@@ -1,0 +1,10 @@
+{
+  "data_mode": "fixture",
+  "market_timezone": "UTC",
+  "listing_provider_id": "fixture-listings-v1",
+  "listing_source_id": "sample_basic/listings.csv",
+  "ohlcv_provider_id": "fixture-ohlcv-v1",
+  "ohlcv_source_id": "sample_basic/ohlcv.csv",
+  "provider_config_hash": "fixture-sample-basic",
+  "run_latest_bar_date": "2026-04-24"
+}

@@ -1,0 +1,24 @@
+Symbol|Security Name|Market Category|Test Issue|Financial Status|Round Lot Size|ETF|NextShares
+AAPL|Apple Inc. Common Stock|Q|N|N|100|N|N
+W|Wayfair Inc. Class A Common Stock|Q|N|N|100|N|N
+U|Unity Software Inc. Common Stock|Q|N|N|100|N|N
+R|Ryder System Inc. Common Stock|Q|N|N|100|N|N
+POWER|PowerFleet Inc. Common Stock|Q|N|N|100|N|N
+UNITED|United Airlines Holdings Inc. Common Stock|Q|N|N|100|N|N
+PBNK|Preferred Bank Common Stock|Q|N|N|100|N|N
+FUBC|First United Corporation Common Stock|Q|N|N|100|N|N
+ADSK|Autodesk, Inc. Common Stock|Q|N|N|100|N|N
+BRK.B|Berkshire Hathaway Inc. Class B Common Stock|Q|N|N|100|N|N
+SAFE|Safe Equivalent Corp. Common Stock|Q|N|N|100|N|N
+SAFE|Safe Equivalent Corp. Common Stock|Q|N|N|100|N|N
+ETFZ|ETF Zone Trust ETF|Q|N|N|100|Y|N
+NEXT|NextShares Common Stock|Q|N|N|100|N|Y
+TEST|Test Company Common Stock|Q|Y|N|100|N|N
+SUSP|Suspended Company Common Stock|Q|N|D|100|N|N
+AMBIG|Ambiguous Fund Class A|Q|N|N|100|N|N
+PREFP|Preferred Capital Corp. Preferred Stock|Q|N|N|100|N|N
+WARRW|Warrant Holdings Corp. Warrants|Q|N|N|100|N|N
+UNITU|Unit Holdings Corp. Units|Q|N|N|100|N|N
+RIGHTR|Rights Holdings Corp. Rights|Q|N|N|100|N|N
+ADSP|Preferred Depositary Shares Corp. Depositary Shares Each Representing Preferred Stock|Q|N|N|100|N|N
+File Creation Time: 0503202617:30|||||||

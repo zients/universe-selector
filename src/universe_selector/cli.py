@@ -1,0 +1,166 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Annotated, TypeVar
+
+import typer
+
+from universe_selector.config import AppConfig, load_config
+from universe_selector.domain import Market, canonical_market, canonical_ticker
+from universe_selector.errors import NotFoundError, UniverseSelectorError, ValidationError
+from universe_selector.identifiers import parse_run_id
+from universe_selector.output.inspect import render_inspect
+from universe_selector.persistence.repository import DuckDbRepository, ResolvedRun
+from universe_selector.persistence.schema import validate_schema
+from universe_selector.pipeline import run_batch
+from universe_selector.ranking_profiles import get_ranking_profile
+
+
+app = typer.Typer(no_args_is_help=True)
+T = TypeVar("T")
+
+
+def _exit_with_error(exc: Exception) -> None:
+    if isinstance(exc, UniverseSelectorError):
+        message = str(exc)
+        code = exc.exit_code
+    else:
+        message = str(exc) or exc.__class__.__name__
+        code = UniverseSelectorError.exit_code
+    typer.echo(message)
+    raise typer.Exit(code=code)
+
+
+def _guard(action: Callable[[], T]) -> T:
+    try:
+        return action()
+    except Exception as exc:
+        _exit_with_error(exc)
+        raise
+
+
+def _read_repo(config: AppConfig) -> DuckDbRepository:
+    repo = DuckDbRepository(config.duckdb_path)
+    validate_schema(repo.connect(read_only=True))
+    return repo
+
+
+def _resolution_request(market: str | None, run_id: str | None) -> tuple[str, str | Market]:
+    if market and run_id:
+        raise ValidationError("provide either MARKET or --run-id, not both")
+    if not market and not run_id:
+        raise ValidationError("provide MARKET or --run-id")
+    if run_id:
+        parsed = parse_run_id(run_id)
+        return "explicit run_id", parsed.run_id
+
+    resolved_market = canonical_market(market or "")
+    return "resolved latest successful run", resolved_market
+
+
+def _resolve_run(
+    repo: DuckDbRepository,
+    resolution_mode: str,
+    target: str | Market,
+    *,
+    ranking_profile: str | None,
+) -> ResolvedRun:
+    if resolution_mode == "explicit run_id":
+        return repo.resolve_successful_run(target)
+
+    assert isinstance(target, Market)
+    return repo.resolve_latest_successful_run(target, ranking_profile=ranking_profile)
+
+
+def _resolve_readable_run(
+    repo: DuckDbRepository,
+    resolution_mode: str,
+    target: str | Market,
+    *,
+    ranking_profile: str | None,
+) -> ResolvedRun:
+    try:
+        return _resolve_run(repo, resolution_mode, target, ranking_profile=ranking_profile)
+    except NotFoundError as exc:
+        if resolution_mode == "explicit run_id":
+            raise NotFoundError(f"No readable successful run found for run_id {target}") from exc
+        assert isinstance(target, Market)
+        raise NotFoundError(f"No readable successful run found for market {target.value}") from exc
+
+
+@app.command()
+def batch(market: Annotated[str, typer.Argument()]) -> None:
+    def action() -> None:
+        config = load_config()
+        result = run_batch(canonical_market(market), config)
+        typer.echo(f"run_id: {result.run_id}")
+        typer.echo(f"market: {result.market.value}")
+
+    _guard(action)
+
+
+@app.command()
+def report(
+    market: Annotated[str | None, typer.Argument()] = None,
+    run_id: Annotated[str | None, typer.Option("--run-id")] = None,
+) -> None:
+    def action() -> None:
+        resolution_mode, target = _resolution_request(market, run_id)
+        config = load_config()
+        repo = _read_repo(config)
+        resolved = _resolve_readable_run(
+            repo,
+            resolution_mode,
+            target,
+            ranking_profile=None if resolution_mode == "explicit run_id" else config.ranking_profile,
+        )
+        markdown = repo.read_report_markdown(resolved.run_id)
+        typer.echo(f"resolution mode: {resolution_mode}")
+        typer.echo(f"run_id: {resolved.run_id}")
+        typer.echo(markdown, nl=False)
+
+    _guard(action)
+
+
+@app.command()
+def inspect(
+    ticker: Annotated[str, typer.Option("--ticker")],
+    market: Annotated[str | None, typer.Argument()] = None,
+    run_id: Annotated[str | None, typer.Option("--run-id")] = None,
+) -> None:
+    def action() -> None:
+        normalized_ticker = canonical_ticker(ticker)
+        resolution_mode, target = _resolution_request(market, run_id)
+        config = load_config()
+        repo = _read_repo(config)
+        resolved = _resolve_readable_run(
+            repo,
+            resolution_mode,
+            target,
+            ranking_profile=None if resolution_mode == "explicit run_id" else config.ranking_profile,
+        )
+        profile = get_ranking_profile(resolved.ranking_profile)
+        try:
+            payload = repo.read_inspect_payload(
+                resolved.run_id,
+                normalized_ticker,
+                profile=profile,
+            )
+        except NotFoundError as exc:
+            raise NotFoundError(
+                f"Normalized ticker {normalized_ticker} is not in this run's persisted candidate set"
+            ) from exc
+        typer.echo(
+            render_inspect(
+                run_id=resolved.run_id,
+                resolution_mode=resolution_mode,
+                ticker=normalized_ticker,
+                metadata=payload.metadata,
+                snapshot=payload.snapshot,
+                rankings=payload.rankings,
+                profile=profile,
+            ),
+            nl=False,
+        )
+
+    _guard(action)

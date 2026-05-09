@@ -1,0 +1,15 @@
+ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol
+BABA|Alibaba Group Holding Limited American Depositary Shares|N|BABA|N|100|N|BABA
+KEEPW|Keepwell Inc. Common Stock|N|KEEPW|N|100|N|KEEPW
+CUSIPR|Cousins Properties Incorporated Common Stock|N|CUSIPR|N|100|N|CUSIPR
+CTX.W|ContextLogic Inc. Common Stock Class W|N|CTX.W|N|100|N|CTX.W
+CTX-W|ContextLogic Inc. Common Stock Class W|N|CTX-W|N|100|N|CTX-W
+WCTX.W|Warrant Context Corp. Warrant|N|WCTX.W|N|100|N|WCTX.W
+UCTX-U|Unit Context Corp. Unit|N|UCTX-U|N|100|N|UCTX-U
+RCTX.R|Right Context Corp. Right|N|RCTX.R|N|100|N|RCTX.R
+PCTX-P|Preferred Context Corp. Preferred Stock|N|PCTX-P|N|100|N|PCTX-P
+WSCTX.WS|Warrant Share Context Corp. Warrants|N|WSCTX.WS|N|100|N|WSCTX.WS
+WSCTX-WS|Warrant Share Dash Corp. Warrants|N|WSCTX-WS|N|100|N|WSCTX-WS
+NTEST|NYSE Test Issue Common Stock|N|NTEST|N|100|Y|NTEST
+NOTE|Structured Notes Due 2030|N|NOTE|N|100|N|NOTE
+File Creation Time: 0503202617:30|||||||

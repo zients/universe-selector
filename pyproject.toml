@@ -1,0 +1,79 @@
+[project]
+name = "universe-selector"
+version = "0.1.0"
+description = "Run-centric quantitative universe selector"
+readme = "README.md"
+authors = [
+  { name = "zients" }
+]
+license = "MIT"
+requires-python = ">=3.11,<3.15"
+keywords = [
+  "quantitative-finance",
+  "universe-selection",
+  "duckdb",
+  "yfinance"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Typing :: Typed"
+]
+dependencies = [
+  "duckdb>=1.2.0",
+  "filelock>=3.16.1",
+  "polars>=1.20.0",
+  "PyYAML>=6.0.2",
+  "typer>=0.15.1",
+  "yfinance>=0.2.54"
+]
+
+[project.scripts]
+universe-selector = "universe_selector.cli:app"
+
+[project.urls]
+Repository = "https://github.com/zients/universe-selector"
+Issues = "https://github.com/zients/universe-selector/issues"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.4",
+  "pytest-socket>=0.7.0"
+]
+
+[tool.uv]
+required-version = ">=0.10.9"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/universe_selector"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.git",
+  "/.pytest_cache",
+  "/.venv",
+  "/.worktrees",
+  "/dist",
+]
+
+[tool.hatch.build.targets.wheel.force-include]
+"config.example.yaml" = "universe_selector/config.example.yaml"
+"src/universe_selector/persistence/migrations/001_initial.sql" = "universe_selector/persistence/migrations/001_initial.sql"
+
+[tool.pytest.ini_options]
+addopts = "--disable-socket"
+testpaths = ["tests"]
