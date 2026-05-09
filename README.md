@@ -27,6 +27,39 @@ The CLI has three main commands:
 
 `report` and `inspect` read persisted results. They do not recompute a batch run.
 
+## Architecture
+
+The runtime flow is intentionally small and explicit:
+
+```text
+config.yaml -> provider -> ranking profile -> DuckDB -> report / inspect
+```
+
+- `config.py` loads `config.yaml`, validates provider/profile IDs, and computes
+  stable config hashes for persisted runs.
+- `providers/` owns market data access. Listing providers return tradable listing
+  candidates; OHLCV providers return canonical daily bar data.
+- `ranking_profiles/` owns ranking logic. A profile builds a persisted ticker
+  snapshot, assigns horizon rankings, and declares which metrics are persisted
+  and inspectable.
+- `pipeline.py` coordinates one batch run: load data, run the selected profile,
+  persist the result, and render the report artifact.
+- `persistence/` owns DuckDB migrations and read/write access for run logs,
+  provider metadata, ticker snapshots, rankings, and report artifacts.
+- `output/` renders markdown reports and per-ticker inspect output from persisted
+  data.
+- `cli.py` is the Typer command layer for `batch`, `report`, and `inspect`.
+
+`batch` is the only command that fetches data or computes rankings. `report` and
+`inspect` resolve a persisted successful run, then read DuckDB. This keeps output
+reproducible for a specific run and prevents report rendering from silently
+changing when provider data changes later.
+
+The persistence schema stores stable run fields as columns and profile-specific
+metrics in `metrics_json`. Ranking profiles declare their persisted metric keys,
+so new profiles can add different metrics without adding profile-specific DuckDB
+columns.
+
 ## Requirements
 
 - Python `>=3.11,<3.15`
@@ -51,6 +84,22 @@ data mode, providers, ranking profile, and report size.
 The default `.universe-selector/` directory is also ignored by git. It is local
 runtime state and contains the DuckDB database with persisted runs, report
 artifacts, inspect data, and the batch lock file.
+
+## Fixture Smoke Run
+
+For a network-free smoke run, copy `config.example.yaml` to `config.yaml` and set:
+
+```yaml
+data_mode: fixture
+```
+
+Then run:
+
+```bash
+uv run universe-selector batch us
+uv run universe-selector report us
+uv run universe-selector inspect us --ticker AAA
+```
 
 ## Configuration
 
@@ -132,6 +181,44 @@ It computes:
 - Run-local percentile ranks within the same market and run.
 
 It is a sample profile, not a production strategy recommendation.
+
+## Extending
+
+Universe Selector is designed around two extension points: ranking profiles and
+providers.
+
+To add a ranking profile:
+
+- Add a module under `src/universe_selector/ranking_profiles/`.
+- Implement the `RankingProfile` protocol from `ranking_profiles/base.py`.
+- Define a stable `profile_id` and include it in `ranking_config_payload()`.
+- Implement `build_snapshot()` to turn provider data into one persisted row per
+  surviving ticker.
+- Implement `assign_rankings()` to produce one ranking row per ticker and
+  profile horizon.
+- Declare `snapshot_metric_keys`, `ranking_metric_keys`, and
+  `inspect_metric_keys`; these keys control what is persisted in `metrics_json`
+  and what `inspect` can print.
+- Create a `RankingProfileRegistration` and add it to
+  `ranking_profiles/registry.py`.
+- Add tests for validation, snapshot construction, ranking assignment,
+  persistence, report, and inspect behavior.
+
+To add providers:
+
+- Use `providers/models.py` for the data contracts.
+- A listing provider returns `ListingCandidate` records for a market.
+- An OHLCV provider returns canonical daily bars with `market`, `ticker`,
+  `bar_date`, `open`, `high`, `low`, `close`, `adjusted_close`, and `volume`.
+- Add a provider registration in the provider module and include it in
+  `providers/registry.py`.
+- Keep provider-specific source IDs stable, because they are part of persisted
+  provider metadata and provider config hashes.
+- Add tests for registration, provider parsing/normalization, and error cases.
+
+Do not add profile-specific metrics as DuckDB columns. Keep profile-specific
+values behind the metric key declarations so multiple profiles can coexist in
+the same persistence model.
 
 ## Data Sources
 
