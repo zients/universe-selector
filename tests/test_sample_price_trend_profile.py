@@ -104,6 +104,10 @@ def test_sample_profile_assigns_rankings_per_run_and_market() -> None:
     longterm = rankings.filter((pl.col("run_id") == "run-1") & (pl.col("horizon") == "longterm")).sort("rank")
     assert midterm["ticker"].to_list() == ["AAA", "BBB"]
     assert longterm["ticker"].to_list() == ["BBB", "AAA"]
+    assert midterm["score_return_60d"].to_list() == [0.20, 0.10]
+    assert midterm["score_return_120d"].to_list() == [0.10, 0.30]
+    assert longterm["score_return_60d"].to_list() == [0.10, 0.20]
+    assert longterm["score_return_120d"].to_list() == [0.30, 0.10]
     assert midterm["score"].to_list() == midterm["score_return_60d"].to_list()
     assert longterm["score"].to_list() == longterm["score_return_120d"].to_list()
     assert rankings.filter(pl.col("run_id") == "run-2")["rank"].to_list() == [1, 1]

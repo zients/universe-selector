@@ -88,7 +88,7 @@ def test_config_hash_is_stable_and_ignores_runtime_paths() -> None:
     config_b = AppConfig(data_mode="live", duckdb_path="/tmp/b.duckdb", lock_path="/tmp/b.lock", fixture_dir="/tmp/b")
 
     assert config_a.ranking_config_hash() == config_b.ranking_config_hash()
-    assert config_a.ranking_config_hash() == "5b9d2def4202b62ce96b42d13c72914a7128f89a7dd5ade293f47a038ebe7bfd"
+    assert config_a.ranking_config_hash() == "04ec9df4d31ac5b86a2ad79b7a4e973e10ebd3575a4f0f43fd7fc1f2745b669b"
 
 
 def test_app_config_defaults_to_sample_price_trend_profile() -> None:
@@ -125,7 +125,6 @@ def test_sample_price_trend_profile_public_api_and_payload() -> None:
         "snapshot_metric_keys": ["avg_traded_value_20d_local", "return_60d", "return_120d"],
         "ranking_metric_keys": ["score_return_60d", "score_return_120d"],
         "inspect_metric_keys": ["avg_traded_value_20d_local", "return_60d", "return_120d"],
-        "percentile_method": "average_rank_100_times_rank_minus_half_over_n",
     }
 
 

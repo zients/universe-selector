@@ -178,7 +178,7 @@ It computes:
 - 60-day adjusted-close return for the `midterm` horizon.
 - 120-day adjusted-close return for the `longterm` horizon.
 - 20-day average traded value for liquidity filtering.
-- Run-local normalized return factor scores using `percentile_rank()` internally.
+- Raw adjusted-close return scores for each ranking horizon.
 
 It is a sample profile, not a production strategy recommendation.
 

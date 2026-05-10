@@ -27,7 +27,7 @@ def _metadata(run_id: str) -> ProviderMetadata:
     )
 
 
-def test_repository_persists_profile_scores_outside_percentile_range(tmp_path: Path) -> None:
+def test_repository_persists_profile_scores_outside_0_to_100_range(tmp_path: Path) -> None:
     run_id = "us-00000000-0000-4000-8000-000000000123"
     repo = DuckDbRepository(tmp_path / "runs.duckdb")
     apply_migrations(repo.connect())

@@ -11,14 +11,12 @@ import polars as pl
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.providers.models import ListingCandidate
-from universe_selector.ranking_profiles.rank_math import percentile_rank
 from universe_selector.ranking_profiles.registration import RankingProfileRegistration
 
 
 SAMPLE_PRICE_TREND_PROFILE_ID = "sample_price_trend_v1"
-SAMPLE_PRICE_TREND_PERCENTILE_METHOD = "average_rank_100_times_rank_minus_half_over_n"
 SAMPLE_PRICE_TREND_RANK_INTERPRETATION_NOTE = (
-    "Sample profile scores are run-local normalized return factor scores."
+    "Sample profile scores are raw adjusted-close return factors."
 )
 
 SAMPLE_PRICE_TREND_SNAPSHOT_METRIC_KEYS = (
@@ -130,7 +128,6 @@ class SamplePriceTrendV1Profile:
     ranking_metric_keys: tuple[str, ...] = SAMPLE_PRICE_TREND_RANKING_METRIC_KEYS
     inspect_metric_keys: tuple[str, ...] = SAMPLE_PRICE_TREND_INSPECT_METRIC_KEYS
     horizon_order: tuple[str, ...] = SAMPLE_PRICE_TREND_HORIZON_ORDER
-    percentile_method: str = SAMPLE_PRICE_TREND_PERCENTILE_METHOD
     rank_interpretation_note: str = SAMPLE_PRICE_TREND_RANK_INTERPRETATION_NOTE
 
     def __post_init__(self) -> None:
@@ -173,8 +170,6 @@ class SamplePriceTrendV1Profile:
             numeric = _finite_float(value)
             if numeric is None or numeric <= 0:
                 raise ValidationError("liquidity_floor values must be finite positive numbers")
-        if self.percentile_method != SAMPLE_PRICE_TREND_PERCENTILE_METHOD:
-            raise ValidationError(f"percentile_method must be {SAMPLE_PRICE_TREND_PERCENTILE_METHOD}")
         if self.rank_interpretation_note != SAMPLE_PRICE_TREND_RANK_INTERPRETATION_NOTE:
             raise ValidationError("rank_interpretation_note must match sample_price_trend_v1")
 
@@ -192,7 +187,6 @@ class SamplePriceTrendV1Profile:
             "snapshot_metric_keys": list(self.snapshot_metric_keys),
             "ranking_metric_keys": list(self.ranking_metric_keys),
             "inspect_metric_keys": list(self.inspect_metric_keys),
-            "percentile_method": self.percentile_method,
         }
 
     def build_snapshot(
@@ -292,14 +286,8 @@ class SamplePriceTrendV1Profile:
 
     def _with_return_scores(self, frame: pl.DataFrame) -> pl.DataFrame:
         return frame.with_columns(
-            pl.Series(
-                "score_return_60d",
-                percentile_rank(frame["return_60d"]).to_list(),
-            ),
-            pl.Series(
-                "score_return_120d",
-                percentile_rank(frame["return_120d"]).to_list(),
-            ),
+            pl.col("return_60d").alias("score_return_60d"),
+            pl.col("return_120d").alias("score_return_120d"),
         )
 
     def _drop_non_finite_required_returns(self, snapshot: pl.DataFrame) -> pl.DataFrame:
