@@ -159,12 +159,23 @@ Inspect a ticker from the latest successful US run:
 uv run universe-selector inspect us --ticker AXTI
 ```
 
+Use a specific ranking profile for a new run or latest-run lookup:
+
+```bash
+uv run universe-selector batch us --ranking-profile sample_price_trend_v1
+uv run universe-selector report us --ranking-profile sample_price_trend_v1
+uv run universe-selector inspect us --ticker AXTI --ranking-profile sample_price_trend_v1
+```
+
 You can also read an explicit persisted run:
 
 ```bash
 uv run universe-selector report --run-id us-00000000-0000-4000-8000-000000000001
 uv run universe-selector inspect --run-id us-00000000-0000-4000-8000-000000000001 --ticker AXTI
 ```
+
+`--run-id` reads one persisted run directly. Do not combine it with
+`--ranking-profile`; the run already records its ranking profile.
 
 ## Ranking Profiles
 
