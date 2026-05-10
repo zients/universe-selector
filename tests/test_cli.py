@@ -232,6 +232,46 @@ def test_cli_run_id_ranking_profile_conflict_does_not_load_config(monkeypatch) -
     assert "load_config must not run" not in inspect.output
 
 
+def test_cli_run_id_ranking_profile_conflict_precedes_run_id_parsing() -> None:
+    report = runner.invoke(app, ["report", "--run-id", "bad-id", "--ranking-profile", "sample_price_trend_v1"])
+    assert report.exit_code != 0
+    assert "do not provide --ranking-profile with --run-id" in report.output
+
+    inspect = runner.invoke(
+        app,
+        ["inspect", "--run-id", "bad-id", "--ticker", "AAA", "--ranking-profile", "sample_price_trend_v1"],
+    )
+    assert inspect.exit_code != 0
+    assert "do not provide --ranking-profile with --run-id" in inspect.output
+
+
+def test_cli_market_run_id_conflict_precedes_ranking_profile_conflict() -> None:
+    report = runner.invoke(
+        app,
+        ["report", "us", "--run-id", "us-00000000-0000-4000-8000-000000000001", "--ranking-profile", "sample_price_trend_v1"],
+    )
+    assert report.exit_code != 0
+    assert "provide either MARKET or --run-id, not both" in report.output
+    assert "do not provide --ranking-profile with --run-id" not in report.output
+
+    inspect = runner.invoke(
+        app,
+        [
+            "inspect",
+            "us",
+            "--run-id",
+            "us-00000000-0000-4000-8000-000000000001",
+            "--ticker",
+            "AAA",
+            "--ranking-profile",
+            "sample_price_trend_v1",
+        ],
+    )
+    assert inspect.exit_code != 0
+    assert "provide either MARKET or --run-id, not both" in inspect.output
+    assert "do not provide --ranking-profile with --run-id" not in inspect.output
+
+
 def test_cli_rejects_unknown_ranking_profile_override(monkeypatch, tmp_path: Path, fixture_dir: Path) -> None:
     _write_cli_config(tmp_path, fixture_dir)
     monkeypatch.chdir(tmp_path)

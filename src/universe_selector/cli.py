@@ -46,28 +46,31 @@ def _read_repo(config: AppConfig) -> DuckDbRepository:
     return repo
 
 
-def _config_with_ranking_profile(config: AppConfig, ranking_profile: str | None) -> AppConfig:
-    if ranking_profile is None:
+def _config_with_cli_overrides(
+    config: AppConfig,
+    *,
+    ranking_profile: str | None = None,
+) -> AppConfig:
+    updates: dict[str, object] = {}
+    if ranking_profile is not None:
+        updates["ranking_profile"] = ranking_profile
+    if not updates:
         return config
-    overridden = replace(config, ranking_profile=ranking_profile)
+    overridden = replace(config, **updates)
     overridden.validate()
     return overridden
 
 
-def _validate_ranking_profile_resolution_request(resolution_mode: str, ranking_profile: str | None) -> None:
-    if resolution_mode == "explicit run_id" and ranking_profile is not None:
-        raise ValidationError("do not provide --ranking-profile with --run-id")
-
-
-def _ranking_profile_for_resolution(
+def _validate_read_resolution_request(
     *,
-    resolution_mode: str,
-    ranking_profile: str | None,
-    config: AppConfig,
-) -> str | None:
-    if resolution_mode == "explicit run_id":
-        return None
-    return _config_with_ranking_profile(config, ranking_profile).ranking_profile
+    market: str | None,
+    run_id: str | None,
+    ranking_profile: str | None = None,
+) -> None:
+    if market and run_id:
+        raise ValidationError("provide either MARKET or --run-id, not both")
+    if run_id is not None and ranking_profile is not None:
+        raise ValidationError("do not provide --ranking-profile with --run-id")
 
 
 def _resolution_request(market: str | None, run_id: str | None) -> tuple[str, str | Market]:
@@ -119,7 +122,7 @@ def batch(
     ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
 ) -> None:
     def action() -> None:
-        config = _config_with_ranking_profile(load_config(), ranking_profile)
+        config = _config_with_cli_overrides(load_config(), ranking_profile=ranking_profile)
         result = run_batch(canonical_market(market), config)
         typer.echo(f"run_id: {result.run_id}")
         typer.echo(f"market: {result.market.value}")
@@ -134,14 +137,10 @@ def report(
     ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
 ) -> None:
     def action() -> None:
+        _validate_read_resolution_request(market=market, run_id=run_id, ranking_profile=ranking_profile)
         resolution_mode, target = _resolution_request(market, run_id)
-        _validate_ranking_profile_resolution_request(resolution_mode, ranking_profile)
-        config = load_config()
-        resolution_ranking_profile = _ranking_profile_for_resolution(
-            resolution_mode=resolution_mode,
-            ranking_profile=ranking_profile,
-            config=config,
-        )
+        config = _config_with_cli_overrides(load_config(), ranking_profile=ranking_profile)
+        resolution_ranking_profile = None if resolution_mode == "explicit run_id" else config.ranking_profile
         repo = _read_repo(config)
         resolved = _resolve_readable_run(
             repo,
@@ -165,15 +164,11 @@ def inspect(
     ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
 ) -> None:
     def action() -> None:
+        _validate_read_resolution_request(market=market, run_id=run_id, ranking_profile=ranking_profile)
         normalized_ticker = canonical_ticker(ticker)
         resolution_mode, target = _resolution_request(market, run_id)
-        _validate_ranking_profile_resolution_request(resolution_mode, ranking_profile)
-        config = load_config()
-        resolution_ranking_profile = _ranking_profile_for_resolution(
-            resolution_mode=resolution_mode,
-            ranking_profile=ranking_profile,
-            config=config,
-        )
+        config = _config_with_cli_overrides(load_config(), ranking_profile=ranking_profile)
+        resolution_ranking_profile = None if resolution_mode == "explicit run_id" else config.ranking_profile
         repo = _read_repo(config)
         resolved = _resolve_readable_run(
             repo,
