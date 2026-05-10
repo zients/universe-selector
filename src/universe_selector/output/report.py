@@ -20,9 +20,9 @@ def _top_section(title: str, rankings: pl.DataFrame, horizon: str, top_n: int) -
     rows = rankings.filter(pl.col("horizon") == horizon).sort("rank").head(top_n).to_dicts()
     if not rows:
         return f"## {title}\n\nNo persisted candidates for this horizon.\n"
-    lines = [f"## {title}", "", "| rank | ticker | final_rank_percentile |", "|---:|---|---:|"]
+    lines = [f"## {title}", "", "| rank | ticker | score |", "|---:|---|---:|"]
     for row in rows:
-        lines.append(f"| {row['rank']} | {row['ticker']} | {row['final_rank_percentile']:.4f} |")
+        lines.append(f"| {row['rank']} | {row['ticker']} | {row['score']:.4f} |")
     return "\n".join(lines) + "\n"
 
 
@@ -71,7 +71,8 @@ def render_markdown_report(
 ## Methodology Notes
 
 - This is a pure quantitative run report.
-- Rank percentiles are run-local and market-local.
+- Ranking profiles compute finite scores; higher score ranks better.
+- Scores are meaningful within the same run, market, profile, and horizon unless the profile documents otherwise.
 - {profile.rank_interpretation_note}
 - Filtered-out tickers and exclusion reasons are not persisted.
 - This report is rendered during batch; report and inspect read persisted results only.

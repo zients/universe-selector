@@ -48,7 +48,7 @@ REQUIRED_COLUMNS: dict[str, set[str]] = {
         "market",
         "horizon",
         "ticker",
-        "final_rank_percentile",
+        "score",
         "rank",
         "metrics_json",
     },

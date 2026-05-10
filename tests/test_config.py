@@ -88,7 +88,7 @@ def test_config_hash_is_stable_and_ignores_runtime_paths() -> None:
     config_b = AppConfig(data_mode="live", duckdb_path="/tmp/b.duckdb", lock_path="/tmp/b.lock", fixture_dir="/tmp/b")
 
     assert config_a.ranking_config_hash() == config_b.ranking_config_hash()
-    assert config_a.ranking_config_hash() == "17845410100068fda4e91c946bb04487a3ee26d6c7a2c38b0fc105d9b43204d9"
+    assert config_a.ranking_config_hash() == "04ec9df4d31ac5b86a2ad79b7a4e973e10ebd3575a4f0f43fd7fc1f2745b669b"
 
 
 def test_app_config_defaults_to_sample_price_trend_profile() -> None:
@@ -111,8 +111,8 @@ def test_sample_price_trend_profile_public_api_and_payload() -> None:
         "return_120d",
     )
     assert profile.ranking_metric_keys == (
-        "return_60d_rank_percentile",
-        "return_120d_rank_percentile",
+        "score_return_60d",
+        "score_return_120d",
     )
     assert profile.inspect_metric_keys == profile.snapshot_metric_keys
     assert profile.ranking_config_payload() == {
@@ -123,9 +123,8 @@ def test_sample_price_trend_profile_public_api_and_payload() -> None:
         "liquidity_floor": {"TW": 20_000_000.0, "US": 5_000_000.0},
         "horizon_order": ["midterm", "longterm"],
         "snapshot_metric_keys": ["avg_traded_value_20d_local", "return_60d", "return_120d"],
-        "ranking_metric_keys": ["return_60d_rank_percentile", "return_120d_rank_percentile"],
+        "ranking_metric_keys": ["score_return_60d", "score_return_120d"],
         "inspect_metric_keys": ["avg_traded_value_20d_local", "return_60d", "return_120d"],
-        "percentile_method": "average_rank_100_times_rank_minus_half_over_n",
     }
 
 
@@ -176,7 +175,7 @@ def test_sample_profile_is_immutable() -> None:
         (SamplePriceTrendV1Profile(return_windows={"midterm": 30, "longterm": 120}), "return_windows"),
         (SamplePriceTrendV1Profile(horizon_order=("longterm", "midterm")), "horizon_order"),
         (SamplePriceTrendV1Profile(snapshot_metric_keys=("avg_traded_value_20d_local",)), "snapshot metric"),
-        (SamplePriceTrendV1Profile(ranking_metric_keys=("return_60d_rank_percentile",)), "ranking metric"),
+        (SamplePriceTrendV1Profile(ranking_metric_keys=("score_return_60d",)), "ranking metric"),
         (SamplePriceTrendV1Profile(inspect_metric_keys=("close",)), "inspect metric"),
     ],
 )

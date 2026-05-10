@@ -41,7 +41,7 @@ RANKING_COLUMNS = [
     "market",
     "horizon",
     "ticker",
-    "final_rank_percentile",
+    "score",
     "rank",
     "metrics_json",
 ]
@@ -51,7 +51,7 @@ RANKING_CORE_COLUMNS = [
     "market",
     "horizon",
     "ticker",
-    "final_rank_percentile",
+    "score",
     "rank",
 ]
 
@@ -242,9 +242,9 @@ def _ranking_storage_rows(rankings: pl.DataFrame, profile: RankingProfile) -> li
     rows = []
     for row in rankings.to_dicts():
         stored = {column: row[column] for column in RANKING_CORE_COLUMNS}
-        stored["final_rank_percentile"] = _finite_float(
-            stored["final_rank_percentile"],
-            "ranking final_rank_percentile",
+        stored["score"] = _finite_float(
+            stored["score"],
+            "ranking score",
         )
         stored["metrics_json"] = _metrics_json(row, profile.ranking_metric_keys, "ranking")
         rows.append(stored)
