@@ -178,7 +178,7 @@ It computes:
 - 60-day adjusted-close return for the `midterm` horizon.
 - 120-day adjusted-close return for the `longterm` horizon.
 - 20-day average traded value for liquidity filtering.
-- Raw adjusted-close return scores for each ranking horizon.
+- Raw adjusted-close return values are used as ranking scores for each horizon.
 
 It is a sample profile, not a production strategy recommendation.
 
