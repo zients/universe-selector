@@ -89,11 +89,23 @@ def test_sample_profile_assigns_rankings_per_run_and_market() -> None:
 
     rankings = profile.assign_rankings(snapshot)
 
+    assert rankings.columns == [
+        "run_id",
+        "market",
+        "horizon",
+        "ticker",
+        "score_return_60d",
+        "score_return_120d",
+        "score",
+        "rank",
+    ]
     assert rankings.filter(pl.col("run_id") == "run-1").height == 4
     midterm = rankings.filter((pl.col("run_id") == "run-1") & (pl.col("horizon") == "midterm")).sort("rank")
     longterm = rankings.filter((pl.col("run_id") == "run-1") & (pl.col("horizon") == "longterm")).sort("rank")
     assert midterm["ticker"].to_list() == ["AAA", "BBB"]
     assert longterm["ticker"].to_list() == ["BBB", "AAA"]
+    assert midterm["score"].to_list() == midterm["score_return_60d"].to_list()
+    assert longterm["score"].to_list() == longterm["score_return_120d"].to_list()
     assert rankings.filter(pl.col("run_id") == "run-2")["rank"].to_list() == [1, 1]
 
 

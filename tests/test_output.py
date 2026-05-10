@@ -44,7 +44,7 @@ def test_markdown_report_renders_sample_profile_sections_and_notes() -> None:
                 "horizon": ["midterm", "midterm", "longterm", "longterm"],
                 "rank": [1, 2, 1, 2],
                 "ticker": ["AAA", "BBB", "BBB", "AAA"],
-                "final_rank_percentile": [90.0, 70.0, 85.0, 75.0],
+                "score": [90.0, 70.0, 85.0, 75.0],
             }
         ),
         config=AppConfig(data_mode="fixture", report_top_n=2),
@@ -54,6 +54,7 @@ def test_markdown_report_renders_sample_profile_sections_and_notes() -> None:
     assert content.startswith("# Universe Selector Report\n")
     assert "## Highest-ranked midterm candidates" in content
     assert "## Highest-ranked longterm candidates" in content
+    assert "| rank | ticker | score |" in content
     assert "sample_price_trend_v1" in content
     assert profile.rank_interpretation_note in content
     assert "Filtered-out tickers and exclusion reasons are not persisted." in content
@@ -96,16 +97,16 @@ def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:
             {
                 "horizon": "midterm",
                 "rank": 1,
-                "return_60d_rank_percentile": 90.0,
-                "return_120d_rank_percentile": 70.0,
-                "final_rank_percentile": 90.0,
+                "score_return_60d": 90.0,
+                "score_return_120d": 70.0,
+                "score": 90.0,
             },
             {
                 "horizon": "longterm",
                 "rank": 2,
-                "return_60d_rank_percentile": 90.0,
-                "return_120d_rank_percentile": 70.0,
-                "final_rank_percentile": 70.0,
+                "score_return_60d": 90.0,
+                "score_return_120d": 70.0,
+                "score": 70.0,
             },
         ],
         profile=profile,
@@ -113,6 +114,7 @@ def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:
 
     assert "explicit run_id" in output
     assert "- return_60d: 0.2" in output
-    assert "return_120d_rank_percentile 70.0" in output
+    assert "rank 1, score 90.0, score_return_60d 90.0" in output
+    assert "score_return_120d 70.0" in output
     assert profile.rank_interpretation_note in output
     assert "Absent tickers do not expose exclusion reasons." in output

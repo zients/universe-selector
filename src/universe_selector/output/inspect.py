@@ -47,16 +47,16 @@ def render_inspect(
         lines.append(
             f"- {row['horizon']}: "
             f"rank {row['rank']}, "
-            f"{metric_text}, "
-            f"final_rank_percentile {row['final_rank_percentile']}"
+            f"score {row['score']}, "
+            f"{metric_text}"
         )
     lines.extend(
         [
             "",
             "## Notes",
             "",
-            "- Rank percentiles are run-local and market-local.",
-            "- Values are not comparable across markets, runs, or ranking profiles.",
+            "- Ranking profiles compute finite scores; higher score ranks better.",
+            "- Scores are meaningful within the same run, market, profile, and horizon unless the profile documents otherwise.",
             f"- {profile.rank_interpretation_note}",
             "- Absent tickers do not expose exclusion reasons.",
         ]

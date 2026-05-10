@@ -40,7 +40,7 @@ create table run_rankings (
     market varchar not null check (market in ('TW', 'US')),
     horizon varchar not null,
     ticker varchar not null,
-    final_rank_percentile double not null check (final_rank_percentile between 0 and 100),
+    score double not null,
     rank integer not null check (rank >= 1),
     metrics_json varchar not null,
     primary key (run_id, market, horizon, ticker)

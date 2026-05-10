@@ -18,7 +18,7 @@ from universe_selector.ranking_profiles.registration import RankingProfileRegist
 SAMPLE_PRICE_TREND_PROFILE_ID = "sample_price_trend_v1"
 SAMPLE_PRICE_TREND_PERCENTILE_METHOD = "average_rank_100_times_rank_minus_half_over_n"
 SAMPLE_PRICE_TREND_RANK_INTERPRETATION_NOTE = (
-    "High rank percentiles only describe this sample profile's run-local ordering."
+    "Sample profile scores are run-local normalized return factor scores."
 )
 
 SAMPLE_PRICE_TREND_SNAPSHOT_METRIC_KEYS = (
@@ -27,8 +27,8 @@ SAMPLE_PRICE_TREND_SNAPSHOT_METRIC_KEYS = (
     "return_120d",
 )
 SAMPLE_PRICE_TREND_RANKING_METRIC_KEYS = (
-    "return_60d_rank_percentile",
-    "return_120d_rank_percentile",
+    "score_return_60d",
+    "score_return_120d",
 )
 SAMPLE_PRICE_TREND_INSPECT_METRIC_KEYS = SAMPLE_PRICE_TREND_SNAPSHOT_METRIC_KEYS
 SAMPLE_PRICE_TREND_HORIZON_ORDER = ("midterm", "longterm")
@@ -50,9 +50,9 @@ SAMPLE_PRICE_TREND_RANKING_SCHEMA = {
     "market": pl.String,
     "horizon": pl.String,
     "ticker": pl.String,
-    "return_60d_rank_percentile": pl.Float64,
-    "return_120d_rank_percentile": pl.Float64,
-    "final_rank_percentile": pl.Float64,
+    "score_return_60d": pl.Float64,
+    "score_return_120d": pl.Float64,
+    "score": pl.Float64,
     "rank": pl.Int64,
 }
 
@@ -286,18 +286,18 @@ class SamplePriceTrendV1Profile:
             "horizon",
             "ticker",
             *self.ranking_metric_keys,
-            "final_rank_percentile",
+            "score",
             "rank",
         ]
 
-    def _with_return_percentiles(self, frame: pl.DataFrame) -> pl.DataFrame:
+    def _with_return_scores(self, frame: pl.DataFrame) -> pl.DataFrame:
         return frame.with_columns(
             pl.Series(
-                "return_60d_rank_percentile",
+                "score_return_60d",
                 percentile_rank(frame["return_60d"]).to_list(),
             ),
             pl.Series(
-                "return_120d_rank_percentile",
+                "score_return_120d",
                 percentile_rank(frame["return_120d"]).to_list(),
             ),
         )
@@ -311,20 +311,20 @@ class SamplePriceTrendV1Profile:
         )
 
     def _assign_single_run_market_rankings(self, frame: pl.DataFrame) -> pl.DataFrame:
-        with_percentiles = self._with_return_percentiles(frame)
+        with_scores = self._with_return_scores(frame)
         horizon_to_column = {
-            "midterm": "return_60d_rank_percentile",
-            "longterm": "return_120d_rank_percentile",
+            "midterm": "score_return_60d",
+            "longterm": "score_return_120d",
         }
         horizon_frames = []
         for horizon in self.horizon_order:
-            percentile_column = horizon_to_column[horizon]
+            score_column = horizon_to_column[horizon]
             horizon_frame = (
-                with_percentiles.with_columns(
+                with_scores.with_columns(
                     pl.lit(horizon).alias("horizon"),
-                    pl.col(percentile_column).alias("final_rank_percentile"),
+                    pl.col(score_column).alias("score"),
                 )
-                .sort(["final_rank_percentile", "ticker"], descending=[True, False])
+                .sort(["score", "ticker"], descending=[True, False])
                 .with_row_index("rank", offset=1)
                 .with_columns(pl.col("rank").cast(pl.Int64))
                 .select(self._ranking_columns())

@@ -178,7 +178,7 @@ It computes:
 - 60-day adjusted-close return for the `midterm` horizon.
 - 120-day adjusted-close return for the `longterm` horizon.
 - 20-day average traded value for liquidity filtering.
-- Run-local percentile ranks within the same market and run.
+- Run-local normalized return factor scores using `percentile_rank()` internally.
 
 It is a sample profile, not a production strategy recommendation.
 
@@ -240,15 +240,17 @@ are missing or unavailable.
 
 ## Interpreting Output
 
-Rank percentiles are:
+Ranking profiles compute finite scores. Candidates are sorted by score
+descending, and `rank` is the 1-based ordering derived from score within the
+same run, market, profile, and horizon.
 
-- Run-local.
-- Market-local.
-- Profile-specific.
-- Not comparable across different runs, markets, or ranking profiles.
+Scores are profile-defined ranking values. They may be 0-100 values, values
+above 100, negative values, z-scores, composite model scores, or other finite
+numeric values. Scores are only meaningful within the same run, market, profile,
+and horizon unless a profile documents otherwise.
 
-High rank percentiles do not guarantee positive absolute performance, future
-returns, liquidity, or tradability.
+High scores do not guarantee positive absolute performance, future returns,
+liquidity, or tradability.
 
 ## Development
 
