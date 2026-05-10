@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Annotated, TypeVar
 
 import typer
@@ -43,6 +44,33 @@ def _read_repo(config: AppConfig) -> DuckDbRepository:
     repo = DuckDbRepository(config.duckdb_path)
     validate_schema(repo.connect(read_only=True))
     return repo
+
+
+def _config_with_cli_overrides(
+    config: AppConfig,
+    *,
+    ranking_profile: str | None = None,
+) -> AppConfig:
+    updates: dict[str, object] = {}
+    if ranking_profile is not None:
+        updates["ranking_profile"] = ranking_profile
+    if not updates:
+        return config
+    overridden = replace(config, **updates)
+    overridden.validate()
+    return overridden
+
+
+def _validate_read_resolution_request(
+    *,
+    market: str | None,
+    run_id: str | None,
+    ranking_profile: str | None = None,
+) -> None:
+    if market and run_id:
+        raise ValidationError("provide either MARKET or --run-id, not both")
+    if run_id is not None and ranking_profile is not None:
+        raise ValidationError("do not provide --ranking-profile with --run-id")
 
 
 def _resolution_request(market: str | None, run_id: str | None) -> tuple[str, str | Market]:
@@ -89,9 +117,12 @@ def _resolve_readable_run(
 
 
 @app.command()
-def batch(market: Annotated[str, typer.Argument()]) -> None:
+def batch(
+    market: Annotated[str, typer.Argument()],
+    ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
+) -> None:
     def action() -> None:
-        config = load_config()
+        config = _config_with_cli_overrides(load_config(), ranking_profile=ranking_profile)
         result = run_batch(canonical_market(market), config)
         typer.echo(f"run_id: {result.run_id}")
         typer.echo(f"market: {result.market.value}")
@@ -103,16 +134,19 @@ def batch(market: Annotated[str, typer.Argument()]) -> None:
 def report(
     market: Annotated[str | None, typer.Argument()] = None,
     run_id: Annotated[str | None, typer.Option("--run-id")] = None,
+    ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
 ) -> None:
     def action() -> None:
+        _validate_read_resolution_request(market=market, run_id=run_id, ranking_profile=ranking_profile)
         resolution_mode, target = _resolution_request(market, run_id)
-        config = load_config()
+        config = _config_with_cli_overrides(load_config(), ranking_profile=ranking_profile)
+        resolution_ranking_profile = None if resolution_mode == "explicit run_id" else config.ranking_profile
         repo = _read_repo(config)
         resolved = _resolve_readable_run(
             repo,
             resolution_mode,
             target,
-            ranking_profile=None if resolution_mode == "explicit run_id" else config.ranking_profile,
+            ranking_profile=resolution_ranking_profile,
         )
         markdown = repo.read_report_markdown(resolved.run_id)
         typer.echo(f"resolution mode: {resolution_mode}")
@@ -127,17 +161,20 @@ def inspect(
     ticker: Annotated[str, typer.Option("--ticker")],
     market: Annotated[str | None, typer.Argument()] = None,
     run_id: Annotated[str | None, typer.Option("--run-id")] = None,
+    ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
 ) -> None:
     def action() -> None:
+        _validate_read_resolution_request(market=market, run_id=run_id, ranking_profile=ranking_profile)
         normalized_ticker = canonical_ticker(ticker)
         resolution_mode, target = _resolution_request(market, run_id)
-        config = load_config()
+        config = _config_with_cli_overrides(load_config(), ranking_profile=ranking_profile)
+        resolution_ranking_profile = None if resolution_mode == "explicit run_id" else config.ranking_profile
         repo = _read_repo(config)
         resolved = _resolve_readable_run(
             repo,
             resolution_mode,
             target,
-            ranking_profile=None if resolution_mode == "explicit run_id" else config.ranking_profile,
+            ranking_profile=resolution_ranking_profile,
         )
         profile = get_ranking_profile(resolved.ranking_profile)
         try:
