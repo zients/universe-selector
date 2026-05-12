@@ -4,6 +4,8 @@ from collections.abc import Mapping
 
 from universe_selector.errors import ValidationError
 from universe_selector.ranking_profiles.base import RankingProfile
+from universe_selector.ranking_profiles.liquidity_quality_v1 import LIQUIDITY_QUALITY_V1_REGISTRATION
+from universe_selector.ranking_profiles.momentum_v1 import MOMENTUM_V1_REGISTRATION
 from universe_selector.ranking_profiles.registration import (
     RankingProfileRegistration,
     build_ranking_profile_registration_map,
@@ -13,6 +15,8 @@ from universe_selector.ranking_profiles.sample_price_trend_v1 import SAMPLE_PRIC
 
 _REGISTRATIONS: tuple[RankingProfileRegistration, ...] = (
     SAMPLE_PRICE_TREND_V1_REGISTRATION,
+    MOMENTUM_V1_REGISTRATION,
+    LIQUIDITY_QUALITY_V1_REGISTRATION,
 )
 
 _REGISTRATION_BY_ID: Mapping[str, RankingProfileRegistration] = build_ranking_profile_registration_map(_REGISTRATIONS)

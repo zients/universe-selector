@@ -9,6 +9,8 @@ from universe_selector.domain import Market
 from universe_selector.output.inspect import render_inspect
 from universe_selector.output.report import FORBIDDEN_WORDS, render_markdown_report
 from universe_selector.providers.models import ProviderMetadata
+from universe_selector.ranking_profiles.liquidity_quality_v1 import LiquidityQualityV1Profile
+from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
 from universe_selector.ranking_profiles.sample_price_trend_v1 import SamplePriceTrendV1Profile
 
 
@@ -118,3 +120,95 @@ def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:
     assert "score_return_120d 70.0" in output
     assert profile.rank_interpretation_note in output
     assert "Absent tickers do not expose exclusion reasons." in output
+
+
+def test_inspect_renders_momentum_profile_metrics_and_rankings() -> None:
+    profile = MomentumV1Profile()
+    output = render_inspect(
+        run_id="us-momentum",
+        resolution_mode="explicit run_id",
+        ticker="AAA",
+        metadata=_provider_metadata(),
+        snapshot={
+            "ticker": "AAA",
+            "momentum_return_12_1": 0.30,
+            "momentum_return_6_1": 0.20,
+            "volatility_12_1": 0.03,
+            "volatility_6_1": 0.02,
+            "risk_adjusted_momentum_12_1": 10.0,
+            "risk_adjusted_momentum_6_1": 8.0,
+            "short_term_strength_20d": 0.08,
+        },
+        rankings=[
+            {
+                "horizon": "swing",
+                "rank": 1,
+                "score_risk_adjusted_momentum_12_1": 10.0,
+                "score_risk_adjusted_momentum_6_1": 8.0,
+                "score_short_term_strength_20d": 4.0,
+                "score": 8.0,
+            },
+            {
+                "horizon": "midterm",
+                "rank": 2,
+                "score_risk_adjusted_momentum_12_1": 10.0,
+                "score_risk_adjusted_momentum_6_1": 8.0,
+                "score_short_term_strength_20d": 4.0,
+                "score": 9.0,
+            },
+        ],
+        profile=profile,
+    )
+
+    assert "## Horizon Rankings" in output
+    assert "- momentum_return_12_1: 0.3" in output
+    assert "- swing: rank 1, score 8.0, score_risk_adjusted_momentum_12_1 10.0" in output
+    assert profile.rank_interpretation_note in output
+
+
+def test_inspect_renders_liquidity_quality_metrics_through_generic_path() -> None:
+    profile = LiquidityQualityV1Profile()
+    snapshot = {
+        "ticker": "AAA",
+        **{key: 0.0 for key in profile.inspect_metric_keys},
+    }
+    snapshot.update(
+        {
+            "profile_metrics_version": 1.0,
+            "avg_traded_value_20d_local": 25_000_000.0,
+            "avg_traded_value_60d_local": 24_000_000.0,
+            "amihud_illiquidity_60d": 1e-10,
+        }
+    )
+    ranking_metrics = {key: 0.0 for key in profile.ranking_metric_keys}
+    ranking_metrics.update(
+        {
+            "score_log_traded_value_20d": 1.0,
+            "score_log_traded_value_60d": 0.9,
+            "depth_score": 0.95,
+            "friction_score": 0.85,
+            "stability_score": 0.8,
+            "tag_positive_deep_liquidity": 1.0,
+        }
+    )
+
+    output = render_inspect(
+        run_id="us-liquidity",
+        resolution_mode="latest successful run",
+        ticker="AAA",
+        metadata=_provider_metadata(),
+        snapshot=snapshot,
+        rankings=[
+            {"horizon": "composite", "rank": 1, "score": 0.90, **ranking_metrics},
+            {"horizon": "shortterm", "rank": 1, "score": 0.88, **ranking_metrics},
+            {"horizon": "stable", "rank": 1, "score": 0.86, **ranking_metrics},
+        ],
+        profile=profile,
+    )
+
+    assert "## Horizon Rankings" in output
+    assert "- avg_traded_value_20d_local: 25000000.0" in output
+    assert "- composite: rank 1, score 0.9, score_log_traded_value_20d 1.0" in output
+    assert "tag_positive_deep_liquidity 1.0" in output
+    assert "volume:" not in output
+    assert profile.rank_interpretation_note in output

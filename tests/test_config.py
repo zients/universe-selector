@@ -18,6 +18,16 @@ from universe_selector.ranking_profiles import (
     get_ranking_profile_registration,
     supported_ranking_profile_ids,
 )
+from universe_selector.ranking_profiles.liquidity_quality_v1 import (
+    LIQUIDITY_QUALITY_PROFILE_ID,
+    LIQUIDITY_QUALITY_SCORE_METHOD,
+    LiquidityQualityV1Profile,
+)
+from universe_selector.ranking_profiles.momentum_v1 import (
+    MOMENTUM_PROFILE_ID,
+    MOMENTUM_SCORE_METHOD,
+    MomentumV1Profile,
+)
 from universe_selector.ranking_profiles.registration import build_ranking_profile_registration_map
 from universe_selector.ranking_profiles.sample_price_trend_v1 import (
     SAMPLE_PRICE_TREND_PROFILE_ID,
@@ -128,20 +138,119 @@ def test_sample_price_trend_profile_public_api_and_payload() -> None:
     }
 
 
+def test_momentum_profile_public_api_and_payload() -> None:
+    profile = MomentumV1Profile()
+
+    assert MOMENTUM_PROFILE_ID == "momentum_v1"
+    assert profile.horizon_order == ("swing", "midterm")
+    assert profile.snapshot_metric_keys == (
+        "avg_traded_value_20d_local",
+        "momentum_return_12_1",
+        "momentum_return_6_1",
+        "volatility_12_1",
+        "volatility_6_1",
+        "risk_adjusted_momentum_12_1",
+        "risk_adjusted_momentum_6_1",
+        "short_term_strength_20d",
+    )
+    assert profile.ranking_metric_keys == (
+        "score_risk_adjusted_momentum_12_1",
+        "score_risk_adjusted_momentum_6_1",
+        "score_short_term_strength_20d",
+    )
+    assert profile.inspect_metric_keys == (
+        "momentum_return_12_1",
+        "momentum_return_6_1",
+        "volatility_12_1",
+        "volatility_6_1",
+        "risk_adjusted_momentum_12_1",
+        "risk_adjusted_momentum_6_1",
+        "short_term_strength_20d",
+    )
+    assert profile.ranking_config_payload() == {
+        "active_trading_min_days_274": 230,
+        "horizon_weights": {
+            "midterm": {
+                "score_risk_adjusted_momentum_12_1": 0.5,
+                "score_risk_adjusted_momentum_6_1": 0.5,
+            },
+            "swing": {
+                "score_risk_adjusted_momentum_6_1": 0.5,
+                "score_risk_adjusted_momentum_12_1": 0.3,
+                "score_short_term_strength_20d": 0.2,
+            },
+        },
+        "liquidity_floor": {"TW": 20_000_000.0, "US": 5_000_000.0},
+        "min_history_bars": 274,
+        "price_floor": {"TW": 10.0, "US": 5.0},
+        "ranking_profile": "momentum_v1",
+        "ranking_metric_keys": list(profile.ranking_metric_keys),
+        "score_input_columns": [
+            "risk_adjusted_momentum_12_1",
+            "risk_adjusted_momentum_6_1",
+            "short_term_strength_20d",
+            "volatility_6_1",
+        ],
+        "score_method": MOMENTUM_SCORE_METHOD,
+        "stdev_ddof": 1,
+        "volatility_floor": 0.001,
+        "zero_volume_max_days_20": 2,
+    }
+
+
+def test_liquidity_quality_profile_public_api_and_payload() -> None:
+    profile = LiquidityQualityV1Profile()
+
+    assert LIQUIDITY_QUALITY_PROFILE_ID == "liquidity_quality_v1"
+    assert profile.horizon_order == ("composite", "shortterm", "stable")
+    assert profile.inspect_metric_keys == profile.snapshot_metric_keys
+    assert "avg_traded_value_20d_local" in profile.snapshot_metric_keys
+    assert "volume" not in profile.snapshot_metric_keys
+    assert profile.ranking_config_payload() == {
+        "ranking_profile": "liquidity_quality_v1",
+        "min_history_bars": 63,
+        "price_floor": {"TW": 10.0, "US": 5.0},
+        "liquidity_floor": {"TW": 50_000_000.0, "US": 10_000_000.0},
+        "active_trading_min_days_60": {"TW": 50, "US": 55},
+        "zero_volume_max_days_20": {"TW": 3, "US": 1},
+        "horizon_order": ["composite", "shortterm", "stable"],
+        "snapshot_metric_keys": list(profile.snapshot_metric_keys),
+        "ranking_metric_keys": list(profile.ranking_metric_keys),
+        "inspect_metric_keys": list(profile.inspect_metric_keys),
+        "score_method": LIQUIDITY_QUALITY_SCORE_METHOD,
+    }
+
+
 def test_ranking_profiles_package_root_exposes_registry_contract_only() -> None:
     assert ranking_profiles.RankingProfileRegistration is RankingProfileRegistration
     assert ranking_profiles.get_ranking_profile is get_ranking_profile
     assert ranking_profiles.supported_ranking_profile_ids is supported_ranking_profile_ids
+    assert "LiquidityQualityV1Profile" not in ranking_profiles.__all__
+    assert "MomentumV1Profile" not in ranking_profiles.__all__
     assert "SamplePriceTrendV1Profile" not in ranking_profiles.__all__
 
 
-def test_supported_profile_registry_is_sample_only() -> None:
-    assert supported_ranking_profile_ids() == ("sample_price_trend_v1",)
+def test_supported_profile_registry_includes_public_profiles() -> None:
+    assert supported_ranking_profile_ids() == (
+        "sample_price_trend_v1",
+        "momentum_v1",
+        "liquidity_quality_v1",
+    )
 
     registration = get_ranking_profile_registration("sample_price_trend_v1")
     assert isinstance(registration, RankingProfileRegistration)
     assert isinstance(registration.create_profile(), SamplePriceTrendV1Profile)
     assert isinstance(get_ranking_profile("sample_price_trend_v1"), SamplePriceTrendV1Profile)
+
+    momentum_registration = get_ranking_profile_registration("momentum_v1")
+    assert isinstance(momentum_registration, RankingProfileRegistration)
+    assert isinstance(momentum_registration.create_profile(), MomentumV1Profile)
+    assert isinstance(get_ranking_profile("momentum_v1"), MomentumV1Profile)
+
+    liquidity_registration = get_ranking_profile_registration("liquidity_quality_v1")
+    assert isinstance(liquidity_registration, RankingProfileRegistration)
+    assert isinstance(liquidity_registration.create_profile(), LiquidityQualityV1Profile)
+    assert isinstance(get_ranking_profile("liquidity_quality_v1"), LiquidityQualityV1Profile)
 
 
 def test_supported_profile_registry_rejects_unknown_profile() -> None:
