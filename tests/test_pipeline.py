@@ -42,6 +42,60 @@ def test_pipeline_runs_sample_profile_and_persists_report(tmp_path: Path, fixtur
     assert {row["horizon"] for row in payload.rankings} == {"midterm", "longterm"}
 
 
+def test_pipeline_runs_momentum_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
+    config = AppConfig(
+        data_mode="fixture",
+        duckdb_path=str(tmp_path / "runs.duckdb"),
+        lock_path=str(tmp_path / "batch.lock"),
+        fixture_dir=str(fixture_dir),
+        ranking_profile="momentum_v1",
+        report_top_n=2,
+    )
+
+    result = run_batch(Market.US, config)
+
+    repo = DuckDbRepository(config.duckdb_path)
+    resolved = repo.resolve_latest_successful_run(Market.US, ranking_profile="momentum_v1")
+    payload = repo.read_inspect_payload(result.run_id, "AAA", profile=config.selected_ranking_profile)
+
+    assert resolved.run_id == result.run_id
+    assert resolved.ranking_profile == "momentum_v1"
+    assert "risk_adjusted_momentum_12_1" in payload.snapshot
+    assert "score_risk_adjusted_momentum_12_1" in payload.rankings[0]
+    assert {row["horizon"] for row in payload.rankings} == {"swing", "midterm"}
+
+
+def test_pipeline_runs_liquidity_quality_profile_and_persists_metrics(
+    tmp_path: Path, fixture_dir: Path
+) -> None:
+    config = AppConfig(
+        data_mode="fixture",
+        duckdb_path=str(tmp_path / "runs.duckdb"),
+        lock_path=str(tmp_path / "batch.lock"),
+        fixture_dir=str(fixture_dir),
+        ranking_profile="liquidity_quality_v1",
+        report_top_n=2,
+    )
+
+    result = run_batch(Market.US, config)
+
+    repo = DuckDbRepository(config.duckdb_path)
+    resolved = repo.resolve_latest_successful_run(Market.US, ranking_profile="liquidity_quality_v1")
+    report = repo.read_report_markdown(result.run_id)
+    payload = repo.read_inspect_payload(result.run_id, "AAA", profile=config.selected_ranking_profile)
+
+    assert resolved.run_id == result.run_id
+    assert resolved.ranking_profile == "liquidity_quality_v1"
+    assert "ranking_profile: liquidity_quality_v1" in report
+    assert payload.snapshot["ticker"] == "AAA"
+    assert payload.snapshot["profile_metrics_version"] == 1.0
+    assert payload.snapshot["avg_traded_value_20d_local"] >= 10_000_000.0
+    assert "volume" not in payload.snapshot
+    assert {row["horizon"] for row in payload.rankings} == {"composite", "shortterm", "stable"}
+    assert "depth_score" in payload.rankings[0]
+    assert "tag_risk_thin_liquidity" in payload.rankings[0]
+
+
 def test_pipeline_marks_failed_run_when_provider_has_no_usable_rows(tmp_path: Path, fixture_dir: Path) -> None:
     config = _fixture_config(tmp_path, fixture_dir)
     empty_fixture_dir = tmp_path / "empty_fixture"
