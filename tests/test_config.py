@@ -33,6 +33,14 @@ from universe_selector.ranking_profiles.sample_price_trend_v1 import (
     SAMPLE_PRICE_TREND_PROFILE_ID,
     SamplePriceTrendV1Profile,
 )
+from universe_selector.ranking_profiles.trend_quality_v1 import (
+    TREND_QUALITY_PROFILE_ID,
+    TREND_QUALITY_RANKING_METRIC_KEYS,
+    TREND_QUALITY_RANK_INTERPRETATION_NOTE,
+    TREND_QUALITY_SCORE_METHOD,
+    TREND_QUALITY_SNAPSHOT_METRIC_KEYS,
+    TrendQualityV1Profile,
+)
 from universe_selector.ranking_profiles.volatility_quality_v1 import (
     VOLATILITY_QUALITY_PROFILE_ID,
     VOLATILITY_QUALITY_RANK_INTERPRETATION_NOTE,
@@ -257,8 +265,54 @@ def test_volatility_quality_profile_public_api_and_payload() -> None:
     }
 
 
+def test_trend_quality_profile_public_api_and_payload() -> None:
+    profile = TrendQualityV1Profile()
+
+    assert TREND_QUALITY_PROFILE_ID == "trend_quality_v1"
+    assert profile.horizon_order == ("composite", "shortterm", "midterm")
+    assert profile.rank_interpretation_note == TREND_QUALITY_RANK_INTERPRETATION_NOTE
+    assert profile.snapshot_metric_keys == TREND_QUALITY_SNAPSHOT_METRIC_KEYS
+    assert profile.ranking_metric_keys == TREND_QUALITY_RANKING_METRIC_KEYS
+    assert profile.inspect_metric_keys == profile.snapshot_metric_keys
+    assert "avg_traded_value_20d_local" in profile.snapshot_metric_keys
+    assert "asof_bar_date_yyyymmdd" in profile.snapshot_metric_keys
+    assert "volume" not in profile.snapshot_metric_keys
+    assert "tag_structure_cap_active" in profile.ranking_metric_keys
+    assert "tag_structure_downtrend" not in profile.ranking_metric_keys
+    assert profile.ranking_config_payload() == {
+        "ranking_profile": "trend_quality_v1",
+        "min_history_bars": 252,
+        "price_floor": {"TW": 10.0, "US": 5.0},
+        "liquidity_floor": {"TW": 50_000_000.0, "US": 10_000_000.0},
+        "active_trading_min_days_60": {"TW": 50, "US": 55},
+        "zero_volume_max_days_20": {"TW": 3, "US": 1},
+        "volatility_floor": 0.0001,
+        "horizon_order": ["composite", "shortterm", "midterm"],
+        "snapshot_metric_keys": list(TREND_QUALITY_SNAPSHOT_METRIC_KEYS),
+        "ranking_metric_keys": list(TREND_QUALITY_RANKING_METRIC_KEYS),
+        "inspect_metric_keys": list(TREND_QUALITY_SNAPSHOT_METRIC_KEYS),
+        "stdev_ddof": 1,
+        "score_method": TREND_QUALITY_SCORE_METHOD,
+    }
+
+
 def test_volatility_quality_profile_is_immutable() -> None:
     profile = VolatilityQualityV1Profile()
+
+    with pytest.raises(FrozenInstanceError):
+        profile.min_history_bars = 100  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        profile.price_floor[Market.US] = 1.0  # type: ignore[index]
+    with pytest.raises(TypeError):
+        profile.liquidity_floor[Market.US] = 1.0  # type: ignore[index]
+    with pytest.raises(TypeError):
+        profile.active_trading_min_days_60[Market.US] = 1  # type: ignore[index]
+    with pytest.raises(TypeError):
+        profile.zero_volume_max_days_20[Market.US] = 1  # type: ignore[index]
+
+
+def test_trend_quality_profile_is_immutable() -> None:
+    profile = TrendQualityV1Profile()
 
     with pytest.raises(FrozenInstanceError):
         profile.min_history_bars = 100  # type: ignore[misc]
@@ -300,6 +354,43 @@ def test_volatility_quality_profile_rejects_contract_changes(
         profile.validate()
 
 
+@pytest.mark.parametrize(
+    ("profile", "message"),
+    [
+        (TrendQualityV1Profile(min_history_bars=251), "min_history_bars"),
+        (TrendQualityV1Profile(profile_id="bad"), "profile_id"),
+        (TrendQualityV1Profile(price_floor={Market.TW: 11.0, Market.US: 5.0}), "price_floor"),
+        (
+            TrendQualityV1Profile(
+                liquidity_floor={Market.TW: 50_000_000.0, Market.US: 9_000_000.0}
+            ),
+            "liquidity_floor",
+        ),
+        (
+            TrendQualityV1Profile(active_trading_min_days_60={Market.TW: 50, Market.US: 54}),
+            "active_trading_min_days_60",
+        ),
+        (
+            TrendQualityV1Profile(zero_volume_max_days_20={Market.TW: 2, Market.US: 1}),
+            "zero_volume_max_days_20",
+        ),
+        (TrendQualityV1Profile(volatility_floor=0.001), "volatility_floor"),
+        (TrendQualityV1Profile(snapshot_metric_keys=("profile_metrics_version",)), "snapshot metric"),
+        (TrendQualityV1Profile(ranking_metric_keys=("score_return_20d",)), "ranking metric"),
+        (TrendQualityV1Profile(inspect_metric_keys=("return_20d",)), "inspect metric"),
+        (TrendQualityV1Profile(horizon_order=("shortterm", "composite", "midterm")), "horizon order"),
+        (TrendQualityV1Profile(stdev_ddof=0), "stdev_ddof"),
+        (TrendQualityV1Profile(score_method="bad"), "score_method"),
+        (TrendQualityV1Profile(rank_interpretation_note="bad"), "rank_interpretation_note"),
+    ],
+)
+def test_trend_quality_profile_rejects_contract_changes(
+    profile: TrendQualityV1Profile, message: str
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        profile.validate()
+
+
 def test_ranking_profiles_package_root_exposes_registry_contract_only() -> None:
     assert ranking_profiles.RankingProfileRegistration is RankingProfileRegistration
     assert ranking_profiles.get_ranking_profile is get_ranking_profile
@@ -307,12 +398,14 @@ def test_ranking_profiles_package_root_exposes_registry_contract_only() -> None:
     assert "LiquidityQualityV1Profile" not in ranking_profiles.__all__
     assert "MomentumV1Profile" not in ranking_profiles.__all__
     assert "SamplePriceTrendV1Profile" not in ranking_profiles.__all__
+    assert "TrendQualityV1Profile" not in ranking_profiles.__all__
 
 
 def test_supported_profile_registry_includes_public_profiles() -> None:
     assert supported_ranking_profile_ids() == (
         "sample_price_trend_v1",
         "momentum_v1",
+        "trend_quality_v1",
         "volatility_quality_v1",
         "liquidity_quality_v1",
     )
@@ -331,6 +424,11 @@ def test_supported_profile_registry_includes_public_profiles() -> None:
     assert isinstance(volatility_registration, RankingProfileRegistration)
     assert isinstance(volatility_registration.create_profile(), VolatilityQualityV1Profile)
     assert isinstance(get_ranking_profile("volatility_quality_v1"), VolatilityQualityV1Profile)
+
+    trend_registration = get_ranking_profile_registration("trend_quality_v1")
+    assert isinstance(trend_registration, RankingProfileRegistration)
+    assert isinstance(trend_registration.create_profile(), TrendQualityV1Profile)
+    assert isinstance(get_ranking_profile("trend_quality_v1"), TrendQualityV1Profile)
 
     liquidity_registration = get_ranking_profile_registration("liquidity_quality_v1")
     assert isinstance(liquidity_registration, RankingProfileRegistration)
