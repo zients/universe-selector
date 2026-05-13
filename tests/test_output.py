@@ -3,12 +3,11 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 import polars as pl
-import pytest
 
 from universe_selector.config import AppConfig
 from universe_selector.domain import Market
 from universe_selector.output.inspect import render_inspect
-from universe_selector.output.report import FORBIDDEN_WORDS, render_markdown_report
+from universe_selector.output.report import REPORT_RESEARCH_DISCLAIMER, render_markdown_report
 from universe_selector.providers.models import ProviderMetadata
 from universe_selector.ranking_profiles.liquidity_quality_v1 import LiquidityQualityV1Profile
 from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
@@ -60,10 +59,9 @@ def test_markdown_report_renders_sample_profile_sections_and_notes() -> None:
     assert "## Highest-ranked longterm candidates" in content
     assert "| rank | ticker | score |" in content
     assert "sample_price_trend_v1" in content
+    assert REPORT_RESEARCH_DISCLAIMER in content
     assert profile.rank_interpretation_note in content
     assert "Filtered-out tickers and exclusion reasons are not persisted." in content
-    for forbidden in FORBIDDEN_WORDS:
-        assert forbidden not in content.lower()
 
 
 def test_empty_report_is_structured_and_not_advice() -> None:
@@ -80,26 +78,7 @@ def test_empty_report_is_structured_and_not_advice() -> None:
 
     assert "Successful run with no persisted candidates" in content
     assert "surviving candidate count: 0" in content
-    for forbidden in FORBIDDEN_WORDS:
-        assert forbidden not in content.lower()
-
-
-@pytest.mark.parametrize(
-    "unsafe_note",
-    ["hold", "recommendations", "target prices", "expected returns", "portfolio weights"],
-)
-def test_markdown_report_rejects_standalone_advice_terms(unsafe_note: str) -> None:
-    with pytest.raises(ValueError):
-        render_markdown_report(
-            run_id="us-run",
-            market=Market.US,
-            mode_label="fixture",
-            provider_summary={"ranking_profile": "sample_price_trend_v1", "unsafe_note": unsafe_note},
-            snapshot=pl.DataFrame(),
-            rankings=pl.DataFrame(),
-            config=AppConfig(data_mode="fixture"),
-            profile=SamplePriceTrendV1Profile(),
-        )
+    assert REPORT_RESEARCH_DISCLAIMER in content
 
 
 def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:
@@ -267,5 +246,6 @@ def test_report_and_inspect_render_trend_quality_interpretation_note() -> None:
     )
 
     assert profile.rank_interpretation_note in report
+    assert REPORT_RESEARCH_DISCLAIMER in report
     assert profile.rank_interpretation_note in inspect
     assert "tag_structure_cap_active 1.0" in inspect

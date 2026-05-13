@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 import polars as pl
 
 from universe_selector.config import AppConfig
@@ -9,30 +7,7 @@ from universe_selector.domain import Market
 from universe_selector.ranking_profiles import RankingProfile
 
 
-FORBIDDEN_WORDS = ("buy", "sell", "hold", "recommendation", "target price", "expected return", "portfolio weight")
-_ALLOWED_NO_ADVICE_PHRASES = ("holding-period recommendations",)
-_FORBIDDEN_WORDING_PATTERN_SOURCES = {
-    "buy": r"(?<!\w)buy(?!\w)",
-    "sell": r"(?<!\w)sell(?!\w)",
-    "hold": r"(?<!\w)hold(?!\w)",
-    "recommendation": r"(?<!\w)recommendations?(?!\w)",
-    "target price": r"(?<!\w)target prices?(?!\w)",
-    "expected return": r"(?<!\w)expected returns?(?!\w)",
-    "portfolio weight": r"(?<!\w)portfolio weights?(?!\w)",
-}
-_FORBIDDEN_WORDING_PATTERNS = tuple(
-    (wording, re.compile(_FORBIDDEN_WORDING_PATTERN_SOURCES[wording])) for wording in FORBIDDEN_WORDS
-)
-
-
-def _find_forbidden_wording(content: str) -> str | None:
-    lowered = content.lower()
-    for allowed_phrase in _ALLOWED_NO_ADVICE_PHRASES:
-        lowered = lowered.replace(allowed_phrase, " ")
-    for wording, pattern in _FORBIDDEN_WORDING_PATTERNS:
-        if pattern.search(lowered):
-            return wording
-    return None
+REPORT_RESEARCH_DISCLAIMER = "This report is for quantitative research only and is not investment advice."
 
 
 def _format_provider_summary(provider_summary: dict[str, str]) -> str:
@@ -73,7 +48,9 @@ def render_markdown_report(
         )
         for horizon in profile.horizon_order
     )
-    content = f"""# Universe Selector Report
+    return f"""# Universe Selector Report
+
+> {REPORT_RESEARCH_DISCLAIMER}
 
 ## Run Context
 
@@ -102,7 +79,3 @@ def render_markdown_report(
 - Filtered-out tickers and exclusion reasons are not persisted.
 - This report is rendered during batch; report and inspect read persisted results only.
 """
-    forbidden = _find_forbidden_wording(content)
-    if forbidden is not None:
-        raise ValueError(f"report contains forbidden wording: {forbidden}")
-    return content
