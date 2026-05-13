@@ -167,6 +167,19 @@ uv run universe-selector report us --ranking-profile sample_price_trend_v1
 uv run universe-selector inspect us --ticker AXTI --ranking-profile sample_price_trend_v1
 ```
 
+Run several ranking profiles from one provider data load:
+
+```bash
+uv run universe-selector batch us \
+  --ranking-profile trend_quality_v1 \
+  --ranking-profile momentum_v1 \
+  --ranking-profile volatility_quality_v1
+```
+
+Each profile is persisted as its own run. `report` and `inspect` continue
+to read one run at a time; use `--ranking-profile` to resolve the latest
+run for a specific profile.
+
 You can also read an explicit persisted run:
 
 ```bash

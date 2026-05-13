@@ -8,9 +8,10 @@ from typer.testing import CliRunner
 from universe_selector.cli import app
 from universe_selector.config import AppConfig
 from universe_selector.domain import Market
+from universe_selector.errors import ValidationError
 from universe_selector.persistence.repository import DuckDbRepository
 from universe_selector.persistence.schema import apply_migrations
-from universe_selector.pipeline import BatchResult
+from universe_selector.pipeline import BatchResult, FailedBatchResult, MultiProfileBatchError
 
 
 RUN_ID_RE = re.compile(r"run_id: (?P<run_id>(?:tw|us)-[0-9a-f-]+)")
@@ -160,6 +161,186 @@ def test_cli_batch_ranking_profile_overrides_config(monkeypatch) -> None:
 
     assert result.exit_code == 0, result.output
     assert captured == {"market": Market.US, "ranking_profile": "sample_price_trend_v1"}
+
+
+def test_cli_batch_single_profile_output_stays_run_id_and_market_only(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: AppConfig(ranking_profile="sample_price_trend_v1"),
+    )
+
+    def fake_run_batch(market: Market, config: AppConfig) -> BatchResult:
+        return BatchResult(
+            run_id="us-00000000-0000-4000-8000-000000000003",
+            market=market,
+            ranking_profile=config.ranking_profile,
+        )
+
+    monkeypatch.setattr("universe_selector.cli.run_batch", fake_run_batch)
+
+    no_override = runner.invoke(app, ["batch", "us"])
+    assert no_override.exit_code == 0, no_override.output
+    assert no_override.output.splitlines() == [
+        "run_id: us-00000000-0000-4000-8000-000000000003",
+        "market: US",
+    ]
+
+    one_override = runner.invoke(app, ["batch", "us", "--ranking-profile", "momentum_v1"])
+    assert one_override.exit_code == 0, one_override.output
+    assert one_override.output.splitlines() == [
+        "run_id: us-00000000-0000-4000-8000-000000000003",
+        "market: US",
+    ]
+
+
+def test_cli_batch_accepts_repeated_ranking_profiles(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: AppConfig(ranking_profile="sample_price_trend_v1"),
+    )
+
+    def fail_run_batch(market: Market, config: AppConfig) -> BatchResult:
+        raise AssertionError("single-profile run_batch must not be used")
+
+    def fake_run_batch_profiles(market: Market, config: AppConfig, profile_ids: tuple[str, ...]):
+        captured["market"] = market
+        captured["base_profile"] = config.ranking_profile
+        captured["profile_ids"] = profile_ids
+        return (
+            BatchResult("us-00000000-0000-4000-8000-000000000001", market, "trend_quality_v1"),
+            BatchResult("us-00000000-0000-4000-8000-000000000002", market, "momentum_v1"),
+        )
+
+    monkeypatch.setattr("universe_selector.cli.run_batch", fail_run_batch)
+    monkeypatch.setattr("universe_selector.cli.run_batch_profiles", fake_run_batch_profiles)
+
+    result = runner.invoke(
+        app,
+        [
+            "batch",
+            "us",
+            "--ranking-profile",
+            "trend_quality_v1",
+            "--ranking-profile",
+            "momentum_v1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured == {
+        "market": Market.US,
+        "base_profile": "sample_price_trend_v1",
+        "profile_ids": ("trend_quality_v1", "momentum_v1"),
+    }
+    assert result.output.splitlines() == [
+        "run_id: us-00000000-0000-4000-8000-000000000001",
+        "ranking_profile: trend_quality_v1",
+        "run_id: us-00000000-0000-4000-8000-000000000002",
+        "ranking_profile: momentum_v1",
+        "market: US",
+    ]
+
+
+def test_cli_batch_rejects_duplicate_repeated_ranking_profiles(monkeypatch) -> None:
+    monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
+
+    def fail_run_batch_profiles(*args, **kwargs):
+        raise AssertionError("pipeline must not run for duplicate profiles")
+
+    monkeypatch.setattr("universe_selector.cli.run_batch_profiles", fail_run_batch_profiles)
+
+    result = runner.invoke(
+        app,
+        ["batch", "us", "--ranking-profile", "momentum_v1", "--ranking-profile", "momentum_v1"],
+    )
+
+    assert result.exit_code != 0
+    assert "duplicate ranking profile momentum_v1" in result.output
+
+
+def test_cli_batch_rejects_unknown_repeated_ranking_profile(monkeypatch) -> None:
+    monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
+
+    def fail_run_batch_profiles(*args, **kwargs):
+        raise AssertionError("pipeline must not run for unknown profiles")
+
+    monkeypatch.setattr("universe_selector.cli.run_batch_profiles", fail_run_batch_profiles)
+
+    result = runner.invoke(
+        app,
+        ["batch", "us", "--ranking-profile", "unknown_profile", "--ranking-profile", "momentum_v1"],
+    )
+
+    assert result.exit_code != 0
+    assert "unknown ranking profile unknown_profile" in result.output
+
+
+def test_cli_batch_prints_partial_results_on_multi_profile_failure(monkeypatch) -> None:
+    monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
+
+    def fake_run_batch_profiles(market: Market, config: AppConfig, profile_ids: tuple[str, ...]):
+        raise MultiProfileBatchError(
+            completed_results=(
+                BatchResult("us-00000000-0000-4000-8000-000000000001", market, "trend_quality_v1"),
+            ),
+            failed_result=FailedBatchResult(
+                run_id="us-00000000-0000-4000-8000-000000000002",
+                market=market,
+                ranking_profile="momentum_v1",
+                error_message="boom",
+            ),
+            exit_code=ValidationError.exit_code,
+        )
+
+    monkeypatch.setattr("universe_selector.cli.run_batch_profiles", fake_run_batch_profiles)
+
+    result = runner.invoke(
+        app,
+        ["batch", "us", "--ranking-profile", "trend_quality_v1", "--ranking-profile", "momentum_v1"],
+    )
+
+    assert result.exit_code == ValidationError.exit_code
+    assert result.output.splitlines() == [
+        "run_id: us-00000000-0000-4000-8000-000000000001",
+        "ranking_profile: trend_quality_v1",
+        "failed_run_id: us-00000000-0000-4000-8000-000000000002",
+        "failed_ranking_profile: momentum_v1",
+        "error: boom",
+        "market: US",
+    ]
+
+
+def test_cli_batch_prints_first_failed_profile_without_completed_results(monkeypatch) -> None:
+    monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
+
+    def fake_run_batch_profiles(market: Market, config: AppConfig, profile_ids: tuple[str, ...]):
+        raise MultiProfileBatchError(
+            completed_results=(),
+            failed_result=FailedBatchResult(
+                run_id="us-00000000-0000-4000-8000-000000000001",
+                market=market,
+                ranking_profile="trend_quality_v1",
+                error_message="first profile failed",
+            ),
+            exit_code=ValidationError.exit_code,
+        )
+
+    monkeypatch.setattr("universe_selector.cli.run_batch_profiles", fake_run_batch_profiles)
+
+    result = runner.invoke(
+        app,
+        ["batch", "us", "--ranking-profile", "trend_quality_v1", "--ranking-profile", "momentum_v1"],
+    )
+
+    assert result.exit_code == ValidationError.exit_code
+    assert result.output.splitlines() == [
+        "failed_run_id: us-00000000-0000-4000-8000-000000000001",
+        "failed_ranking_profile: trend_quality_v1",
+        "error: first profile failed",
+        "market: US",
+    ]
 
 
 def test_cli_report_and_inspect_ranking_profile_filter_latest_run(monkeypatch, tmp_path: Path) -> None:
