@@ -148,7 +148,11 @@ def test_cli_batch_ranking_profile_overrides_config(monkeypatch) -> None:
     def fake_run_batch(market: Market, config: AppConfig) -> BatchResult:
         captured["market"] = market
         captured["ranking_profile"] = config.ranking_profile
-        return BatchResult(run_id="us-00000000-0000-4000-8000-000000000003", market=market)
+        return BatchResult(
+            run_id="us-00000000-0000-4000-8000-000000000003",
+            market=market,
+            ranking_profile=config.ranking_profile,
+        )
 
     monkeypatch.setattr("universe_selector.cli.run_batch", fake_run_batch)
 

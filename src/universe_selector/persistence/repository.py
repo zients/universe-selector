@@ -270,6 +270,12 @@ class DuckDbRepository:
                 raise
         return self._connection
 
+    def close(self) -> None:
+        if self._connection is None:
+            return
+        self._connection.close()
+        self._connection = None
+
     def _read_connection(self) -> duckdb.DuckDBPyConnection:
         connection = self.connect(read_only=True)
         validate_schema(connection)
