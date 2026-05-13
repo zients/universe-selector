@@ -39,7 +39,7 @@ def run_batch(market: Market, config: AppConfig) -> BatchResult:
         repo.create_running_run(run_id, market, config)
         try:
             provider = _provider_for(config)
-            provider_data = provider.load_run_data(run_id, market)
+            provider_data = provider.load_run_data(market)
             if not provider_data.listings:
                 raise ProviderDataError("listing provider returned no usable listings")
             if provider_data.bars.is_empty():

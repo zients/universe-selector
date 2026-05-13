@@ -12,9 +12,8 @@ from universe_selector.persistence.schema import apply_migrations
 from universe_selector.providers.models import ProviderMetadata
 
 
-def _metadata(run_id: str) -> ProviderMetadata:
+def _metadata() -> ProviderMetadata:
     return ProviderMetadata(
-        run_id=run_id,
         data_mode="fixture",
         listing_provider_id="fixture-listings-v1",
         listing_source_id="sample_basic/listings.csv",
@@ -60,7 +59,7 @@ def test_repository_persists_profile_scores_outside_0_to_100_range(tmp_path: Pat
 
     repo.mark_successful_run(
         run_id=run_id,
-        metadata=_metadata(run_id),
+        metadata=_metadata(),
         snapshot=snapshot,
         rankings=rankings,
         markdown="# Report\n",
@@ -71,6 +70,9 @@ def test_repository_persists_profile_scores_outside_0_to_100_range(tmp_path: Pat
         [run_id],
     ).fetchall()
     payload = repo.read_inspect_payload(run_id, "AAA", profile=AppConfig().selected_ranking_profile)
+    stored_metadata = repo.read_provider_metadata(run_id)
 
     assert stored_scores == [(-12.5,), (123.45,)]
     assert {row["score"] for row in payload.rankings} == {123.45, -12.5}
+    assert not hasattr(stored_metadata, "run_id")
+    assert stored_metadata.provider_config_hash == "fixture-sample-basic"

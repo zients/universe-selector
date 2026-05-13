@@ -154,7 +154,6 @@ def _metadata_from_row(row: tuple[Any, ...]) -> ProviderMetadata:
     else:
         data_fetch_started_at = data_fetch_started_at.astimezone(timezone.utc)
     return ProviderMetadata(
-        run_id=str(payload["run_id"]),
         data_mode=str(payload["data_mode"]),
         listing_provider_id=str(payload["listing_provider_id"]),
         listing_source_id=str(payload["listing_source_id"]),
@@ -325,8 +324,6 @@ class DuckDbRepository:
             run_market = running_row[0]
             profile = get_ranking_profile(str(running_row[1]))
             profile.validate()
-            if metadata.run_id != run_id:
-                raise DataIntegrityError("provider metadata run_id must match run context")
             _require_column_value(snapshot, "run_id", run_id, "snapshot run_id")
             _require_column_value(snapshot, "market", run_market, "snapshot market")
             _require_column_value(rankings, "run_id", run_id, "ranking run_id")
