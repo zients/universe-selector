@@ -30,7 +30,6 @@ def _payloads() -> dict[str, bytes]:
 
 def _context():
     return build_provider_run_context(
-        run_id="tw-test-run",
         market=Market.TW,
         data_fetch_started_at=datetime(2026, 5, 3, 13, 30, tzinfo=timezone.utc),
         ticker_limit=None,

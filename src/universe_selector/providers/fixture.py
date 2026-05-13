@@ -16,8 +16,8 @@ class FixtureProvider(MarketDataProvider):
     def __init__(self, fixture_dir: str | Path) -> None:
         self.fixture_dir = Path(fixture_dir)
 
-    def load_run_data(self, run_id: str, market: Market) -> ProviderRunData:
-        metadata = self._read_metadata(run_id, market)
+    def load_run_data(self, market: Market) -> ProviderRunData:
+        metadata = self._read_metadata(market)
         listings = self._read_listings(market)
         bars = self._read_ohlcv(
             market,
@@ -26,11 +26,10 @@ class FixtureProvider(MarketDataProvider):
         )
         return ProviderRunData(metadata=metadata, listings=listings, bars=bars)
 
-    def _read_metadata(self, run_id: str, market: Market) -> ProviderMetadata:
+    def _read_metadata(self, market: Market) -> ProviderMetadata:
         del market
         payload = json.loads((self.fixture_dir / "metadata.json").read_text())
         return ProviderMetadata(
-            run_id=run_id,
             data_mode=payload["data_mode"],
             listing_provider_id=payload["listing_provider_id"],
             listing_source_id=payload["listing_source_id"],

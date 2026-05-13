@@ -15,7 +15,6 @@ from universe_selector.providers.yfinance_ohlcv import YFinanceOhlcvProvider
 
 def _context(market: Market = Market.US):
     return build_provider_run_context(
-        run_id=f"{market.value.lower()}-test-run",
         market=market,
         data_fetch_started_at=datetime(2026, 5, 3, 13, 30, tzinfo=timezone.utc),
         ticker_limit=None,

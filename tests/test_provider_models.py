@@ -19,7 +19,6 @@ def test_provider_models_are_owned_by_provider_package() -> None:
         source_id="fixture",
     )
     metadata = ProviderMetadata(
-        run_id="us-123e4567-e89b-12d3-a456-426614174000",
         data_mode="fixture",
         listing_provider_id="fixture",
         listing_source_id="fixture",
@@ -46,6 +45,7 @@ def test_provider_models_are_owned_by_provider_package() -> None:
 
     provider_data = ProviderRunData(metadata=metadata, listings=[listing], bars=bars)
 
+    assert not hasattr(metadata, "run_id")
     assert provider_data.metadata is metadata
     assert provider_data.listings == [listing]
     assert provider_data.bars.height == 1

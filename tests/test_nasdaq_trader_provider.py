@@ -36,7 +36,6 @@ def _provider(texts: dict[str, str] | None = None) -> NasdaqTraderListingProvide
 
 def _context():
     return build_provider_run_context(
-        run_id="us-test-run",
         market=Market.US,
         data_fetch_started_at=datetime.fromisoformat("2026-05-03T13:30:00+00:00"),
         ticker_limit=None,
