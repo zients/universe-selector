@@ -115,6 +115,27 @@ def _max_drawdown(values: list[float]) -> float:
     return worst
 
 
+def _percentile_scores(values: list[float], *, higher_is_better: bool = True) -> list[float]:
+    if not values:
+        return []
+    if len(values) == 1:
+        return [1.0]
+    indexed = list(enumerate(values))
+    indexed.sort(key=lambda item: item[1], reverse=higher_is_better)
+    scores = [0.0] * len(values)
+    position = 0
+    while position < len(indexed):
+        end = position + 1
+        while end < len(indexed) and indexed[end][1] == indexed[position][1]:
+            end += 1
+        average_rank_position = (position + end - 1) / 2.0
+        score = 1.0 - average_rank_position / (len(values) - 1)
+        for original_index, _value in indexed[position:end]:
+            scores[original_index] = score
+        position = end
+    return scores
+
+
 def _immutable_market_float_mapping(value: Mapping[Market, float]) -> Mapping[Market, float]:
     return MappingProxyType({market: float(value[market]) for market in Market})
 
@@ -386,7 +407,147 @@ class VolatilityQualityV1Profile:
         return pl.DataFrame(rows, schema=VOLATILITY_QUALITY_SNAPSHOT_SCHEMA).sort("ticker")
 
     def assign_rankings(self, snapshot: pl.DataFrame) -> pl.DataFrame:
-        return _empty_rankings()
+        if snapshot.is_empty():
+            return _empty_rankings()
+        if not self._has_required_ranking_inputs(snapshot):
+            raise ValidationError("volatility_quality_v1 snapshot is missing required ranking inputs")
+        for column in VOLATILITY_QUALITY_SNAPSHOT_METRIC_KEYS:
+            if not snapshot.schema[column].is_numeric():
+                raise ValidationError(
+                    f"volatility_quality_v1 snapshot contains non-numeric ranking input: {column}"
+                )
+            invalid_count = snapshot.filter(pl.col(column).is_null() | (~pl.col(column).is_finite())).height
+            if invalid_count > 0:
+                raise ValidationError(
+                    f"volatility_quality_v1 snapshot contains non-finite ranking input: {column}"
+                )
+        ranking_frames = []
+        for partition in snapshot.partition_by(["run_id", "market"], maintain_order=True):
+            ranking_frames.append(self._assign_single_run_market_rankings(partition))
+        return (
+            pl.concat(ranking_frames)
+            .sort(["run_id", "market", "horizon", "rank"])
+            .select(self._ranking_columns())
+        )
+
+    def _has_required_ranking_inputs(self, snapshot: pl.DataFrame) -> bool:
+        required = {"run_id", "market", "ticker", *VOLATILITY_QUALITY_SNAPSHOT_METRIC_KEYS}
+        return required.issubset(set(snapshot.columns))
+
+    def _ranking_columns(self) -> list[str]:
+        return [
+            "run_id",
+            "market",
+            "horizon",
+            "ticker",
+            *self.ranking_metric_keys,
+            "score",
+            "rank",
+        ]
+
+    def _assign_single_run_market_rankings(self, frame: pl.DataFrame) -> pl.DataFrame:
+        rows = frame.sort("ticker").to_dicts()
+        vol_20d = [float(row["volatility_20d"]) for row in rows]
+        vol_60d = [float(row["volatility_60d"]) for row in rows]
+        downside_vol_60d = [float(row["downside_volatility_60d"]) for row in rows]
+        drawdown_120d = [float(row["max_drawdown_120d"]) for row in rows]
+        range_20d = [float(row["median_range_pct_20d"]) for row in rows]
+        range_60d = [float(row["median_range_pct_60d"]) for row in rows]
+        stability_60d = [float(row["volatility_stability_60d"]) for row in rows]
+
+        score_low_volatility_20d = _percentile_scores(vol_20d, higher_is_better=False)
+        score_low_volatility_60d = _percentile_scores(vol_60d, higher_is_better=False)
+        score_downside_volatility_60d = _percentile_scores(downside_vol_60d, higher_is_better=False)
+        score_drawdown_control_120d = _percentile_scores(drawdown_120d)
+        score_range_tightness_20d = _percentile_scores(range_20d, higher_is_better=False)
+        score_range_tightness_60d = _percentile_scores(range_60d, higher_is_better=False)
+        score_volatility_stability_60d = _percentile_scores(stability_60d, higher_is_better=False)
+
+        scored_rows: list[dict[str, object]] = []
+        for index, row in enumerate(rows):
+            volatility_control_score = (
+                0.45 * score_low_volatility_60d[index]
+                + 0.35 * score_low_volatility_20d[index]
+                + 0.20 * score_downside_volatility_60d[index]
+            )
+            trading_smoothness_score = (
+                0.50 * score_range_tightness_20d[index]
+                + 0.30 * score_range_tightness_60d[index]
+                + 0.20 * score_volatility_stability_60d[index]
+            )
+            drawdown_quality_score = score_drawdown_control_120d[index]
+            penalty_score = 0.0
+            if float(row["data_quality_extreme_return_flag"]) == 1.0:
+                penalty_score += 0.15
+            if float(row["stale_close_days_20d"]) >= 3.0:
+                penalty_score += 0.10
+            if float(row["volatility_stability_60d"]) > math.log(2.0):
+                penalty_score += 0.10
+
+            row.update(
+                {
+                    "score_low_volatility_20d": score_low_volatility_20d[index],
+                    "score_low_volatility_60d": score_low_volatility_60d[index],
+                    "score_downside_volatility_60d": score_downside_volatility_60d[index],
+                    "score_drawdown_control_120d": score_drawdown_control_120d[index],
+                    "score_range_tightness_20d": score_range_tightness_20d[index],
+                    "score_range_tightness_60d": score_range_tightness_60d[index],
+                    "score_volatility_stability_60d": score_volatility_stability_60d[index],
+                    "volatility_control_score": volatility_control_score,
+                    "trading_smoothness_score": trading_smoothness_score,
+                    "drawdown_quality_score": drawdown_quality_score,
+                    "penalty_score": penalty_score,
+                }
+            )
+            scored_rows.append(row)
+
+        ranking_rows: list[dict[str, object]] = []
+        for horizon in self.horizon_order:
+            horizon_rows = []
+            for row in scored_rows:
+                if horizon == "composite":
+                    score = (
+                        0.45 * float(row["volatility_control_score"])
+                        + 0.30 * float(row["drawdown_quality_score"])
+                        + 0.25 * float(row["trading_smoothness_score"])
+                        - float(row["penalty_score"])
+                    )
+                elif horizon == "shortterm":
+                    score = (
+                        0.45 * float(row["score_low_volatility_20d"])
+                        + 0.35 * float(row["score_range_tightness_20d"])
+                        + 0.20 * float(row["score_volatility_stability_60d"])
+                        - float(row["penalty_score"])
+                    )
+                elif horizon == "stable":
+                    score = (
+                        0.40 * float(row["score_low_volatility_60d"])
+                        + 0.25 * float(row["score_downside_volatility_60d"])
+                        + 0.25 * float(row["score_drawdown_control_120d"])
+                        + 0.10 * float(row["score_range_tightness_60d"])
+                        - float(row["penalty_score"])
+                    )
+                else:
+                    raise ValidationError(f"unknown horizon {horizon}")
+                if not math.isfinite(score):
+                    raise ValidationError("volatility_quality_v1 produced a non-finite ranking score")
+                horizon_rows.append(
+                    {
+                        "run_id": row["run_id"],
+                        "market": row["market"],
+                        "horizon": horizon,
+                        "ticker": row["ticker"],
+                        **{key: row[key] for key in self.ranking_metric_keys},
+                        "score": score,
+                    }
+                )
+            horizon_rows.sort(key=lambda item: (-float(item["score"]), str(item["ticker"])))
+            for rank, row in enumerate(horizon_rows, start=1):
+                row["rank"] = rank
+                ranking_rows.append(row)
+        return pl.DataFrame(ranking_rows, schema=VOLATILITY_QUALITY_RANKING_SCHEMA).select(
+            self._ranking_columns()
+        )
 
 
 VOLATILITY_QUALITY_V1_REGISTRATION = RankingProfileRegistration(
