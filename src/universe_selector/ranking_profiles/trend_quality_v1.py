@@ -124,6 +124,51 @@ def _all_finite(values: list[object]) -> bool:
     )
 
 
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values)
+
+
+def _std(values: list[float], *, ddof: int) -> float | None:
+    if len(values) <= ddof:
+        return None
+    average = _mean(values)
+    variance = sum((value - average) ** 2 for value in values) / (len(values) - ddof)
+    return math.sqrt(variance)
+
+
+def _max_drawdown(values: list[float]) -> float:
+    peak = values[0]
+    worst = 0.0
+    for value in values:
+        peak = max(peak, value)
+        worst = min(worst, value / peak - 1.0)
+    return worst
+
+
+def _ols_slope_r2(values: list[float]) -> tuple[float, float]:
+    y_values = [math.log(value) for value in values]
+    x_values = list(range(len(y_values)))
+    x_mean = _mean([float(value) for value in x_values])
+    y_mean = _mean(y_values)
+    ss_xx = sum((float(value) - x_mean) ** 2 for value in x_values)
+    slope = sum(
+        (float(x) - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=True)
+    ) / ss_xx
+    intercept = y_mean - slope * x_mean
+    total = sum((value - y_mean) ** 2 for value in y_values)
+    if total == 0.0:
+        return slope, 0.0
+    residual = sum(
+        (y - (intercept + slope * float(x))) ** 2
+        for x, y in zip(x_values, y_values, strict=True)
+    )
+    return slope, 1.0 - residual / total
+
+
+def _yyyymmdd(value: date) -> float:
+    return float(value.year * 10_000 + value.month * 100 + value.day)
+
+
 def _immutable_market_float_mapping(value: Mapping[Market, float]) -> Mapping[Market, float]:
     return MappingProxyType({market: float(value[market]) for market in Market})
 
@@ -252,8 +297,175 @@ class TrendQualityV1Profile:
         bars: pl.DataFrame,
         run_latest_bar_date: date,
     ) -> pl.DataFrame:
-        _ = (run_id, market, listings, bars, run_latest_bar_date)
-        return _empty_snapshot()
+        listed_tickers = {item.ticker for item in listings if item.market == market}
+        if not listed_tickers or bars.is_empty():
+            return _empty_snapshot()
+
+        candidate_bars = bars.filter(
+            (pl.col("market") == market.value)
+            & (pl.col("ticker").is_in(list(listed_tickers)))
+            & (pl.col("bar_date") <= run_latest_bar_date)
+        )
+        if candidate_bars.is_empty():
+            return _empty_snapshot()
+        if candidate_bars.filter(pl.col("bar_date") == run_latest_bar_date).height > 0:
+            candidate_bars = candidate_bars.filter(pl.col("bar_date") != run_latest_bar_date)
+        if candidate_bars.is_empty():
+            return _empty_snapshot()
+
+        profile_asof_bar_date = candidate_bars["bar_date"].max()
+        rows: list[dict[str, object]] = []
+        for ticker in sorted(listed_tickers):
+            ticker_bars = (
+                candidate_bars.filter((pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date))
+                .sort("bar_date")
+            )
+            if ticker_bars.is_empty() or ticker_bars.height < self.min_history_bars:
+                continue
+            if ticker_bars["bar_date"].n_unique() != ticker_bars.height:
+                continue
+            if ticker_bars["bar_date"][-1] != profile_asof_bar_date:
+                continue
+
+            retained = ticker_bars.tail(self.min_history_bars)
+            opens = retained["open"].to_list()
+            highs = retained["high"].to_list()
+            lows = retained["low"].to_list()
+            closes = retained["close"].to_list()
+            adjusted_closes = retained["adjusted_close"].to_list()
+            volumes = retained["volume"].to_list()
+            if not _all_finite(opens + highs + lows + closes + adjusted_closes + volumes):
+                continue
+
+            opens_float = [float(value) for value in opens]
+            highs_float = [float(value) for value in highs]
+            lows_float = [float(value) for value in lows]
+            closes_float = [float(value) for value in closes]
+            adjusted_closes_float = [float(value) for value in adjusted_closes]
+            volumes_float = [float(value) for value in volumes]
+            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+                continue
+            if any(value < 0.0 for value in volumes_float):
+                continue
+            if any(
+                high < low or high < open_ or high < close or low > open_ or low > close
+                for high, low, open_, close in zip(
+                    highs_float, lows_float, opens_float, closes_float, strict=True
+                )
+            ):
+                continue
+
+            latest_close = closes_float[-1]
+            latest_adjusted_close = adjusted_closes_float[-1]
+            traded_values_20d = [
+                close * volume for close, volume in zip(closes_float[-20:], volumes_float[-20:], strict=True)
+            ]
+            avg_traded_value_20d_local = _mean(traded_values_20d)
+            active_trading_days_60d = float(sum(1 for value in volumes_float[-60:] if value > 0.0))
+            zero_volume_days_20d = float(sum(1 for value in volumes_float[-20:] if value == 0.0))
+            stale_close_days_20d = float(
+                sum(
+                    1
+                    for index in range(len(closes_float) - 20, len(closes_float))
+                    if closes_float[index] == closes_float[index - 1]
+                    and adjusted_closes_float[index] == adjusted_closes_float[index - 1]
+                )
+            )
+
+            if latest_close < self.price_floor[market]:
+                continue
+            if avg_traded_value_20d_local < self.liquidity_floor[market]:
+                continue
+            if active_trading_days_60d < self.active_trading_min_days_60[market]:
+                continue
+            if zero_volume_days_20d > self.zero_volume_max_days_20[market]:
+                continue
+            if stale_close_days_20d >= 5.0:
+                continue
+
+            returns = [
+                adjusted_closes_float[index] / adjusted_closes_float[index - 1] - 1.0
+                for index in range(1, len(adjusted_closes_float))
+            ]
+            returns_60d = returns[-60:]
+            volatility_60d = _std(returns_60d, ddof=self.stdev_ddof)
+            if volatility_60d is None or volatility_60d <= self.volatility_floor:
+                continue
+            extreme_returns_200d = [
+                adjusted_closes_float[index] / adjusted_closes_float[index - 1] - 1.0
+                for index in range(len(adjusted_closes_float) - 200, len(adjusted_closes_float))
+            ]
+            if any(abs(value) > 0.80 for value in extreme_returns_200d):
+                continue
+
+            trend_slope_60d, trend_r2_60d = _ols_slope_r2(adjusted_closes_float[-60:])
+            uptrend_r2_60d = trend_r2_60d if trend_slope_60d > 0.0 else 0.0
+            trend_consistency_60d = float(sum(1 for value in returns_60d if value > 0.0)) / 60.0
+            sma_50d = _mean(adjusted_closes_float[-50:])
+            sma_200d = _mean(adjusted_closes_float[-200:])
+            price_vs_sma_50d = latest_adjusted_close / sma_50d - 1.0
+            price_vs_sma_200d = latest_adjusted_close / sma_200d - 1.0
+            sma_50d_vs_sma_200d = sma_50d / sma_200d - 1.0
+            pct_below_120d_high = latest_adjusted_close / max(adjusted_closes_float[-120:]) - 1.0
+            max_drawdown_120d = _max_drawdown(adjusted_closes_float[-120:])
+            return_20d = latest_adjusted_close / adjusted_closes_float[-21] - 1.0
+            return_60d = latest_adjusted_close / adjusted_closes_float[-61] - 1.0
+            return_120d = latest_adjusted_close / adjusted_closes_float[-121] - 1.0
+
+            computed = [
+                avg_traded_value_20d_local,
+                return_20d,
+                return_60d,
+                return_120d,
+                volatility_60d,
+                trend_slope_60d,
+                trend_r2_60d,
+                uptrend_r2_60d,
+                trend_consistency_60d,
+                price_vs_sma_50d,
+                price_vs_sma_200d,
+                sma_50d_vs_sma_200d,
+                pct_below_120d_high,
+                max_drawdown_120d,
+                zero_volume_days_20d,
+                active_trading_days_60d,
+                stale_close_days_20d,
+            ]
+            if not _all_finite(computed):
+                continue
+
+            rows.append(
+                {
+                    "run_id": run_id,
+                    "market": market.value,
+                    "ticker": ticker,
+                    "close": latest_close,
+                    "adjusted_close": latest_adjusted_close,
+                    "profile_metrics_version": 1.0,
+                    "asof_bar_date_yyyymmdd": _yyyymmdd(profile_asof_bar_date),
+                    "avg_traded_value_20d_local": avg_traded_value_20d_local,
+                    "return_20d": return_20d,
+                    "return_60d": return_60d,
+                    "return_120d": return_120d,
+                    "volatility_60d": volatility_60d,
+                    "trend_slope_60d": trend_slope_60d,
+                    "trend_r2_60d": trend_r2_60d,
+                    "uptrend_r2_60d": uptrend_r2_60d,
+                    "trend_consistency_60d": trend_consistency_60d,
+                    "price_vs_sma_50d": price_vs_sma_50d,
+                    "price_vs_sma_200d": price_vs_sma_200d,
+                    "sma_50d_vs_sma_200d": sma_50d_vs_sma_200d,
+                    "pct_below_120d_high": pct_below_120d_high,
+                    "max_drawdown_120d": max_drawdown_120d,
+                    "zero_volume_days_20d": zero_volume_days_20d,
+                    "active_trading_days_60d": active_trading_days_60d,
+                    "stale_close_days_20d": stale_close_days_20d,
+                }
+            )
+
+        if not rows:
+            return _empty_snapshot()
+        return pl.DataFrame(rows, schema=TREND_QUALITY_SNAPSHOT_SCHEMA).sort("ticker")
 
     def assign_rankings(self, snapshot: pl.DataFrame) -> pl.DataFrame:
         if snapshot.is_empty():
