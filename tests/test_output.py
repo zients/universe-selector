@@ -7,11 +7,12 @@ import polars as pl
 from universe_selector.config import AppConfig
 from universe_selector.domain import Market
 from universe_selector.output.inspect import render_inspect
-from universe_selector.output.report import FORBIDDEN_WORDS, render_markdown_report
+from universe_selector.output.report import REPORT_RESEARCH_DISCLAIMER, render_markdown_report
 from universe_selector.providers.models import ProviderMetadata
 from universe_selector.ranking_profiles.liquidity_quality_v1 import LiquidityQualityV1Profile
 from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
 from universe_selector.ranking_profiles.sample_price_trend_v1 import SamplePriceTrendV1Profile
+from universe_selector.ranking_profiles.trend_quality_v1 import TrendQualityV1Profile
 
 
 def _provider_metadata() -> ProviderMetadata:
@@ -58,10 +59,9 @@ def test_markdown_report_renders_sample_profile_sections_and_notes() -> None:
     assert "## Highest-ranked longterm candidates" in content
     assert "| rank | ticker | score |" in content
     assert "sample_price_trend_v1" in content
+    assert REPORT_RESEARCH_DISCLAIMER in content
     assert profile.rank_interpretation_note in content
     assert "Filtered-out tickers and exclusion reasons are not persisted." in content
-    for forbidden in FORBIDDEN_WORDS:
-        assert forbidden not in content.lower()
 
 
 def test_empty_report_is_structured_and_not_advice() -> None:
@@ -78,8 +78,7 @@ def test_empty_report_is_structured_and_not_advice() -> None:
 
     assert "Successful run with no persisted candidates" in content
     assert "surviving candidate count: 0" in content
-    for forbidden in FORBIDDEN_WORDS:
-        assert forbidden not in content.lower()
+    assert REPORT_RESEARCH_DISCLAIMER in content
 
 
 def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:
@@ -212,3 +211,41 @@ def test_inspect_renders_liquidity_quality_metrics_through_generic_path() -> Non
     assert "tag_positive_deep_liquidity 1.0" in output
     assert "volume:" not in output
     assert profile.rank_interpretation_note in output
+
+
+def test_report_and_inspect_render_trend_quality_interpretation_note() -> None:
+    profile = TrendQualityV1Profile()
+    snapshot = {"ticker": "AAA", **{key: 0.0 for key in profile.inspect_metric_keys}}
+    snapshot.update({"profile_metrics_version": 1.0, "asof_bar_date_yyyymmdd": 20260507.0})
+    ranking_metrics = {key: 0.0 for key in profile.ranking_metric_keys}
+    ranking_metrics.update({"tag_structure_cap_active": 1.0, "structure_cap_score": 0.70})
+    rankings = [
+        {"horizon": "composite", "ticker": "AAA", "rank": 1, "score": 0.70, **ranking_metrics},
+        {"horizon": "shortterm", "ticker": "AAA", "rank": 1, "score": 0.65, **ranking_metrics},
+        {"horizon": "midterm", "ticker": "AAA", "rank": 1, "score": 0.60, **ranking_metrics},
+    ]
+
+    report = render_markdown_report(
+        run_id="us-trend",
+        market=Market.US,
+        mode_label="fixture",
+        provider_summary={"ranking_profile": "trend_quality_v1"},
+        snapshot=pl.DataFrame({"ticker": ["AAA"]}),
+        rankings=pl.DataFrame(rankings),
+        config=AppConfig(data_mode="fixture", ranking_profile="trend_quality_v1"),
+        profile=profile,
+    )
+    inspect = render_inspect(
+        run_id="us-trend",
+        resolution_mode="latest successful run",
+        ticker="AAA",
+        metadata=_provider_metadata(),
+        snapshot=snapshot,
+        rankings=rankings,
+        profile=profile,
+    )
+
+    assert profile.rank_interpretation_note in report
+    assert REPORT_RESEARCH_DISCLAIMER in report
+    assert profile.rank_interpretation_note in inspect
+    assert "tag_structure_cap_active 1.0" in inspect

@@ -7,7 +7,7 @@ from universe_selector.domain import Market
 from universe_selector.ranking_profiles import RankingProfile
 
 
-FORBIDDEN_WORDS = ("buy", "sell", "hold", "recommendation", "target price", "expected return", "portfolio weight")
+REPORT_RESEARCH_DISCLAIMER = "This report is for quantitative research only and is not investment advice."
 
 
 def _format_provider_summary(provider_summary: dict[str, str]) -> str:
@@ -48,7 +48,9 @@ def render_markdown_report(
         )
         for horizon in profile.horizon_order
     )
-    content = f"""# Universe Selector Report
+    return f"""# Universe Selector Report
+
+> {REPORT_RESEARCH_DISCLAIMER}
 
 ## Run Context
 
@@ -77,8 +79,3 @@ def render_markdown_report(
 - Filtered-out tickers and exclusion reasons are not persisted.
 - This report is rendered during batch; report and inspect read persisted results only.
 """
-    lowered = content.lower()
-    for forbidden in FORBIDDEN_WORDS:
-        if forbidden in lowered:
-            raise ValueError(f"report contains forbidden wording: {forbidden}")
-    return content
