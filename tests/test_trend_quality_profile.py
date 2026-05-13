@@ -7,6 +7,7 @@ import polars as pl
 import pytest
 
 from universe_selector.domain import Market
+from universe_selector.errors import ValidationError
 from universe_selector.providers.models import ListingCandidate
 from universe_selector.ranking_profiles.trend_quality_v1 import TrendQualityV1Profile
 
@@ -672,3 +673,68 @@ def test_trend_quality_penalty_reduces_uncapped_score() -> None:
     assert rows["STALE"]["structure_cap_score"] == 1.0
     assert rows["STALE"]["penalty_score"] == pytest.approx(0.10)
     assert rows["STALE"]["score"] == pytest.approx(rows["BASE"]["score"] - 0.10)
+
+
+def test_trend_quality_empty_snapshot_returns_empty_ranking_schema() -> None:
+    profile = TrendQualityV1Profile()
+
+    rankings = profile.assign_rankings(pl.DataFrame())
+
+    expected_schema = {
+        "run_id": pl.String,
+        "market": pl.String,
+        "horizon": pl.String,
+        "ticker": pl.String,
+        **{key: pl.Float64 for key in profile.ranking_metric_keys},
+        "score": pl.Float64,
+        "rank": pl.Int64,
+    }
+
+    assert rankings.is_empty()
+    assert rankings.columns == list(expected_schema)
+    assert dict(rankings.schema) == expected_schema
+
+
+def test_trend_quality_rejects_malformed_non_numeric_non_finite_and_mixed_asof_snapshots() -> None:
+    profile = TrendQualityV1Profile()
+    with pytest.raises(ValidationError, match="missing required ranking inputs"):
+        profile.assign_rankings(pl.DataFrame({"run_id": ["run"], "market": ["US"], "ticker": ["AAA"]}))
+
+    non_finite = _snapshot_rows([{"ticker": "AAA", "return_20d": float("nan")}])
+    with pytest.raises(ValidationError, match="non-finite ranking input"):
+        profile.assign_rankings(non_finite)
+
+    non_numeric = _snapshot_rows([{"ticker": "AAA"}]).with_columns(pl.lit("bad").alias("return_20d"))
+    with pytest.raises(ValidationError, match="non-numeric ranking input"):
+        profile.assign_rankings(non_numeric)
+
+    mixed_asof = _snapshot_rows([
+        {"ticker": "AAA", "asof_bar_date_yyyymmdd": 20260507.0},
+        {"ticker": "BBB", "asof_bar_date_yyyymmdd": 20260506.0},
+    ])
+    with pytest.raises(ValidationError, match="mixed as-of"):
+        profile.assign_rankings(mixed_asof)
+
+
+def test_trend_quality_declared_ranking_metrics_are_finite_and_ordered() -> None:
+    profile = TrendQualityV1Profile()
+    rankings = profile.assign_rankings(_snapshot_rows([
+        {"ticker": "AAA", "return_120d": 0.20},
+        {"ticker": "BBB", "return_120d": 0.05},
+    ]))
+
+    assert rankings.columns == [
+        "run_id",
+        "market",
+        "horizon",
+        "ticker",
+        *profile.ranking_metric_keys,
+        "score",
+        "rank",
+    ]
+    for row in rankings.to_dicts():
+        assert isinstance(row["rank"], int)
+        assert math.isfinite(float(row["score"]))
+        for key in profile.ranking_metric_keys:
+            assert isinstance(row[key], int | float)
+            assert math.isfinite(float(row[key]))
