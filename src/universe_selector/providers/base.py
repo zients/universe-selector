@@ -12,7 +12,7 @@ from universe_selector.providers.models import ListingCandidate, ProviderRunData
 
 class MarketDataProvider(ABC):
     @abstractmethod
-    def load_run_data(self, run_id: str, market: Market) -> ProviderRunData:
+    def load_run_data(self, market: Market) -> ProviderRunData:
         raise NotImplementedError
 
 

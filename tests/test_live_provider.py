@@ -123,7 +123,7 @@ def test_live_provider_reuses_one_context_and_applies_sorted_ticker_limit() -> N
         listing_provider=listing_provider,
         ohlcv_provider=ohlcv_provider,
         clock=clock,
-    ).load_run_data("us-run", Market.US)
+    ).load_run_data(Market.US)
 
     assert clock_calls == 1
     assert listing_provider.contexts == ohlcv_provider.contexts
@@ -136,6 +136,7 @@ def test_live_provider_reuses_one_context_and_applies_sorted_ticker_limit() -> N
     assert [item.ticker for item in ohlcv_provider.listings[0]] == ["AAA", "BBB"]
     assert provider_data.metadata.run_latest_bar_date == date(2026, 5, 2)
     assert provider_data.metadata.data_fetch_started_at == context.data_fetch_started_at
+    assert not hasattr(provider_data.metadata, "run_id")
 
 
 def test_live_provider_drops_null_dates_before_latest_date_and_returned_bars() -> None:
@@ -163,7 +164,7 @@ def test_live_provider_drops_null_dates_before_latest_date_and_returned_bars() -
         config=config,
         listing_provider=listing_provider,
         ohlcv_provider=ohlcv_provider,
-    ).load_run_data("us-run", Market.US)
+    ).load_run_data(Market.US)
 
     assert provider_data.metadata.run_latest_bar_date == date(2026, 5, 3)
     assert provider_data.bars["bar_date"].null_count() == 0
@@ -183,7 +184,7 @@ def test_live_provider_rejects_empty_or_all_null_date_bars(bars: pl.DataFrame) -
             config=config,
             listing_provider=listing_provider,
             ohlcv_provider=ohlcv_provider,
-        ).load_run_data("us-run", Market.US)
+        ).load_run_data(Market.US)
 
 
 def test_live_provider_allows_partial_bars_and_builds_metadata_from_provider_config() -> None:
@@ -213,7 +214,7 @@ def test_live_provider_allows_partial_bars_and_builds_metadata_from_provider_con
         now=datetime(2026, 5, 3, 17, 30, tzinfo=timezone.utc),
     )
 
-    provider_data = provider.load_run_data("us-run", Market.US)
+    provider_data = provider.load_run_data(Market.US)
 
     assert [item.ticker for item in provider_data.listings] == ["AAA", "BBB"]
     assert provider_data.bars["ticker"].to_list() == ["BBB"]
@@ -263,7 +264,7 @@ def test_live_provider_applies_ticker_limit_after_sorted_tw_listings() -> None:
         ohlcv_provider=ohlcv_provider,
     )
 
-    provider_data = provider.load_run_data("tw-run", Market.TW)
+    provider_data = provider.load_run_data(Market.TW)
 
     assert [item.ticker for item in provider_data.listings] == ["1234", "2330"]
     assert [item.ticker for item in ohlcv_provider.listings[0]] == ["1234", "2330"]

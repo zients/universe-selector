@@ -45,7 +45,7 @@ def _bars(ticker: str, latest: date, *, start_price: float, end_price: float, vo
 def test_sample_profile_builds_snapshot_from_fixture_provider(fixture_dir) -> None:
     from universe_selector.providers.fixture import FixtureProvider
 
-    run_data = FixtureProvider(fixture_dir).load_run_data("sample-run", Market.US)
+    run_data = FixtureProvider(fixture_dir).load_run_data(Market.US)
     profile = SamplePriceTrendV1Profile()
 
     snapshot = profile.build_snapshot(

@@ -21,7 +21,6 @@ class ListingCandidate:
 
 @dataclass(frozen=True)
 class ProviderMetadata:
-    run_id: str
     data_mode: str
     listing_provider_id: str
     listing_source_id: str

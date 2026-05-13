@@ -19,13 +19,13 @@ def fixture_dir() -> Path:
 def test_fixture_provider_loads_metadata_listings_and_bars(fixture_dir: Path) -> None:
     provider = FixtureProvider(fixture_dir)
 
-    us_data = provider.load_run_data("us-test-run", Market.US)
-    tw_data = provider.load_run_data("tw-test-run", Market.TW)
+    us_data = provider.load_run_data(Market.US)
+    tw_data = provider.load_run_data(Market.TW)
 
     assert us_data.metadata.run_latest_bar_date == date(2026, 4, 24)
     assert us_data.metadata.market_timezone == "UTC"
     assert us_data.metadata.data_mode == "fixture"
-    assert us_data.metadata.run_id == "us-test-run"
+    assert not hasattr(us_data.metadata, "run_id")
     assert [item.ticker for item in us_data.listings] == ["AAA", "BBB", "CCC", "LOWVOL", "SHORT"]
     assert [item.listing_symbol for item in us_data.listings] == ["AAA", "BBB", "CCC", "LOWVOL", "SHORT"]
     assert [item.ticker for item in us_data.listings] == sorted(item.ticker for item in us_data.listings)
@@ -51,7 +51,7 @@ def test_fixture_provider_rejects_duplicate_bars(tmp_path: Path, fixture_dir: Pa
     provider = FixtureProvider(temp_fixture_dir)
 
     with pytest.raises(ProviderDataError):
-        provider.load_run_data("us-test-run", Market.US)
+        provider.load_run_data(Market.US)
 
 
 def test_fixture_provider_rejects_rows_after_run_latest_bar_date(tmp_path: Path, fixture_dir: Path) -> None:
@@ -67,7 +67,7 @@ def test_fixture_provider_rejects_rows_after_run_latest_bar_date(tmp_path: Path,
     provider = FixtureProvider(temp_fixture_dir)
 
     with pytest.raises(ProviderDataError, match="run_latest_bar_date"):
-        provider.load_run_data("us-test-run", Market.US)
+        provider.load_run_data(Market.US)
 
 
 def test_fixture_provider_rejects_old_price_schema(tmp_path: Path, fixture_dir: Path) -> None:
@@ -83,4 +83,4 @@ def test_fixture_provider_rejects_old_price_schema(tmp_path: Path, fixture_dir: 
     provider = FixtureProvider(temp_fixture_dir)
 
     with pytest.raises(ProviderDataError, match="adjusted_close"):
-        provider.load_run_data("us-test-run", Market.US)
+        provider.load_run_data(Market.US)

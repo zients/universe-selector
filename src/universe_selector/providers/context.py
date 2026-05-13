@@ -17,7 +17,6 @@ class MarketProfile:
 
 @dataclass(frozen=True)
 class ProviderRunContext:
-    run_id: str
     data_fetch_started_at: datetime
     market_timezone: str
     market_fetch_date: date
@@ -39,7 +38,6 @@ def market_profile_for(market: Market) -> MarketProfile:
 
 def build_provider_run_context(
     *,
-    run_id: str,
     market: Market,
     data_fetch_started_at: datetime,
     ticker_limit: int | None,
@@ -51,7 +49,6 @@ def build_provider_run_context(
     utc_started_at = data_fetch_started_at.astimezone(timezone.utc)
     market_started_at = utc_started_at.astimezone(ZoneInfo(profile.market_timezone))
     return ProviderRunContext(
-        run_id=run_id,
         data_fetch_started_at=utc_started_at,
         market_timezone=profile.market_timezone,
         market_fetch_date=market_started_at.date(),

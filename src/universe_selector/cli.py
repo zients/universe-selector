@@ -13,7 +13,7 @@ from universe_selector.identifiers import parse_run_id
 from universe_selector.output.inspect import render_inspect
 from universe_selector.persistence.repository import DuckDbRepository, ResolvedRun
 from universe_selector.persistence.schema import validate_schema
-from universe_selector.pipeline import run_batch
+from universe_selector.pipeline import BatchResult, MultiProfileBatchError, run_batch, run_batch_profiles
 from universe_selector.ranking_profiles import get_ranking_profile
 
 
@@ -35,6 +35,8 @@ def _exit_with_error(exc: Exception) -> None:
 def _guard(action: Callable[[], T]) -> T:
     try:
         return action()
+    except typer.Exit:
+        raise
     except Exception as exc:
         _exit_with_error(exc)
         raise
@@ -116,16 +118,68 @@ def _resolve_readable_run(
         raise NotFoundError(f"No readable successful run found for market {target.value}") from exc
 
 
+def _profile_overrides(values: list[str] | None) -> tuple[str, ...]:
+    return tuple(values or ())
+
+
+def _validate_multi_profile_overrides(profile_ids: tuple[str, ...]) -> None:
+    seen: set[str] = set()
+    for profile_id in profile_ids:
+        if profile_id in seen:
+            raise ValidationError(f"duplicate ranking profile {profile_id}")
+        seen.add(profile_id)
+        get_ranking_profile(profile_id).validate()
+
+
+def _echo_batch_result(result: BatchResult, *, include_profile: bool) -> None:
+    typer.echo(f"run_id: {result.run_id}")
+    if include_profile:
+        typer.echo(f"ranking_profile: {result.ranking_profile}")
+
+
+def _echo_batch_results(results: tuple[BatchResult, ...], *, include_profile: bool) -> None:
+    for result in results:
+        _echo_batch_result(result, include_profile=include_profile)
+
+
+def _echo_batch_results_with_market(results: tuple[BatchResult, ...], *, include_profile: bool) -> None:
+    _echo_batch_results(results, include_profile=include_profile)
+    if results:
+        typer.echo(f"market: {results[0].market.value}")
+
+
 @app.command()
 def batch(
     market: Annotated[str, typer.Argument()],
-    ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
+    ranking_profile: Annotated[list[str] | None, typer.Option("--ranking-profile")] = None,
 ) -> None:
     def action() -> None:
-        config = _config_with_cli_overrides(load_config(), ranking_profile=ranking_profile)
-        result = run_batch(canonical_market(market), config)
-        typer.echo(f"run_id: {result.run_id}")
-        typer.echo(f"market: {result.market.value}")
+        config = load_config()
+        overrides = _profile_overrides(ranking_profile)
+        resolved_market = canonical_market(market)
+        if len(overrides) == 0:
+            result = run_batch(resolved_market, config)
+            _echo_batch_result(result, include_profile=False)
+            typer.echo(f"market: {result.market.value}")
+            return
+        if len(overrides) == 1:
+            profile_config = _config_with_cli_overrides(config, ranking_profile=overrides[0])
+            result = run_batch(resolved_market, profile_config)
+            _echo_batch_result(result, include_profile=False)
+            typer.echo(f"market: {result.market.value}")
+            return
+
+        _validate_multi_profile_overrides(overrides)
+        try:
+            results = run_batch_profiles(resolved_market, config, overrides)
+        except MultiProfileBatchError as exc:
+            _echo_batch_results(exc.completed_results, include_profile=True)
+            typer.echo(f"failed_run_id: {exc.failed_result.run_id}")
+            typer.echo(f"failed_ranking_profile: {exc.failed_result.ranking_profile}")
+            typer.echo(f"error: {exc.failed_result.error_message}")
+            typer.echo(f"market: {exc.failed_result.market.value}")
+            raise typer.Exit(code=exc.exit_code)
+        _echo_batch_results_with_market(results, include_profile=True)
 
     _guard(action)
 

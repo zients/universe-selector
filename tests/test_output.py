@@ -17,7 +17,6 @@ from universe_selector.ranking_profiles.trend_quality_v1 import TrendQualityV1Pr
 
 def _provider_metadata() -> ProviderMetadata:
     return ProviderMetadata(
-        run_id="us-run",
         data_mode="fixture",
         listing_provider_id="fixture-listings-v1",
         listing_source_id="sample_basic/listings.csv",

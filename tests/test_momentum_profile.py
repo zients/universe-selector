@@ -9,7 +9,7 @@ from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
 
 
 def test_momentum_profile_builds_snapshot_from_fixture_provider(fixture_dir) -> None:
-    run_data = FixtureProvider(fixture_dir).load_run_data("sample-run", Market.US)
+    run_data = FixtureProvider(fixture_dir).load_run_data(Market.US)
     profile = MomentumV1Profile()
 
     snapshot = profile.build_snapshot(
@@ -41,7 +41,7 @@ def test_momentum_profile_builds_snapshot_from_fixture_provider(fixture_dir) -> 
 
 
 def test_momentum_profile_ignores_listings_from_other_markets(fixture_dir) -> None:
-    run_data = FixtureProvider(fixture_dir).load_run_data("sample-run", Market.US)
+    run_data = FixtureProvider(fixture_dir).load_run_data(Market.US)
     profile = MomentumV1Profile()
     cross_market_listing = ListingCandidate(
         market=Market.TW,
@@ -65,7 +65,7 @@ def test_momentum_profile_ignores_listings_from_other_markets(fixture_dir) -> No
 
 
 def test_momentum_profile_assigns_swing_and_midterm_rankings(fixture_dir) -> None:
-    run_data = FixtureProvider(fixture_dir).load_run_data("sample-run", Market.US)
+    run_data = FixtureProvider(fixture_dir).load_run_data(Market.US)
     profile = MomentumV1Profile()
     snapshot = profile.build_snapshot(
         run_id="sample-run",

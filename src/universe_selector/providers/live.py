@@ -9,7 +9,7 @@ from universe_selector.config import AppConfig
 from universe_selector.domain import Market
 from universe_selector.errors import ProviderDataError
 from universe_selector.providers.base import ListingProvider, MarketDataProvider, OhlcvProvider
-from universe_selector.providers.context import ProviderRunContext, build_provider_run_context
+from universe_selector.providers.context import build_provider_run_context
 from universe_selector.providers.models import ListingCandidate, ProviderMetadata, ProviderRunData
 from universe_selector.providers.registration import ListingProviderRegistration, OhlcvProviderRegistration
 from universe_selector.providers.registry import (
@@ -54,10 +54,9 @@ class LiveMarketDataProvider(MarketDataProvider):
         self._ohlcv_registration_resolver = ohlcv_registration_resolver or get_ohlcv_registration
         self._clock = clock or (lambda: datetime.now(timezone.utc))
 
-    def load_run_data(self, run_id: str, market: Market) -> ProviderRunData:
+    def load_run_data(self, market: Market) -> ProviderRunData:
         started_at = self._clock()
         context = build_provider_run_context(
-            run_id=run_id,
             market=market,
             data_fetch_started_at=started_at,
             ticker_limit=self.config.live_ticker_limit,
@@ -83,7 +82,6 @@ class LiveMarketDataProvider(MarketDataProvider):
             raise ProviderDataError("OHLCV provider returned no usable bars")
 
         metadata = ProviderMetadata(
-            run_id=run_id,
             data_mode="live",
             listing_provider_id=listing_adapter.provider_id,
             listing_source_id=_join_source_ids(listing_adapter.source_ids),
