@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 import polars as pl
+import pytest
 
 from universe_selector.config import AppConfig
 from universe_selector.domain import Market
@@ -12,6 +13,7 @@ from universe_selector.providers.models import ProviderMetadata
 from universe_selector.ranking_profiles.liquidity_quality_v1 import LiquidityQualityV1Profile
 from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
 from universe_selector.ranking_profiles.sample_price_trend_v1 import SamplePriceTrendV1Profile
+from universe_selector.ranking_profiles.trend_quality_v1 import TrendQualityV1Profile
 
 
 def _provider_metadata() -> ProviderMetadata:
@@ -80,6 +82,24 @@ def test_empty_report_is_structured_and_not_advice() -> None:
     assert "surviving candidate count: 0" in content
     for forbidden in FORBIDDEN_WORDS:
         assert forbidden not in content.lower()
+
+
+@pytest.mark.parametrize(
+    "unsafe_note",
+    ["hold", "recommendations", "target prices", "expected returns", "portfolio weights"],
+)
+def test_markdown_report_rejects_standalone_advice_terms(unsafe_note: str) -> None:
+    with pytest.raises(ValueError):
+        render_markdown_report(
+            run_id="us-run",
+            market=Market.US,
+            mode_label="fixture",
+            provider_summary={"ranking_profile": "sample_price_trend_v1", "unsafe_note": unsafe_note},
+            snapshot=pl.DataFrame(),
+            rankings=pl.DataFrame(),
+            config=AppConfig(data_mode="fixture"),
+            profile=SamplePriceTrendV1Profile(),
+        )
 
 
 def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:
@@ -212,3 +232,40 @@ def test_inspect_renders_liquidity_quality_metrics_through_generic_path() -> Non
     assert "tag_positive_deep_liquidity 1.0" in output
     assert "volume:" not in output
     assert profile.rank_interpretation_note in output
+
+
+def test_report_and_inspect_render_trend_quality_interpretation_note() -> None:
+    profile = TrendQualityV1Profile()
+    snapshot = {"ticker": "AAA", **{key: 0.0 for key in profile.inspect_metric_keys}}
+    snapshot.update({"profile_metrics_version": 1.0, "asof_bar_date_yyyymmdd": 20260507.0})
+    ranking_metrics = {key: 0.0 for key in profile.ranking_metric_keys}
+    ranking_metrics.update({"tag_structure_cap_active": 1.0, "structure_cap_score": 0.70})
+    rankings = [
+        {"horizon": "composite", "ticker": "AAA", "rank": 1, "score": 0.70, **ranking_metrics},
+        {"horizon": "shortterm", "ticker": "AAA", "rank": 1, "score": 0.65, **ranking_metrics},
+        {"horizon": "midterm", "ticker": "AAA", "rank": 1, "score": 0.60, **ranking_metrics},
+    ]
+
+    report = render_markdown_report(
+        run_id="us-trend",
+        market=Market.US,
+        mode_label="fixture",
+        provider_summary={"ranking_profile": "trend_quality_v1"},
+        snapshot=pl.DataFrame({"ticker": ["AAA"]}),
+        rankings=pl.DataFrame(rankings),
+        config=AppConfig(data_mode="fixture", ranking_profile="trend_quality_v1"),
+        profile=profile,
+    )
+    inspect = render_inspect(
+        run_id="us-trend",
+        resolution_mode="latest successful run",
+        ticker="AAA",
+        metadata=_provider_metadata(),
+        snapshot=snapshot,
+        rankings=rankings,
+        profile=profile,
+    )
+
+    assert profile.rank_interpretation_note in report
+    assert profile.rank_interpretation_note in inspect
+    assert "tag_structure_cap_active 1.0" in inspect
