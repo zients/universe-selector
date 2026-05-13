@@ -169,6 +169,38 @@ def _yyyymmdd(value: date) -> float:
     return float(value.year * 10_000 + value.month * 100 + value.day)
 
 
+def _percentile_scores(values: list[float], *, higher_is_better: bool = True) -> list[float]:
+    if not values:
+        return []
+    if len(values) == 1:
+        return [1.0]
+    indexed = list(enumerate(values))
+    indexed.sort(key=lambda item: item[1], reverse=higher_is_better)
+    scores = [0.0] * len(values)
+    position = 0
+    while position < len(indexed):
+        end = position + 1
+        while end < len(indexed) and indexed[end][1] == indexed[position][1]:
+            end += 1
+        average_rank_position = (position + end - 1) / 2.0
+        score = 1.0 - average_rank_position / (len(values) - 1)
+        for original_index, _value in indexed[position:end]:
+            scores[original_index] = score
+        position = end
+    return scores
+
+
+def _positive_only_percentile_scores(values: list[float]) -> list[float]:
+    scores = [0.0] * len(values)
+    positive_pairs = [(index, value) for index, value in enumerate(values) if value > 0.0]
+    if not positive_pairs:
+        return scores
+    positive_scores = _percentile_scores([value for _index, value in positive_pairs])
+    for (original_index, _value), score in zip(positive_pairs, positive_scores, strict=True):
+        scores[original_index] = score
+    return scores
+
+
 def _immutable_market_float_mapping(value: Mapping[Market, float]) -> Mapping[Market, float]:
     return MappingProxyType({market: float(value[market]) for market in Market})
 
@@ -470,7 +502,350 @@ class TrendQualityV1Profile:
     def assign_rankings(self, snapshot: pl.DataFrame) -> pl.DataFrame:
         if snapshot.is_empty():
             return _empty_rankings()
-        return _empty_rankings()
+        if not self._has_required_ranking_inputs(snapshot):
+            raise ValidationError("trend_quality_v1 snapshot is missing required ranking inputs")
+        for column in TREND_QUALITY_SNAPSHOT_METRIC_KEYS:
+            if not snapshot.schema[column].is_numeric():
+                raise ValidationError(f"trend_quality_v1 snapshot contains non-numeric ranking input: {column}")
+            invalid_count = snapshot.filter(pl.col(column).is_null() | (~pl.col(column).is_finite())).height
+            if invalid_count > 0:
+                raise ValidationError(f"trend_quality_v1 snapshot contains non-finite ranking input: {column}")
+
+        ranking_frames = []
+        for partition in snapshot.partition_by(["run_id", "market"], maintain_order=True):
+            if partition["asof_bar_date_yyyymmdd"].n_unique() != 1:
+                raise ValidationError("trend_quality_v1 snapshot contains mixed as-of dates")
+            ranking_frames.append(self._assign_single_run_market_rankings(partition))
+        if not ranking_frames:
+            return _empty_rankings()
+        return (
+            pl.concat(ranking_frames)
+            .with_columns(pl.col("horizon").replace_strict({horizon: index for index, horizon in enumerate(self.horizon_order)}).alias("_horizon_order"))
+            .sort(["run_id", "market", "_horizon_order", "rank", "ticker"])
+            .drop("_horizon_order")
+            .select(self._ranking_columns())
+        )
+
+    def _has_required_ranking_inputs(self, snapshot: pl.DataFrame) -> bool:
+        required = {"run_id", "market", "ticker", *TREND_QUALITY_SNAPSHOT_METRIC_KEYS}
+        return required.issubset(set(snapshot.columns))
+
+    def _ranking_columns(self) -> list[str]:
+        return [
+            "run_id",
+            "market",
+            "horizon",
+            "ticker",
+            *self.ranking_metric_keys,
+            "score",
+            "rank",
+        ]
+
+    def _assign_single_run_market_rankings(self, frame: pl.DataFrame) -> pl.DataFrame:
+        rows = frame.sort("ticker").to_dicts()
+        score_return_20d = _percentile_scores([float(row["return_20d"]) for row in rows])
+        score_return_60d = _percentile_scores([float(row["return_60d"]) for row in rows])
+        score_return_120d = _percentile_scores([float(row["return_120d"]) for row in rows])
+        score_trend_slope_60d = _positive_only_percentile_scores(
+            [float(row["trend_slope_60d"]) for row in rows]
+        )
+        score_trend_consistency_60d = _percentile_scores(
+            [float(row["trend_consistency_60d"]) for row in rows]
+        )
+        score_price_vs_sma_50d = _percentile_scores([float(row["price_vs_sma_50d"]) for row in rows])
+        score_price_vs_sma_200d = _percentile_scores([float(row["price_vs_sma_200d"]) for row in rows])
+        score_sma_50d_vs_sma_200d = _percentile_scores([float(row["sma_50d_vs_sma_200d"]) for row in rows])
+        score_pct_below_120d_high = _percentile_scores([float(row["pct_below_120d_high"]) for row in rows])
+        score_drawdown_control_120d = _percentile_scores([float(row["max_drawdown_120d"]) for row in rows])
+
+        scored_rows: list[dict[str, object]] = []
+        for index, row in enumerate(rows):
+            trend_slope_60d = float(row["trend_slope_60d"])
+            return_20d = float(row["return_20d"])
+            return_60d = float(row["return_60d"])
+            price_vs_sma_50d = float(row["price_vs_sma_50d"])
+            price_vs_sma_200d = float(row["price_vs_sma_200d"])
+            sma_50d_vs_sma_200d = float(row["sma_50d_vs_sma_200d"])
+            max_drawdown_120d = float(row["max_drawdown_120d"])
+            uptrend_r2_60d = float(row["uptrend_r2_60d"])
+            trend_r2_60d = float(row["trend_r2_60d"])
+            trend_consistency_60d = float(row["trend_consistency_60d"])
+            stale_close_days_20d = float(row["stale_close_days_20d"])
+
+            score_uptrend_r2_60d = uptrend_r2_60d if trend_slope_60d > 0.0 else 0.0
+            trend_strength_score = (
+                0.35 * score_return_120d[index]
+                + 0.25 * score_return_60d[index]
+                + 0.25 * score_trend_slope_60d[index]
+                + 0.15 * score_price_vs_sma_200d[index]
+            )
+            raw_trend_cleanliness_score = (
+                0.35 * score_uptrend_r2_60d
+                + 0.25 * score_trend_consistency_60d[index]
+                + 0.25 * score_sma_50d_vs_sma_200d[index]
+                + 0.15 * score_drawdown_control_120d[index]
+            )
+            trend_cleanliness_cap_score = self._trend_cleanliness_cap_score(
+                trend_slope_60d=trend_slope_60d,
+                uptrend_r2_60d=uptrend_r2_60d,
+            )
+            trend_cleanliness_score = min(raw_trend_cleanliness_score, trend_cleanliness_cap_score)
+            breakout_position_score = (
+                0.40 * score_pct_below_120d_high[index]
+                + 0.25 * score_return_20d[index]
+                + 0.20 * score_price_vs_sma_50d[index]
+                + 0.15 * score_sma_50d_vs_sma_200d[index]
+            )
+            drawdown_control_score = score_drawdown_control_120d[index]
+            weak_structure_fail_count = float(
+                sum(
+                    1
+                    for failed in (
+                        trend_slope_60d <= 0.0,
+                        return_60d < 0.0,
+                        price_vs_sma_50d < 0.0,
+                        price_vs_sma_200d < 0.0,
+                        sma_50d_vs_sma_200d < 0.0,
+                    )
+                    if failed
+                )
+            )
+            weak_positive_structure_count = float(
+                sum(
+                    1
+                    for weak in (
+                        0.0 < trend_slope_60d < 0.0002,
+                        0.0 <= return_60d < 0.02,
+                        0.0 <= price_vs_sma_50d < 0.01,
+                        0.0 <= price_vs_sma_200d < 0.02,
+                        0.0 <= sma_50d_vs_sma_200d < 0.01,
+                    )
+                    if weak
+                )
+            )
+            hard_structure_cap_score = self._hard_structure_cap_score(
+                weak_structure_fail_count=weak_structure_fail_count,
+                max_drawdown_120d=max_drawdown_120d,
+            )
+            trend_magnitude_cap_score = self._trend_magnitude_cap_score(
+                weak_structure_fail_count=weak_structure_fail_count,
+                weak_positive_structure_count=weak_positive_structure_count,
+            )
+            overextension_cap_score = self._overextension_cap_score(
+                return_20d=return_20d,
+                price_vs_sma_50d=price_vs_sma_50d,
+            )
+            structure_cap_score = min(
+                hard_structure_cap_score,
+                trend_magnitude_cap_score,
+                trend_cleanliness_cap_score,
+                overextension_cap_score,
+            )
+            penalty_score = 0.0
+            if stale_close_days_20d >= 3.0:
+                penalty_score += 0.10
+            severely_overextended = return_20d > 0.50 or price_vs_sma_50d > 0.30
+            moderately_overextended = return_20d > 0.30 or price_vs_sma_50d > 0.20
+            if severely_overextended:
+                penalty_score += 0.15
+            elif moderately_overextended:
+                penalty_score += 0.10
+            if trend_slope_60d <= 0.0:
+                penalty_score += 0.10
+            if return_60d < 0.0:
+                penalty_score += 0.10
+            if price_vs_sma_50d < 0.0:
+                penalty_score += 0.10
+            if price_vs_sma_200d < 0.0:
+                penalty_score += 0.10
+            if sma_50d_vs_sma_200d < 0.0:
+                penalty_score += 0.10
+            if weak_structure_fail_count == 0.0:
+                penalty_score += 0.05 * weak_positive_structure_count
+            if trend_slope_60d > 0.0 and uptrend_r2_60d < 0.50:
+                penalty_score += 0.05
+            if max_drawdown_120d <= -0.25:
+                penalty_score += 0.10
+
+            row.update(
+                {
+                    "score_return_20d": score_return_20d[index],
+                    "score_return_60d": score_return_60d[index],
+                    "score_return_120d": score_return_120d[index],
+                    "score_trend_slope_60d": score_trend_slope_60d[index],
+                    "score_uptrend_r2_60d": score_uptrend_r2_60d,
+                    "score_trend_consistency_60d": score_trend_consistency_60d[index],
+                    "score_price_vs_sma_50d": score_price_vs_sma_50d[index],
+                    "score_price_vs_sma_200d": score_price_vs_sma_200d[index],
+                    "score_sma_50d_vs_sma_200d": score_sma_50d_vs_sma_200d[index],
+                    "score_pct_below_120d_high": score_pct_below_120d_high[index],
+                    "score_drawdown_control_120d": score_drawdown_control_120d[index],
+                    "trend_strength_score": trend_strength_score,
+                    "trend_cleanliness_score": trend_cleanliness_score,
+                    "breakout_position_score": breakout_position_score,
+                    "drawdown_control_score": drawdown_control_score,
+                    "trend_cleanliness_cap_score": trend_cleanliness_cap_score,
+                    "hard_structure_cap_score": hard_structure_cap_score,
+                    "weak_structure_fail_count": weak_structure_fail_count,
+                    "weak_positive_structure_count": weak_positive_structure_count,
+                    "trend_magnitude_cap_score": trend_magnitude_cap_score,
+                    "overextension_cap_score": overextension_cap_score,
+                    "structure_cap_score": structure_cap_score,
+                    "penalty_score": penalty_score,
+                    "tag_structure_uptrend": (
+                        1.0
+                        if trend_slope_60d > 0.0
+                        and return_60d > 0.0
+                        and price_vs_sma_50d > 0.0
+                        and sma_50d_vs_sma_200d > 0.0
+                        else 0.0
+                    ),
+                    "tag_structure_breakout_proximity": 1.0 if float(row["pct_below_120d_high"]) >= -0.03 else 0.0,
+                    "tag_structure_consistent_uptrend": (
+                        1.0
+                        if trend_slope_60d > 0.0
+                        and return_60d > 0.0
+                        and trend_r2_60d >= 0.50
+                        and trend_consistency_60d >= 0.55
+                        else 0.0
+                    ),
+                    "tag_structure_nonpositive_60d_slope": 1.0 if trend_slope_60d <= 0.0 else 0.0,
+                    "tag_structure_negative_60d_return": 1.0 if return_60d < 0.0 else 0.0,
+                    "tag_structure_below_sma_50d": 1.0 if price_vs_sma_50d < 0.0 else 0.0,
+                    "tag_structure_below_sma_200d": 1.0 if price_vs_sma_200d < 0.0 else 0.0,
+                    "tag_structure_sma_50d_below_sma_200d": (
+                        1.0 if sma_50d_vs_sma_200d < 0.0 else 0.0
+                    ),
+                    "tag_structure_weak_trend_component": 1.0 if weak_structure_fail_count > 0.0 else 0.0,
+                    "tag_structure_large_drawdown": 1.0 if max_drawdown_120d <= -0.25 else 0.0,
+                    "tag_structure_overextended": 1.0 if moderately_overextended else 0.0,
+                    "tag_structure_cap_active": 1.0 if structure_cap_score < 1.0 else 0.0,
+                    "tag_data_stale_trading": 1.0 if stale_close_days_20d >= 3.0 else 0.0,
+                }
+            )
+            scored_rows.append(row)
+
+        ranking_rows: list[dict[str, object]] = []
+        for horizon in self.horizon_order:
+            horizon_rows = []
+            for row in scored_rows:
+                if horizon == "composite":
+                    raw_score = (
+                        0.40 * float(row["trend_strength_score"])
+                        + 0.30 * float(row["trend_cleanliness_score"])
+                        + 0.20 * float(row["breakout_position_score"])
+                        + 0.10 * float(row["drawdown_control_score"])
+                    )
+                elif horizon == "shortterm":
+                    raw_score = (
+                        0.20 * float(row["score_return_20d"])
+                        + 0.15 * float(row["score_return_60d"])
+                        + 0.15 * float(row["score_pct_below_120d_high"])
+                        + 0.15 * float(row["score_price_vs_sma_50d"])
+                        + 0.10 * float(row["score_sma_50d_vs_sma_200d"])
+                        + 0.10 * float(row["score_trend_slope_60d"])
+                        + 0.05 * float(row["score_uptrend_r2_60d"])
+                        + 0.05 * float(row["score_trend_consistency_60d"])
+                        + 0.05 * float(row["score_drawdown_control_120d"])
+                    )
+                elif horizon == "midterm":
+                    raw_score = (
+                        0.25 * float(row["score_return_120d"])
+                        + 0.20 * float(row["score_trend_slope_60d"])
+                        + 0.15 * float(row["score_sma_50d_vs_sma_200d"])
+                        + 0.15 * float(row["score_drawdown_control_120d"])
+                        + 0.10 * float(row["score_trend_consistency_60d"])
+                        + 0.10 * float(row["trend_cleanliness_score"])
+                        + 0.05 * float(row["score_uptrend_r2_60d"])
+                    )
+                else:
+                    raise ValidationError(f"unknown horizon {horizon}")
+                score = min(raw_score - float(row["penalty_score"]), float(row["structure_cap_score"]))
+                ranking_values = [float(row[key]) for key in self.ranking_metric_keys] + [score]
+                if not _all_finite(ranking_values):
+                    raise ValidationError("trend_quality_v1 produced a non-finite ranking metric")
+                horizon_rows.append(
+                    {
+                        "run_id": row["run_id"],
+                        "market": row["market"],
+                        "horizon": horizon,
+                        "ticker": row["ticker"],
+                        **{key: row[key] for key in self.ranking_metric_keys},
+                        "score": score,
+                    }
+                )
+            horizon_rows.sort(key=lambda item: (-float(item["score"]), str(item["ticker"])))
+            for rank, row in enumerate(horizon_rows, start=1):
+                row["rank"] = rank
+                ranking_rows.append(row)
+        return pl.DataFrame(ranking_rows, schema=TREND_QUALITY_RANKING_SCHEMA).select(
+            self._ranking_columns()
+        )
+
+    def _trend_cleanliness_cap_score(self, *, trend_slope_60d: float, uptrend_r2_60d: float) -> float:
+        if trend_slope_60d <= 0.0:
+            return 0.35
+        if uptrend_r2_60d < 0.10:
+            return 0.45
+        if uptrend_r2_60d < 0.25:
+            return 0.65
+        if uptrend_r2_60d < 0.50:
+            return 0.70
+        return 1.0
+
+    def _hard_structure_cap_score(
+        self,
+        *,
+        weak_structure_fail_count: float,
+        max_drawdown_120d: float,
+    ) -> float:
+        large_drawdown = max_drawdown_120d <= -0.25
+        if weak_structure_fail_count >= 5.0 and large_drawdown:
+            return 0.15
+        if weak_structure_fail_count >= 5.0:
+            return 0.20
+        if weak_structure_fail_count == 4.0 and large_drawdown:
+            return 0.20
+        if weak_structure_fail_count == 4.0:
+            return 0.25
+        if weak_structure_fail_count == 3.0 and large_drawdown:
+            return 0.25
+        if weak_structure_fail_count == 3.0:
+            return 0.30
+        if weak_structure_fail_count == 2.0 and large_drawdown:
+            return 0.30
+        if weak_structure_fail_count == 2.0:
+            return 0.35
+        if weak_structure_fail_count == 1.0 and large_drawdown:
+            return 0.35
+        if weak_structure_fail_count == 1.0:
+            return 0.40
+        if weak_structure_fail_count == 0.0 and large_drawdown:
+            return 0.65
+        return 1.0
+
+    def _trend_magnitude_cap_score(
+        self,
+        *,
+        weak_structure_fail_count: float,
+        weak_positive_structure_count: float,
+    ) -> float:
+        if weak_structure_fail_count != 0.0:
+            return 1.0
+        if weak_positive_structure_count >= 3.0:
+            return 0.45
+        if weak_positive_structure_count == 2.0:
+            return 0.60
+        if weak_positive_structure_count == 1.0:
+            return 0.75
+        return 1.0
+
+    def _overextension_cap_score(self, *, return_20d: float, price_vs_sma_50d: float) -> float:
+        if return_20d > 0.50 or price_vs_sma_50d > 0.30:
+            return 0.60
+        if return_20d > 0.30 or price_vs_sma_50d > 0.20:
+            return 0.75
+        return 1.0
 
 
 TREND_QUALITY_V1_REGISTRATION = RankingProfileRegistration(
