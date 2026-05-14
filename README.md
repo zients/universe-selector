@@ -2,9 +2,13 @@
 
 Run-centric quantitative universe selector for repeatable market scans.
 
-Universe Selector loads market listings and OHLCV data, runs a configured ranking
-profile, persists the full run into DuckDB, and renders reports or per-ticker
+Universe Selector loads market listings and OHLCV data, runs one or more ranking
+profiles, persists each full run into DuckDB, and renders reports or per-ticker
 inspect output from persisted results.
+
+A run is the durable unit of work: one market, one ranking profile, one provider
+snapshot, one ranking config hash, and one rendered report. Reports and inspect
+output read those persisted runs instead of recomputing rankings.
 
 This project is an alpha-stage research tool. It is not investment advice.
 
@@ -15,15 +19,25 @@ This project is an alpha-stage research tool. It is not investment advice.
 - Supported markets: `US` and `TW`.
 - Runtime config source: `config.yaml` in the current working directory.
 - Default example ranking profile: `sample_price_trend_v1`.
+- Supported ranking profiles: `sample_price_trend_v1`, `momentum_v1`,
+  `trend_quality_v1`, `volatility_quality_v1`, and `liquidity_quality_v1`.
+- Single-profile and multi-profile batch runs are supported.
 - Persistence: local DuckDB database under `.universe-selector/` by default.
 
 ## What It Does
 
-The CLI has three main commands:
+The CLI has three command families:
 
-- `batch MARKET`: fetch data, run the ranking profile, persist the run, and render a report artifact.
-- `report MARKET`: print the latest successful report for the current configured ranking profile.
-- `inspect MARKET --ticker TICKER`: print persisted metrics and rankings for one ticker.
+- `batch MARKET`: fetch provider data, run one or more ranking profiles, persist
+  each run, and render report artifacts.
+- `report MARKET`: print the latest successful report for the current configured
+  ranking profile, or for a `--ranking-profile` override.
+- `report --run-id RUN_ID`: print one explicit persisted successful run.
+- `inspect MARKET --ticker TICKER`: print persisted metrics and rankings for one
+  ticker from the latest successful run for the current configured ranking
+  profile, or for a `--ranking-profile` override.
+- `inspect --run-id RUN_ID --ticker TICKER`: inspect one ticker from one explicit
+  persisted successful run.
 
 `report` and `inspect` read persisted results. They do not recompute a batch run.
 
@@ -42,8 +56,8 @@ config.yaml -> provider -> ranking profile -> DuckDB -> report / inspect
 - `ranking_profiles/` owns ranking logic. A profile builds a persisted ticker
   snapshot, assigns horizon rankings, and declares which metrics are persisted
   and inspectable.
-- `pipeline.py` coordinates one batch run: load data, run the selected profile,
-  persist the result, and render the report artifact.
+- `pipeline.py` coordinates batch execution: load provider data, run the selected
+  profile or profiles, persist each result, and render report artifacts.
 - `persistence/` owns DuckDB migrations and read/write access for run logs,
   provider metadata, ticker snapshots, rankings, and report artifacts.
 - `output/` renders markdown reports and per-ticker inspect output from persisted
@@ -54,6 +68,10 @@ config.yaml -> provider -> ranking profile -> DuckDB -> report / inspect
 `inspect` resolve a persisted successful run, then read DuckDB. This keeps output
 reproducible for a specific run and prevents report rendering from silently
 changing when provider data changes later.
+
+When `batch` receives more than one `--ranking-profile`, provider data is loaded
+once and then reused for each selected profile. Each profile is persisted as a
+separate run with its own run id, ranking config hash, rankings, and report.
 
 The persistence schema stores stable run fields as columns and profile-specific
 metrics in `metrics_json`. Ranking profiles declare their persisted metric keys,
@@ -130,6 +148,14 @@ report:
   top_n: 100
 ```
 
+`ranking.profile` may be any supported profile id:
+
+- `sample_price_trend_v1`
+- `momentum_v1`
+- `trend_quality_v1`
+- `volatility_quality_v1`
+- `liquidity_quality_v1`
+
 For quick smoke runs against a smaller live universe, set:
 
 ```yaml
@@ -180,6 +206,10 @@ Each profile is persisted as its own run. `report` and `inspect` continue
 to read one run at a time; use `--ranking-profile` to resolve the latest
 run for a specific profile.
 
+If any profile fails during a multi-profile batch, completed profile runs remain
+persisted and the CLI prints the completed run ids plus the failed run id, failed
+profile, and error.
+
 You can also read an explicit persisted run:
 
 ```bash
@@ -191,6 +221,22 @@ uv run universe-selector inspect --run-id us-00000000-0000-4000-8000-00000000000
 `--ranking-profile`; the run already records its ranking profile.
 
 ## Ranking Profiles
+
+Ranking profiles are independent scoring lenses. They share the same persisted
+run model but define their own candidate filters, metric keys, horizons, scores,
+and interpretation notes.
+
+| Profile | Purpose | Horizons | Required History |
+|---|---|---|---:|
+| `sample_price_trend_v1` | Minimal example profile for smoke runs and extension patterns. | `midterm`, `longterm` | 121 bars |
+| `momentum_v1` | Raw weighted momentum profile using risk-adjusted medium-term momentum and short-term strength. | `swing`, `midterm` | 274 bars |
+| `trend_quality_v1` | Market-relative trend profile using returns, trend slope, trend fit, moving-average structure, drawdown control, caps, and structure tags. | `composite`, `shortterm`, `midterm` | 252 bars |
+| `volatility_quality_v1` | Market-relative quality profile favoring lower realized volatility, downside volatility control, range tightness, and drawdown control. | `composite`, `shortterm`, `stable` | 126 bars |
+| `liquidity_quality_v1` | Market-relative liquidity profile using traded value depth, friction proxies, traded value stability, concentration, continuity, and range tightness. | `composite`, `shortterm`, `stable` | 63 bars |
+
+All profile scores are ranking values, not return forecasts. Higher score ranks
+better within the same run, market, profile, and horizon unless the profile
+documents a narrower interpretation.
 
 ### `sample_price_trend_v1`
 
@@ -205,6 +251,67 @@ It computes:
 - Raw adjusted-close return values are used as ranking scores for each horizon.
 
 It is a sample profile, not a production strategy recommendation.
+
+### `momentum_v1`
+
+`momentum_v1` is a raw weighted momentum profile. It computes 12-1 and 6-1
+momentum returns, realized volatility over those same windows, risk-adjusted
+momentum factors, and 20-day short-term strength.
+
+It ranks two horizons:
+
+- `swing`: shorter momentum lens emphasizing 6-1 risk-adjusted momentum and
+  20-day strength.
+- `midterm`: medium-term momentum lens emphasizing 12-1 and 6-1 risk-adjusted
+  momentum.
+
+Scores are raw weighted composites and are not bounded to 0-100.
+
+### `trend_quality_v1`
+
+`trend_quality_v1` is a market-relative trend quality profile. It combines
+absolute and percentile components for recent returns, trend slope, trend fit,
+moving-average structure, breakout position, drawdown control, and penalties.
+
+It also persists non-exclusive structure tags such as `tag_structure_uptrend`,
+`tag_structure_consistent_uptrend`, `tag_structure_negative_60d_return`,
+`tag_structure_large_drawdown`, `tag_structure_weak_trend_component`, and
+`tag_structure_cap_active`. These tags are intended to make high or low scores
+easier to audit in `inspect`.
+
+Top ranks are relative to the eligible candidates in the same run. In a weak
+eligible universe, a top-ranked row can still be the least-bad candidate rather
+than a clean upward trend. Scores may be negative or capped.
+
+### `volatility_quality_v1`
+
+`volatility_quality_v1` is a market-relative volatility quality profile. It
+favors lower 20-day and 60-day realized volatility, lower downside volatility,
+tighter daily ranges, more stable volatility, and better 120-day drawdown
+control.
+
+The profile is useful as a defensive or risk-control lens. High scores do not
+guarantee lower future risk or positive future returns.
+
+### `liquidity_quality_v1`
+
+`liquidity_quality_v1` is a market-relative liquidity quality profile. It ranks
+local-currency traded value depth, Amihud-style illiquidity proxies, traded value
+stability and concentration, recent liquidity fade, trading continuity, and
+range tightness.
+
+The profile is useful for screening tradability and liquidity quality. Traded
+value metrics are local currency amounts, so compare scores and ranks within the
+same market, run, profile, and horizon.
+
+### Choosing Profiles
+
+Use `sample_price_trend_v1` for fixture smoke tests and as a reference
+implementation for new profiles. Use `momentum_v1` when you want a raw momentum
+candidate list. Use `trend_quality_v1` when you want a more structured trend
+lens with audit tags. Use `volatility_quality_v1` and `liquidity_quality_v1` as
+risk and tradability companions, either on their own or in a multi-profile batch
+with momentum or trend profiles.
 
 ## Extending
 
