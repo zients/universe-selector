@@ -15,7 +15,12 @@ def _format_provider_summary(provider_summary: dict[str, str]) -> str:
     return "\n".join(f"- {key}: {value}" for key, value in provider_summary.items())
 
 
-def _top_section(title: str, rankings: pl.DataFrame, horizon: str, top_n: int) -> str:
+def _top_section(
+    title: str,
+    rankings: pl.DataFrame,
+    horizon: str,
+    top_n: int,
+) -> str:
     if rankings.is_empty():
         return f"## {title}\n\nNo persisted candidates for this horizon.\n"
     rows = rankings.filter(pl.col("horizon") == horizon).sort("rank").head(top_n).to_dicts()

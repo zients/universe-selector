@@ -15,8 +15,10 @@ from universe_selector.output.report import REPORT_RESEARCH_DISCLAIMER, render_j
 from universe_selector.providers.models import ProviderMetadata
 from universe_selector.ranking_profiles.liquidity_quality_v1 import LiquidityQualityV1Profile
 from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
+from universe_selector.ranking_profiles.momentum_quality_v1 import MomentumQualityV1Profile
 from universe_selector.ranking_profiles.sample_price_trend_v1 import SamplePriceTrendV1Profile
 from universe_selector.ranking_profiles.trend_quality_v1 import TrendQualityV1Profile
+from universe_selector.ranking_profiles.volatility_quality_v1 import VolatilityQualityV1Profile
 
 
 def _provider_metadata() -> ProviderMetadata:
@@ -61,6 +63,38 @@ def test_json_helpers_convert_domain_values_and_emit_compact_sorted_json() -> No
     assert json.loads(encoded)["a"]["when"] == "2026-05-18"
 
 
+def _ranking_row(horizon: str, rank: int) -> dict[str, object]:
+    return {
+        "horizon": horizon,
+        "rank": rank,
+        "score": 90.0 - rank,
+        "score_risk_adjusted_momentum_12_1": 90.0,
+        "score_risk_adjusted_momentum_6_1": 85.0,
+        "score_short_term_strength_20d": 80.0,
+        "score_short_term_extension_20d": 95.0,
+        "score_distance_from_ma20": 92.0,
+        "score_volatility_12_1": 70.0,
+        "score_volatility_6_1": 75.0,
+        "moving_average_structure_score": 88.0,
+        "drawdown_control_score": 82.0,
+        "uptrend_consistency_score": 86.0,
+        "trend_quality_score": 85.6,
+        "momentum_blend_score": 87.25,
+        "overheat_score": 93.8,
+        "overheat_penalty_score": 69.0,
+        "tag_risk_overheated": 1.0,
+        "tag_risk_extended_from_ma20": 1.0,
+        "tag_risk_high_volatility": 0.0,
+        "tag_risk_large_drawdown": 0.0,
+        "tag_risk_weak_trend_quality": 0.0,
+        "tag_risk_thin_recent_volume": 0.0,
+        "tag_risk_data_quality_warning": 0.0,
+        "tag_positive_strong_momentum": 1.0,
+        "tag_positive_stable_uptrend": 1.0,
+        "tag_positive_early_breakout": 0.0,
+    }
+
+
 def test_markdown_report_renders_sample_profile_sections_and_notes() -> None:
     profile = SamplePriceTrendV1Profile()
     content = render_markdown_report(
@@ -93,6 +127,88 @@ def test_markdown_report_renders_sample_profile_sections_and_notes() -> None:
     assert REPORT_RESEARCH_DISCLAIMER in content
     assert profile.rank_interpretation_note in content
     assert "Filtered-out tickers and exclusion reasons are not persisted." in content
+
+
+def test_markdown_report_does_not_render_ranking_tag_columns() -> None:
+    profile = MomentumQualityV1Profile()
+    content = render_markdown_report(
+        run_id="us-v2",
+        market=Market.US,
+        mode_label="fixture",
+        provider_summary={"ranking_profile": profile.profile_id},
+        snapshot=pl.DataFrame({"ticker": ["AAA", "BBB"]}),
+        rankings=pl.DataFrame(
+            {
+                "horizon": ["composite", "composite", "swing", "swing", "midterm", "midterm"],
+                "rank": [1, 2, 1, 2, 1, 2],
+                "ticker": ["AAA", "BBB", "AAA", "BBB", "AAA", "BBB"],
+                "score": [90.0, 80.0, 91.0, 81.0, 92.0, 82.0],
+                "tag_risk_overheated": [1.0, 0.0, 1.0, 0.0, 1.0, 0.0],
+                "tag_risk_extended_from_ma20": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+                "tag_risk_high_volatility": [0.0] * 6,
+                "tag_risk_large_drawdown": [0.0] * 6,
+                "tag_risk_weak_trend_quality": [0.0] * 6,
+                "tag_risk_thin_recent_volume": [0.0] * 6,
+                "tag_risk_data_quality_warning": [0.0] * 6,
+                "tag_positive_strong_momentum": [1.0] * 6,
+                "tag_structure_cap_active": [1.0] * 6,
+            }
+        ),
+        config=AppConfig(data_mode="fixture", report_top_n=2),
+        profile=profile,
+    )
+
+    ranking_content = content.split("## Methodology Notes", 1)[0]
+    assert "| rank | ticker | score |" in ranking_content
+    assert "| rank | ticker | score | risk_tags |" not in ranking_content
+    assert "risk_tags" not in ranking_content
+    assert "overheated" not in ranking_content
+    assert "extended_from_ma20" not in ranking_content
+    assert "tag_risk_overheated" not in ranking_content
+    assert "tag_positive_strong_momentum" not in ranking_content
+    assert "tag_structure_cap_active" not in ranking_content
+    assert "| 1 | AAA | 90.0000 |" in content
+    assert "| 2 | BBB | 80.0000 |" in content
+    assert ranking_content.count("| rank | ticker | score |") == len(profile.horizon_order)
+
+
+def test_markdown_reports_use_plain_ranking_tables_for_any_profile() -> None:
+    profiles = [
+        SamplePriceTrendV1Profile(),
+        MomentumV1Profile(),
+        MomentumQualityV1Profile(),
+        LiquidityQualityV1Profile(),
+        TrendQualityV1Profile(),
+        VolatilityQualityV1Profile(),
+    ]
+    for profile in profiles:
+        tag_metric_keys = [key for key in profile.ranking_metric_keys if key.startswith("tag_")]
+        rankings = pl.DataFrame(
+            {
+                "horizon": list(profile.horizon_order),
+                "rank": [1] * len(profile.horizon_order),
+                "ticker": ["AAA"] * len(profile.horizon_order),
+                "score": [1.0] * len(profile.horizon_order),
+                **{key: [1.0] * len(profile.horizon_order) for key in tag_metric_keys},
+            }
+        )
+        content = render_markdown_report(
+            run_id=f"us-{profile.profile_id}",
+            market=Market.US,
+            mode_label="fixture",
+            provider_summary={"ranking_profile": profile.profile_id},
+            snapshot=pl.DataFrame({"ticker": ["AAA"]}),
+            rankings=rankings,
+            config=AppConfig(data_mode="fixture", ranking_profile=profile.profile_id),
+            profile=profile,
+        )
+
+        ranking_content = content.split("## Methodology Notes", 1)[0]
+        assert profile.rank_interpretation_note in content, profile.profile_id
+        assert ranking_content.count("| rank | ticker | score |") == len(profile.horizon_order)
+        assert "| rank | ticker | score | risk_tags |" not in ranking_content, profile.profile_id
+        assert "tag_" not in ranking_content, profile.profile_id
+        assert "risk_tags" not in ranking_content, profile.profile_id
 
 
 def test_empty_report_is_structured_and_not_advice() -> None:
@@ -311,6 +427,44 @@ def test_inspect_renders_momentum_profile_metrics_and_rankings() -> None:
     assert profile.rank_interpretation_note in output
 
 
+def test_inspect_renders_momentum_quality_tags_through_generic_path() -> None:
+    profile = MomentumQualityV1Profile()
+    ranking_metrics = {key: 0.0 for key in profile.ranking_metric_keys}
+    ranking_metrics.update(
+        {
+            "score_risk_adjusted_momentum_12_1": 90.0,
+            "score_risk_adjusted_momentum_6_1": 85.0,
+            "score_short_term_strength_20d": 80.0,
+            "tag_risk_overheated": 1.0,
+            "tag_positive_strong_momentum": 1.0,
+        }
+    )
+    snapshot = {"ticker": "AAA", **{key: 0.0 for key in profile.inspect_metric_keys}}
+
+    output = render_inspect(
+        run_id="us-v2",
+        resolution_mode="latest successful run",
+        ticker="AAA",
+        metadata=_provider_metadata(),
+        snapshot=snapshot,
+        rankings=[
+            {"horizon": "composite", "rank": 1, "score": 0.90, **ranking_metrics},
+            {"horizon": "swing", "rank": 1, "score": 0.88, **ranking_metrics},
+            {"horizon": "midterm", "rank": 1, "score": 0.86, **ranking_metrics},
+        ],
+        profile=profile,
+    )
+
+    assert "## Horizon Rankings" in output
+    assert "## Ranking Scores And Tags" not in output
+    assert "- composite: rank 1, score 0.9, score_risk_adjusted_momentum_12_1 90.0" in output
+    assert "tag_risk_overheated 1.0" in output
+    assert "tag_positive_strong_momentum 1.0" in output
+    tag_keys = [key for key in profile.ranking_metric_keys if key.startswith("tag_")]
+    for key in tag_keys:
+        assert f"{key} " in output
+
+
 def test_inspect_renders_liquidity_quality_metrics_through_generic_path() -> None:
     profile = LiquidityQualityV1Profile()
     snapshot = {
@@ -359,7 +513,7 @@ def test_inspect_renders_liquidity_quality_metrics_through_generic_path() -> Non
     assert profile.rank_interpretation_note in output
 
 
-def test_report_and_inspect_render_trend_quality_interpretation_note() -> None:
+def test_report_tables_omit_and_inspect_renders_trend_quality_diagnostics() -> None:
     profile = TrendQualityV1Profile()
     snapshot = {"ticker": "AAA", **{key: 0.0 for key in profile.inspect_metric_keys}}
     snapshot.update({"profile_metrics_version": 1.0, "asof_bar_date_yyyymmdd": 20260507.0})
@@ -391,7 +545,9 @@ def test_report_and_inspect_render_trend_quality_interpretation_note() -> None:
         profile=profile,
     )
 
+    report_ranking_content = report.split("## Methodology Notes", 1)[0]
     assert profile.rank_interpretation_note in report
+    assert "tag_structure_cap_active" not in report_ranking_content
     assert REPORT_RESEARCH_DISCLAIMER in report
     assert profile.rank_interpretation_note in inspect
     assert "tag_structure_cap_active 1.0" in inspect

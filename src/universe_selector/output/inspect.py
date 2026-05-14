@@ -39,8 +39,9 @@ def render_inspect(
     ]
     for key in profile.inspect_metric_keys:
         lines.append(f"- {key}: {snapshot[key]}")
-    lines.extend(["", "## Horizon Rankings", ""])
+
     ranking_by_horizon = {str(row["horizon"]): row for row in rankings}
+    lines.extend(["", "## Horizon Rankings", ""])
     for horizon in profile.horizon_order:
         row = ranking_by_horizon[horizon]
         metric_parts = [f"{key} {row[key]}" for key in profile.ranking_metric_keys]

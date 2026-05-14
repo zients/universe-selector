@@ -223,7 +223,9 @@ def test_pipeline_runs_trend_quality_profile_and_persists_metrics(
     assert resolved.run_id == result.run_id
     assert resolved.ranking_profile == "trend_quality_v1"
     assert "ranking_profile: trend_quality_v1" in report
+    ranking_content = report.split("## Methodology Notes", 1)[0]
     assert profile.rank_interpretation_note in report
+    assert "tag_structure_cap_active" not in ranking_content
 
     expected_snapshot_keys = {
         "run_id",

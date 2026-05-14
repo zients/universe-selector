@@ -35,6 +35,10 @@ from universe_selector.ranking_profiles.momentum_v1 import (
     MomentumV1Profile,
 )
 from universe_selector.ranking_profiles.registration import build_ranking_profile_registration_map
+from universe_selector.ranking_profiles.momentum_quality_v1 import (
+    MOMENTUM_QUALITY_PROFILE_ID,
+    MomentumQualityV1Profile,
+)
 from universe_selector.ranking_profiles.sample_price_trend_v1 import (
     SAMPLE_PRICE_TREND_PROFILE_ID,
     SamplePriceTrendV1Profile,
@@ -421,12 +425,13 @@ def test_ranking_profiles_package_root_exposes_registry_contract_only() -> None:
     assert "TrendQualityV1Profile" not in ranking_profiles.__all__
 
 
-def test_supported_profile_registry_includes_public_profiles() -> None:
+def test_supported_profile_registry_includes_registered_profiles() -> None:
     assert supported_ranking_profile_ids() == (
         "sample_price_trend_v1",
         "momentum_v1",
         "trend_quality_v1",
         "volatility_quality_v1",
+        MOMENTUM_QUALITY_PROFILE_ID,
         "liquidity_quality_v1",
     )
 
@@ -449,6 +454,11 @@ def test_supported_profile_registry_includes_public_profiles() -> None:
     assert isinstance(trend_registration, RankingProfileRegistration)
     assert isinstance(trend_registration.create_profile(), TrendQualityV1Profile)
     assert isinstance(get_ranking_profile("trend_quality_v1"), TrendQualityV1Profile)
+
+    momentum_quality_registration = get_ranking_profile_registration(MOMENTUM_QUALITY_PROFILE_ID)
+    assert isinstance(momentum_quality_registration, RankingProfileRegistration)
+    assert isinstance(momentum_quality_registration.create_profile(), MomentumQualityV1Profile)
+    assert isinstance(get_ranking_profile(MOMENTUM_QUALITY_PROFILE_ID), MomentumQualityV1Profile)
 
     liquidity_registration = get_ranking_profile_registration("liquidity_quality_v1")
     assert isinstance(liquidity_registration, RankingProfileRegistration)

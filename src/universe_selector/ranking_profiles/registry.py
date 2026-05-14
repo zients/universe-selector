@@ -6,6 +6,7 @@ from universe_selector.errors import ValidationError
 from universe_selector.ranking_profiles.base import RankingProfile
 from universe_selector.ranking_profiles.liquidity_quality_v1 import LIQUIDITY_QUALITY_V1_REGISTRATION
 from universe_selector.ranking_profiles.momentum_v1 import MOMENTUM_V1_REGISTRATION
+from universe_selector.ranking_profiles.momentum_quality_v1 import MOMENTUM_QUALITY_V1_REGISTRATION
 from universe_selector.ranking_profiles.registration import (
     RankingProfileRegistration,
     build_ranking_profile_registration_map,
@@ -20,6 +21,7 @@ _REGISTRATIONS: tuple[RankingProfileRegistration, ...] = (
     MOMENTUM_V1_REGISTRATION,
     TREND_QUALITY_V1_REGISTRATION,
     VOLATILITY_QUALITY_V1_REGISTRATION,
+    MOMENTUM_QUALITY_V1_REGISTRATION,
     LIQUIDITY_QUALITY_V1_REGISTRATION,
 )
 
