@@ -32,10 +32,12 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "does not persist the result" in normalized
     assert "The default assumptions path is `valuation_assumptions/{market}/{ticker}.yaml`" in normalized
     assert "`valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml` are sample schemas only" in normalized
-    assert "Before running `fcf_dcf_v1`, fill `facts_overrides.normalized_fcf` and its note" in normalized
+    assert "`fcf_dcf_v1` uses `models.fcf_dcf_v1.starting_fcf` to choose the DCF starting FCF" in normalized
+    assert "templates default to `starting_fcf.method: provider_ttm_fcf`" in normalized
+    assert "Set `starting_fcf.method: override` with `value` and `note`" in normalized
     assert "The committed valuation assumption files are repository templates" in normalized
     assert "installed wheels do not copy them into your working directory" in normalized
     assert "yfinance fundamentals are third-party convenience data" in normalized
-    assert "Raw provider free cash flow is OCF minus capex and is not used as normalized FCF" in normalized
+    assert "uses provider raw FCF as a starting proxy so the command can run directly" in normalized
     assert "model-implied scenario results" in normalized
     assert "not forecasts, expected outcomes, target cases, or recommendations" in normalized

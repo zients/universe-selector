@@ -8,6 +8,7 @@ from universe_selector.providers.registry import get_fundamentals_registration
 from universe_selector.valuation.assumptions import load_valuation_assumptions
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
+    FcfDcfV1Assumptions,
     ValuationInputProvenance,
     ValuationModelInput,
     ValuationResult,
@@ -32,7 +33,6 @@ def run_valuation(
         model_id=model_id,
         assumptions_path=assumptions_path,
     )
-    _validate_required_assumption_overrides(model_id, assumptions.facts_overrides)
     provider = registration.factory()
     fundamentals = provider.load_fundamentals(market, normalized_ticker)
     facts = fundamentals.facts
@@ -40,9 +40,15 @@ def run_valuation(
         raise ValidationError(
             f"assumptions currency {assumptions.currency} must match provider facts currency {facts.currency}"
         )
+    starting_fcf, starting_fcf_source, starting_fcf_note = _resolve_starting_fcf(
+        model_id=model_id,
+        model_assumptions=assumptions.model_assumptions,
+        provider_fcf=facts.free_cash_flow,
+        fiscal_period_type=facts.fiscal_period_type,
+    )
 
     effective_inputs = EffectiveValuationInputs(
-        normalized_fcf=_effective_value("normalized_fcf", facts.free_cash_flow, assumptions.facts_overrides),
+        starting_fcf=starting_fcf,
         shares_outstanding=_effective_value("shares_outstanding", facts.shares_outstanding, assumptions.facts_overrides),
         net_debt=_effective_value("net_debt", facts.net_debt, assumptions.facts_overrides),
         reference_price=_effective_value("reference_price", facts.reference_price, assumptions.facts_overrides),
@@ -66,11 +72,11 @@ def run_valuation(
         ),
     )
     provenance = ValuationInputProvenance(
-        normalized_fcf_source=_source_for("normalized_fcf", assumptions.facts_overrides),
+        starting_fcf_source=starting_fcf_source,
         shares_outstanding_source=_source_for("shares_outstanding", assumptions.facts_overrides),
         net_debt_source=_source_for("net_debt", assumptions.facts_overrides),
         reference_price_source=_source_for("reference_price", assumptions.facts_overrides),
-        normalized_fcf_note=_note_for("normalized_fcf", assumptions.facts_overrides, assumptions.facts_override_notes),
+        starting_fcf_note=starting_fcf_note,
         shares_outstanding_note=_note_for("shares_outstanding", assumptions.facts_overrides, assumptions.facts_override_notes),
         net_debt_note=_note_for("net_debt", assumptions.facts_overrides, assumptions.facts_override_notes),
         reference_price_note=_note_for("reference_price", assumptions.facts_overrides, assumptions.facts_override_notes),
@@ -104,12 +110,29 @@ def _effective_value(field: str, provider_value: float, overrides) -> float:
     return provider_value
 
 
-def _validate_required_assumption_overrides(model_id: str, overrides) -> None:
-    if model_id == "fcf_dcf_v1" and overrides.get("normalized_fcf") is None:
-        raise ValidationError(
-            "facts_overrides.normalized_fcf is required for fcf_dcf_v1; "
-            "raw provider free_cash_flow is not used as normalized FCF"
+def _resolve_starting_fcf(
+    *,
+    model_id: str,
+    model_assumptions: object,
+    provider_fcf: float,
+    fiscal_period_type: str,
+) -> tuple[float, str, str | None]:
+    if model_id != "fcf_dcf_v1":
+        return provider_fcf, "provider_fact", None
+    if not isinstance(model_assumptions, FcfDcfV1Assumptions):
+        raise ValidationError("fcf_dcf_v1 requires FcfDcfV1Assumptions")
+
+    starting_fcf = model_assumptions.starting_fcf
+    if starting_fcf.method == "override":
+        assert starting_fcf.value is not None
+        return starting_fcf.value, "assumption_override", starting_fcf.note
+    if starting_fcf.method == "provider_ttm_fcf":
+        return (
+            provider_fcf,
+            "provider_ttm_fcf",
+            f"Provider raw FCF used as starting FCF proxy; fiscal_period_type={fiscal_period_type}.",
         )
+    raise ValidationError(f"unsupported starting_fcf method: {starting_fcf.method}")
 
 
 def _source_for(field: str, overrides) -> str:

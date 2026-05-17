@@ -48,7 +48,7 @@ _REQUIRED_ROOT_KEYS = frozenset(
         "models",
     }
 )
-_FACT_OVERRIDE_KEYS = ("normalized_fcf", "shares_outstanding", "net_debt", "reference_price")
+_FACT_OVERRIDE_KEYS = ("shares_outstanding", "net_debt", "reference_price")
 
 
 def default_assumptions_path(market: Market, ticker: str) -> Path:

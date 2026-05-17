@@ -13,6 +13,7 @@ from universe_selector.providers.models import FundamentalFacts, FundamentalsMet
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     FcfDcfV1Assumptions,
+    StartingFcfAssumption,
     ValuationAssumptionSet,
     ValuationInputProvenance,
     ValuationResult,
@@ -37,13 +38,11 @@ def _result() -> ValuationResult:
         assumption_path="/repo/valuation_assumptions/us/AAPL.yaml",
         assumption_hash="abc123",
         facts_overrides={
-            "normalized_fcf": 100_000_000_000.0,
             "shares_outstanding": None,
             "net_debt": None,
             "reference_price": 185.0,
         },
         facts_override_notes={
-            "normalized_fcf": "Normalized for one-time working capital movement.",
             "shares_outstanding": None,
             "net_debt": None,
             "reference_price": "Reference price supplied for scenario review.",
@@ -52,7 +51,7 @@ def _result() -> ValuationResult:
         model_assumptions=FcfDcfV1Assumptions(
             forecast_years=5,
             terminal_method="perpetual_growth",
-            cash_flow_basis="normalized_fcf_enterprise_proxy",
+            starting_fcf=StartingFcfAssumption(method="provider_ttm_fcf", value=None, note=None),
             discount_rate_basis="nominal_wacc",
             terminal_growth_basis="nominal_perpetual_growth",
             scenario_order=("conservative", "base", "upside"),
@@ -101,7 +100,7 @@ def _result() -> ValuationResult:
         fiscal_period_type="ttm",
     )
     effective_inputs = EffectiveValuationInputs(
-        normalized_fcf=100_000_000_000.0,
+        starting_fcf=110_000_000_000.0,
         shares_outstanding=15_000_000_000.0,
         net_debt=50_000_000_000.0,
         reference_price=185.0,
@@ -127,11 +126,11 @@ def _result() -> ValuationResult:
             raw_facts=raw_facts,
             effective_inputs=effective_inputs,
             input_provenance=ValuationInputProvenance(
-                normalized_fcf_source="assumption_override",
+                starting_fcf_source="provider_ttm_fcf",
                 shares_outstanding_source="provider_fact",
                 net_debt_source="provider_fact",
                 reference_price_source="assumption_override",
-                normalized_fcf_note="Normalized for one-time working capital movement.",
+                starting_fcf_note="Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm.",
                 shares_outstanding_note=None,
                 net_debt_note=None,
                 reference_price_note="Reference price supplied for scenario review.",
@@ -163,7 +162,7 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "This valuation output is ephemeral and is not persisted." in markdown
     assert "simplified constant-growth explicit forecast with perpetual-growth terminal value" in markdown
     assert (
-        "highly sensitive to normalized FCF, share count, discount rate, "
+        "highly sensitive to starting FCF, share count, discount rate, "
         "terminal growth, and terminal value assumptions"
     ) in markdown
     assert "third-party convenience data may be stale, incomplete, restated, mapped inconsistently, or unavailable" in markdown
@@ -186,7 +185,7 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "Demonstration assumptions for schema validation only; not investment advice." in markdown
     assert "forecast_years: 5" in markdown
     assert "terminal_method: perpetual_growth" in markdown
-    assert "cash_flow_basis: normalized_fcf_enterprise_proxy" in markdown
+    assert "starting_fcf_method: provider_ttm_fcf" in markdown
     assert "discount_rate_basis: nominal_wacc" in markdown
     assert "terminal_growth_basis: nominal_perpetual_growth" in markdown
     assert "| conservative | 3.00% | 10.00% | 2.00% | Lower illustrative scenario. |" in markdown
@@ -196,10 +195,10 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "balance_sheet_as_of" in markdown
     assert "2026-03-31" in markdown
     assert "## Effective Inputs" in markdown
-    assert "enterprise cash-flow proxy" in markdown
+    assert "starting FCF proxy" in markdown
     assert "not verified unlevered FCFF" in markdown
-    assert "Normalized FCF must come from assumptions, not raw provider FCF." in markdown
-    assert "Raw provider FCF is OCF minus capex and remains in Raw Provider Facts only." in markdown
+    assert "provider_ttm_fcf uses raw provider FCF as the starting FCF proxy." in markdown
+    assert "Use starting_fcf.method override when analyst-normalized FCF is needed." in markdown
     assert "fetch_date_fallback" in markdown
     assert "Provider quote timestamp unavailable; using fetch date." in markdown
 
@@ -208,7 +207,7 @@ def test_render_valuation_includes_provenance_and_model_implied_scenarios_withou
     markdown = render_valuation_markdown(_result())
 
     assert "## Input Provenance" in markdown
-    assert "| normalized_fcf | assumption_override | Normalized for one-time working capital movement. |" in markdown
+    assert "| starting_fcf | provider_ttm_fcf | Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm. |" in markdown
     assert "| shares_outstanding | provider_fact |  |" in markdown
     assert "| reference_price | assumption_override | Reference price supplied for scenario review. |" in markdown
     assert "model-implied spread vs reference price" in markdown

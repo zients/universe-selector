@@ -258,13 +258,16 @@ assumption files are repository templates; installed wheels do not copy them
 into your working directory. Create your own assumptions file in the working
 directory or pass `--assumptions`.
 
-Before running `fcf_dcf_v1`, fill `facts_overrides.normalized_fcf` and its note.
-Raw provider free cash flow is OCF minus capex and is not used as normalized FCF.
+`fcf_dcf_v1` uses `models.fcf_dcf_v1.starting_fcf` to choose the DCF starting
+FCF. The committed templates default to `starting_fcf.method: provider_ttm_fcf`,
+which uses provider raw FCF as a starting proxy so the command can run directly.
+Set `starting_fcf.method: override` with `value` and `note` when using an
+analyst-normalized FCF.
 
-`fcf_dcf_v1` is a simplified free-cash-flow DCF model. It uses normalized FCF as
+`fcf_dcf_v1` is a simplified free-cash-flow DCF model. It uses starting FCF as
 an enterprise cash-flow proxy, not verified unlevered FCFF, and computes
 model-implied scenario results against a reference price. Results are highly
-sensitive to normalized FCF, share count, discount rate, terminal growth, and
+sensitive to starting FCF, share count, discount rate, terminal growth, and
 terminal value assumptions. Scenarios are illustrative and are not forecasts,
 expected outcomes, target cases, or recommendations.
 

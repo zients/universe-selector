@@ -83,11 +83,19 @@ def _render_fcf_dcf_assumptions(assumptions: Any) -> list[str]:
         "",
         f"- forecast_years: {assumptions.forecast_years}",
         f"- terminal_method: {_markdown_text(assumptions.terminal_method)}",
-        f"- cash_flow_basis: {_markdown_text(assumptions.cash_flow_basis)}",
+        f"- starting_fcf_method: {_markdown_text(assumptions.starting_fcf.method)}",
         f"- discount_rate_basis: {_markdown_text(assumptions.discount_rate_basis)}",
         f"- terminal_growth_basis: {_markdown_text(assumptions.terminal_growth_basis)}",
         "",
     ]
+    if assumptions.starting_fcf.method == "override":
+        lines.extend(
+            [
+                f"- starting_fcf_value: {_format_number(assumptions.starting_fcf.value)}",
+                f"- starting_fcf_note: {_markdown_text(assumptions.starting_fcf.note)}",
+                "",
+            ]
+        )
     rows = []
     for scenario_id in assumptions.scenario_order:
         scenario = assumptions.scenarios[scenario_id]
@@ -145,7 +153,7 @@ def render_valuation_markdown(result: ValuationResult) -> str:
             "with perpetual-growth terminal value."
         ),
         (
-            "- Sensitivity risk: outputs are highly sensitive to normalized FCF, share count, "
+            "- Sensitivity risk: outputs are highly sensitive to starting FCF, share count, "
             "discount rate, terminal growth, and terminal value assumptions."
         ),
         (
@@ -232,9 +240,9 @@ def render_valuation_markdown(result: ValuationResult) -> str:
             "## Effective Inputs",
             "",
             (
-                "Normalized FCF is used as an enterprise cash-flow proxy and is not verified "
-                "unlevered FCFF. Normalized FCF must come from assumptions, not raw provider FCF. "
-                "Raw provider FCF is OCF minus capex and remains in Raw Provider Facts only."
+                "Starting FCF is used as an enterprise cash-flow proxy and is not verified "
+                "unlevered FCFF. provider_ttm_fcf uses raw provider FCF as the starting FCF proxy. "
+                "Use starting_fcf.method override when analyst-normalized FCF is needed."
             ),
             "",
         ]
@@ -243,7 +251,7 @@ def render_valuation_markdown(result: ValuationResult) -> str:
         _lines_table(
             ("field", "value"),
             (
-                ("normalized_fcf", _format_money(effective.normalized_fcf, effective.currency)),
+                ("starting_fcf", _format_money(effective.starting_fcf, effective.currency)),
                 ("shares_outstanding", _format_number(effective.shares_outstanding)),
                 ("net_debt", _format_money(effective.net_debt, effective.currency)),
                 ("reference_price", _format_money(effective.reference_price, effective.currency)),
@@ -283,9 +291,9 @@ def render_valuation_markdown(result: ValuationResult) -> str:
             ("field", "source", "note"),
             (
                 (
-                    "normalized_fcf",
-                    provenance.normalized_fcf_source,
-                    _format_note(provenance.normalized_fcf_note),
+                    "starting_fcf",
+                    provenance.starting_fcf_source,
+                    _format_note(provenance.starting_fcf_note),
                 ),
                 (
                     "shares_outstanding",

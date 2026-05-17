@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from universe_selector.errors import ValidationError
 from universe_selector.valuation.models import (
     FcfDcfV1Assumptions,
+    StartingFcfAssumption,
     ValuationModelInput,
     ValuationScenarioAssumptions,
     ValuationScenarioResult,
@@ -16,12 +17,13 @@ _MODEL_KEYS = frozenset(
     {
         "forecast_years",
         "terminal_method",
-        "cash_flow_basis",
+        "starting_fcf",
         "discount_rate_basis",
         "terminal_growth_basis",
         "scenarios",
     }
 )
+_STARTING_FCF_KEYS = frozenset({"method", "value", "note"})
 _SCENARIO_KEYS = frozenset({"growth_rate", "discount_rate", "terminal_growth_rate", "note"})
 
 
@@ -40,11 +42,7 @@ class FcfDcfV1Model:
         terminal_method = assumptions.get("terminal_method")
         if terminal_method != "perpetual_growth":
             raise ValidationError("terminal_method must be perpetual_growth")
-        cash_flow_basis = _require_literal(
-            assumptions.get("cash_flow_basis"),
-            "cash_flow_basis",
-            "normalized_fcf_enterprise_proxy",
-        )
+        starting_fcf = _parse_starting_fcf(assumptions.get("starting_fcf"))
         discount_rate_basis = _require_literal(
             assumptions.get("discount_rate_basis"),
             "discount_rate_basis",
@@ -74,7 +72,7 @@ class FcfDcfV1Model:
         return FcfDcfV1Assumptions(
             forecast_years=forecast_years,
             terminal_method=terminal_method,
-            cash_flow_basis=cash_flow_basis,
+            starting_fcf=starting_fcf,
             discount_rate_basis=discount_rate_basis,
             terminal_growth_basis=terminal_growth_basis,
             scenario_order=_SCENARIO_ORDER,
@@ -96,7 +94,7 @@ class FcfDcfV1Model:
         for scenario_id in assumptions.scenario_order:
             scenario = assumptions.scenarios[scenario_id]
             projected_fcf = tuple(
-                inputs.normalized_fcf * (1.0 + scenario.growth_rate) ** year
+                inputs.starting_fcf * (1.0 + scenario.growth_rate) ** year
                 for year in range(1, assumptions.forecast_years + 1)
             )
             present_value_projected_fcf = tuple(
@@ -183,6 +181,40 @@ def _require_literal(value: object, field: str, expected: str) -> str:
     if value != expected:
         raise ValidationError(f"{field} must be {expected}")
     return expected
+
+
+def _parse_starting_fcf(value: object) -> StartingFcfAssumption:
+    if not isinstance(value, Mapping):
+        raise ValidationError("starting_fcf must be a mapping")
+    unknown_keys = sorted(set(value) - _STARTING_FCF_KEYS)
+    if unknown_keys:
+        raise ValidationError(f"unknown starting_fcf key: {unknown_keys[0]}")
+
+    method = value.get("method")
+    if method == "provider_ttm_fcf":
+        if "value" in value:
+            raise ValidationError("starting_fcf.value is only allowed when method is override")
+        if "note" in value:
+            raise ValidationError("starting_fcf.note is only allowed when method is override")
+        return StartingFcfAssumption(method="provider_ttm_fcf", value=None, note=None)
+
+    if method == "override":
+        override_value = _require_finite_float(value.get("value"), "starting_fcf.value")
+        note = value.get("note")
+        if not isinstance(note, str) or not note.strip():
+            raise ValidationError("starting_fcf.note is required when method is override")
+        return StartingFcfAssumption(method="override", value=override_value, note=note)
+
+    raise ValidationError("starting_fcf.method must be provider_ttm_fcf or override")
+
+
+def _require_finite_float(value: object, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValidationError(f"{field} must be a finite number")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValidationError(f"{field} must be finite")
+    return number
 
 
 def _require_rate(value: object, field: str) -> float:

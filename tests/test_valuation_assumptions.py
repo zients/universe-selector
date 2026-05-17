@@ -55,6 +55,9 @@ def test_loads_default_assumptions_and_hash_is_path_independent(monkeypatch, tmp
     assert default_loaded.assumption_hash == explicit_loaded.assumption_hash
     assert default_loaded.model_id == "fcf_dcf_v1"
     assert default_loaded.model_assumptions.forecast_years == 5
+    assert default_loaded.model_assumptions.starting_fcf.method == "provider_ttm_fcf"
+    assert default_loaded.model_assumptions.starting_fcf.value is None
+    assert default_loaded.model_assumptions.starting_fcf.note is None
     assert default_loaded.model_assumptions.scenario_order == ("conservative", "base", "upside")
 
 
@@ -72,6 +75,7 @@ def test_loads_tw_2330_assumptions_fixture() -> None:
     assert loaded.amount_unit == "currency_units"
     assert loaded.assumption_path == str(TW_FIXTURE)
     assert loaded.model_id == "fcf_dcf_v1"
+    assert loaded.model_assumptions.starting_fcf.method == "provider_ttm_fcf"
 
 
 def test_missing_default_assumptions_file_reports_expected_path(monkeypatch, tmp_path: Path) -> None:
@@ -159,9 +163,9 @@ def test_rejects_unknown_override_and_note_keys(tmp_path: Path) -> None:
 
 def test_rejects_non_finite_override_and_unknown_model_key(tmp_path: Path) -> None:
     path = _copy_fixture(tmp_path)
-    path.write_text(path.read_text().replace("normalized_fcf: null", "normalized_fcf: .nan", 1))
+    path.write_text(path.read_text().replace("reference_price: null", "reference_price: .nan", 1))
 
-    with pytest.raises(ValidationError, match="normalized_fcf"):
+    with pytest.raises(ValidationError, match="reference_price"):
         load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
 
     path = _copy_fixture(tmp_path / "model")
@@ -176,7 +180,40 @@ def test_rejects_non_finite_override_and_unknown_model_key(tmp_path: Path) -> No
         load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
 
 
-def test_rejects_invalid_rates_and_override_without_note(tmp_path: Path) -> None:
+def test_rejects_invalid_starting_fcf_shapes(tmp_path: Path) -> None:
+    path = _copy_fixture(tmp_path)
+    text = path.read_text()
+
+    path.write_text(text.replace("method: provider_ttm_fcf", "method: unknown_method", 1))
+    with pytest.raises(ValidationError, match="starting_fcf.method"):
+        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
+
+    path.write_text(text.replace(
+        "      method: provider_ttm_fcf\n",
+        "      method: provider_ttm_fcf\n      value: 100.0\n",
+        1,
+    ))
+    with pytest.raises(ValidationError, match="starting_fcf.value"):
+        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
+
+    path.write_text(text.replace(
+        "      method: provider_ttm_fcf\n",
+        "      method: override\n      value: 100.0\n",
+        1,
+    ))
+    with pytest.raises(ValidationError, match="starting_fcf.note"):
+        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
+
+    path.write_text(text.replace(
+        "      method: provider_ttm_fcf\n",
+        "      method: override\n      value: .nan\n      note: Adjusted FCF.\n",
+        1,
+    ))
+    with pytest.raises(ValidationError, match="starting_fcf.value"):
+        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
+
+
+def test_rejects_invalid_rates(tmp_path: Path) -> None:
     path = _copy_fixture(tmp_path)
     text = path.read_text()
 
@@ -186,8 +223,4 @@ def test_rejects_invalid_rates_and_override_without_note(tmp_path: Path) -> None
 
     path.write_text(text.replace("discount_rate: 0.09", "discount_rate: 0.01"))
     with pytest.raises(ValidationError, match="discount_rate"):
-        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
-
-    path.write_text(text.replace("normalized_fcf: null", "normalized_fcf: 1000.0", 1))
-    with pytest.raises(ValidationError, match="facts_override_notes.normalized_fcf"):
         load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)

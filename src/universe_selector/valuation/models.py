@@ -18,10 +18,17 @@ class ValuationScenarioAssumptions:
 
 
 @dataclass(frozen=True)
+class StartingFcfAssumption:
+    method: str
+    value: float | None
+    note: str | None
+
+
+@dataclass(frozen=True)
 class FcfDcfV1Assumptions:
     forecast_years: int
     terminal_method: str
-    cash_flow_basis: str
+    starting_fcf: StartingFcfAssumption
     discount_rate_basis: str
     terminal_growth_basis: str
     scenario_order: tuple[str, ...]
@@ -50,7 +57,7 @@ class ValuationAssumptionSet:
 
 @dataclass(frozen=True)
 class EffectiveValuationInputs:
-    normalized_fcf: float
+    starting_fcf: float
     shares_outstanding: float
     net_debt: float
     reference_price: float
@@ -64,11 +71,11 @@ class EffectiveValuationInputs:
 
 @dataclass(frozen=True)
 class ValuationInputProvenance:
-    normalized_fcf_source: str
+    starting_fcf_source: str
     shares_outstanding_source: str
     net_debt_source: str
     reference_price_source: str
-    normalized_fcf_note: str | None
+    starting_fcf_note: str | None
     shares_outstanding_note: str | None
     net_debt_note: str | None
     reference_price_note: str | None

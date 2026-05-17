@@ -56,13 +56,13 @@ class SpyValuationModel:
         return (
             ValuationScenarioResult(
                 scenario_id="base",
-                projected_fcf=(effective.normalized_fcf,),
-                present_value_projected_fcf=(effective.normalized_fcf,),
+                projected_fcf=(effective.starting_fcf,),
+                present_value_projected_fcf=(effective.starting_fcf,),
                 terminal_value=0.0,
                 present_value_terminal_value=0.0,
-                enterprise_value=effective.normalized_fcf,
-                equity_value=effective.normalized_fcf - effective.net_debt,
-                model_implied_value_per_share=(effective.normalized_fcf - effective.net_debt)
+                enterprise_value=effective.starting_fcf,
+                equity_value=effective.starting_fcf - effective.net_debt,
+                model_implied_value_per_share=(effective.starting_fcf - effective.net_debt)
                 / effective.shares_outstanding,
                 reference_price=effective.reference_price,
                 model_implied_spread_to_reference_price=0.0,
@@ -92,16 +92,16 @@ def _facts() -> FundamentalFacts:
     )
 
 
-def _copy_fixture_with_overrides(tmp_path: Path) -> Path:
+def _copy_fixture_with_reference_price_override(tmp_path: Path) -> Path:
     target = tmp_path / "valuation_assumptions" / "us" / "AAPL.yaml"
     target.parent.mkdir(parents=True)
     shutil.copyfile(FIXTURE, target)
     text = target.read_text()
-    text = text.replace("normalized_fcf: null", "normalized_fcf: 100.0", 1)
     text = text.replace("reference_price: null", "reference_price: 185.0", 1)
     text = text.replace(
-        "  normalized_fcf: null\n  shares_outstanding: null\n  net_debt: null\n  reference_price: null\n",
-        "  normalized_fcf: Normalized for one-time working capital movement.\n"
+        "  shares_outstanding: null\n"
+        "  net_debt: null\n"
+        "  reference_price: null\n",
         "  shares_outstanding: null\n"
         "  net_debt: null\n"
         "  reference_price: Reference price supplied for scenario review.\n",
@@ -111,10 +111,17 @@ def _copy_fixture_with_overrides(tmp_path: Path) -> Path:
     return target
 
 
-def _copy_fixture_without_normalized_fcf_override(tmp_path: Path) -> Path:
-    target = tmp_path / "valuation_assumptions" / "us" / "AAPL.yaml"
-    target.parent.mkdir(parents=True)
-    shutil.copyfile(FIXTURE, target)
+def _copy_fixture_with_starting_fcf_override(tmp_path: Path) -> Path:
+    target = _copy_fixture_with_reference_price_override(tmp_path)
+    text = target.read_text()
+    text = text.replace(
+        "      method: provider_ttm_fcf\n",
+        "      method: override\n"
+        "      value: 100.0\n"
+        "      note: Normalized for one-time working capital movement.\n",
+        1,
+    )
+    target.write_text(text)
     return target
 
 
@@ -145,9 +152,9 @@ def _install_no_ranking_no_persistence_guards(monkeypatch: pytest.MonkeyPatch) -
     )
 
 
-def test_run_valuation_loads_facts_assumptions_applies_overrides_and_calls_model(monkeypatch, tmp_path: Path) -> None:
+def test_run_valuation_uses_provider_ttm_fcf_starting_fcf_and_calls_model(monkeypatch, tmp_path: Path) -> None:
     _install_no_ranking_no_persistence_guards(monkeypatch)
-    assumptions_path = _copy_fixture_with_overrides(tmp_path)
+    assumptions_path = _copy_fixture_with_reference_price_override(tmp_path)
     fake_provider = FakeFundamentalsProvider(_facts())
     fake_registration = FundamentalsProviderRegistration(
         provider_id=fake_provider.provider_id,
@@ -176,7 +183,7 @@ def test_run_valuation_loads_facts_assumptions_applies_overrides_and_calls_model
     assert result.run_input.market is Market.US
     assert result.run_input.ticker == "AAPL"
     assert result.run_input.raw_facts.free_cash_flow == 110.0
-    assert result.run_input.effective_inputs.normalized_fcf == 100.0
+    assert result.run_input.effective_inputs.starting_fcf == 110.0
     assert result.run_input.effective_inputs.shares_outstanding == 10.0
     assert result.run_input.effective_inputs.net_debt == 50.0
     assert result.run_input.effective_inputs.reference_price == 185.0
@@ -184,17 +191,19 @@ def test_run_valuation_loads_facts_assumptions_applies_overrides_and_calls_model
     assert result.run_input.effective_inputs.reference_price_as_of_source == "assumption_override"
     assert result.run_input.effective_inputs.reference_price_as_of_note == "Reference price supplied for scenario review."
     assert result.run_input.raw_facts.reference_price_as_of_source == "provider_reported"
-    assert result.run_input.input_provenance.normalized_fcf_source == "assumption_override"
-    assert result.run_input.input_provenance.normalized_fcf_note == "Normalized for one-time working capital movement."
+    assert result.run_input.input_provenance.starting_fcf_source == "provider_ttm_fcf"
+    assert result.run_input.input_provenance.starting_fcf_note == (
+        "Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm."
+    )
     assert result.run_input.input_provenance.shares_outstanding_source == "provider_fact"
     assert result.run_input.input_provenance.net_debt_source == "provider_fact"
     assert result.run_input.input_provenance.reference_price_source == "assumption_override"
     assert result.scenario_results[0].scenario_id == "base"
 
 
-def test_run_valuation_requires_explicit_normalized_fcf_override(monkeypatch, tmp_path: Path) -> None:
+def test_run_valuation_uses_override_starting_fcf(monkeypatch, tmp_path: Path) -> None:
     _install_no_ranking_no_persistence_guards(monkeypatch)
-    assumptions_path = _copy_fixture_without_normalized_fcf_override(tmp_path)
+    assumptions_path = _copy_fixture_with_starting_fcf_override(tmp_path)
     fake_provider = FakeFundamentalsProvider(_facts())
     fake_registration = FundamentalsProviderRegistration(
         provider_id=fake_provider.provider_id,
@@ -207,15 +216,17 @@ def test_run_valuation_requires_explicit_normalized_fcf_override(monkeypatch, tm
         lambda provider_id, market: fake_registration,
     )
 
-    with pytest.raises(ValidationError, match="facts_overrides.normalized_fcf is required for fcf_dcf_v1"):
-        run_valuation(Market.US, "AAPL", "fcf_dcf_v1", assumptions_path, "fake_fundamentals")
+    result = run_valuation(Market.US, "AAPL", "fcf_dcf_v1", assumptions_path, "fake_fundamentals")
 
-    assert fake_provider.requests == []
+    assert fake_provider.requests == [(Market.US, "AAPL")]
+    assert result.run_input.effective_inputs.starting_fcf == 100.0
+    assert result.run_input.input_provenance.starting_fcf_source == "assumption_override"
+    assert result.run_input.input_provenance.starting_fcf_note == "Normalized for one-time working capital movement."
 
 
 def test_run_valuation_rejects_assumption_currency_mismatch(monkeypatch, tmp_path: Path) -> None:
     _install_no_ranking_no_persistence_guards(monkeypatch)
-    assumptions_path = _copy_fixture_with_overrides(tmp_path)
+    assumptions_path = _copy_fixture_with_reference_price_override(tmp_path)
     assumptions_path.write_text(assumptions_path.read_text().replace("currency: USD", "currency: TWD"))
     fake_provider = FakeFundamentalsProvider(_facts())
     fake_registration = FundamentalsProviderRegistration(
@@ -235,7 +246,7 @@ def test_run_valuation_rejects_assumption_currency_mismatch(monkeypatch, tmp_pat
 
 def test_run_valuation_uses_default_assumptions_path(monkeypatch, tmp_path: Path) -> None:
     _install_no_ranking_no_persistence_guards(monkeypatch)
-    _copy_fixture_with_overrides(tmp_path)
+    _copy_fixture_with_reference_price_override(tmp_path)
     monkeypatch.chdir(tmp_path)
     fake_provider = FakeFundamentalsProvider(_facts())
     fake_registration = FundamentalsProviderRegistration(
