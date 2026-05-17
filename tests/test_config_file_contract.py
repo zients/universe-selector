@@ -23,6 +23,7 @@ EXPECTED_CONFIG_EXAMPLE: dict[str, object] = {
             "TW": "twse_isin",
         },
         "ohlcv_provider": "yfinance",
+        "fundamentals_provider": "yfinance_fundamentals",
         "ticker_limit": None,
         "yfinance": {
             "batch_size": 200,
@@ -50,6 +51,7 @@ def test_config_example_loads_and_matches_app_config_defaults(monkeypatch, tmp_p
     assert actual.live_listing_provider[Market.US] == expected.live_listing_provider[Market.US]
     assert actual.live_listing_provider[Market.TW] == expected.live_listing_provider[Market.TW]
     assert actual.live_ohlcv_provider == expected.live_ohlcv_provider
+    assert actual.live_fundamentals_provider == expected.live_fundamentals_provider
     assert actual.live_ticker_limit == expected.live_ticker_limit
     assert actual.live_yfinance_batch_size == expected.live_yfinance_batch_size
     assert actual.ranking_config_hash() == expected.ranking_config_hash()

@@ -30,6 +30,7 @@ live:
     US: nasdaq_trader
     TW: twse_isin
   ohlcv_provider: yfinance
+  fundamentals_provider: yfinance_fundamentals
   ticker_limit: null
   yfinance:
     batch_size: 200
@@ -483,11 +484,7 @@ def test_cli_reports_config_errors(monkeypatch, tmp_path: Path) -> None:
     assert "config file not found: config.yaml" in result.output
 
 
-def _install_value_cli_no_config_or_persistence_guards(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "universe_selector.cli.load_config",
-        lambda: (_ for _ in ()).throw(AssertionError("load_config")),
-    )
+def _install_value_cli_no_persistence_or_ranking_guards(monkeypatch) -> None:
     monkeypatch.setattr(
         "universe_selector.cli.ensure_runtime_dirs",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("ensure_runtime_dirs")),
@@ -523,18 +520,31 @@ def _install_value_cli_no_config_or_persistence_guards(monkeypatch) -> None:
     )
 
 
-def test_cli_value_runs_without_config_and_prints_markdown(monkeypatch) -> None:
-    _install_value_cli_no_config_or_persistence_guards(monkeypatch)
+def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> None:
+    _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
     captured: dict[str, object] = {}
     sentinel_result = object()
 
-    def fake_run_valuation(*, market: Market, ticker: str, model_id: str, assumptions_path: Path | None):
+    def fake_run_valuation(
+        *,
+        market: Market,
+        ticker: str,
+        model_id: str,
+        assumptions_path: Path | None,
+        fundamentals_provider_id: str,
+    ):
         captured["market"] = market
         captured["ticker"] = ticker
         captured["model_id"] = model_id
         captured["assumptions_path"] = assumptions_path
+        captured["fundamentals_provider_id"] = fundamentals_provider_id
         return sentinel_result
 
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: AppConfig(live_fundamentals_provider="fake_fundamentals"),
+        raising=False,
+    )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
     monkeypatch.setattr(
@@ -551,19 +561,33 @@ def test_cli_value_runs_without_config_and_prints_markdown(monkeypatch) -> None:
     assert captured["ticker"] == "AAPL"
     assert captured["model_id"] == "fcf_dcf_v1"
     assert captured["assumptions_path"] is None
+    assert captured["fundamentals_provider_id"] == "fake_fundamentals"
 
 
 def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypatch) -> None:
-    _install_value_cli_no_config_or_persistence_guards(monkeypatch)
+    _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
     captured: dict[str, object] = {}
 
-    def fake_run_valuation(*, market: Market, ticker: str, model_id: str, assumptions_path: Path | None):
+    def fake_run_valuation(
+        *,
+        market: Market,
+        ticker: str,
+        model_id: str,
+        assumptions_path: Path | None,
+        fundamentals_provider_id: str,
+    ):
         captured["market"] = market
         captured["ticker"] = ticker
         captured["model_id"] = model_id
         captured["assumptions_path"] = assumptions_path
+        captured["fundamentals_provider_id"] = fundamentals_provider_id
         return object()
 
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: AppConfig(live_fundamentals_provider="fake_fundamentals"),
+        raising=False,
+    )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
     monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n", raising=False)
@@ -576,21 +600,35 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
         "ticker": "AAPL",
         "model_id": "fcf_dcf_v1",
         "assumptions_path": None,
+        "fundamentals_provider_id": "fake_fundamentals",
     }
 
 
 def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path) -> None:
-    _install_value_cli_no_config_or_persistence_guards(monkeypatch)
+    _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
     captured: dict[str, object] = {}
     assumptions_path = tmp_path / "valuation_assumptions" / "us" / "AAPL.yaml"
 
-    def fake_run_valuation(*, market: Market, ticker: str, model_id: str, assumptions_path: Path | None):
+    def fake_run_valuation(
+        *,
+        market: Market,
+        ticker: str,
+        model_id: str,
+        assumptions_path: Path | None,
+        fundamentals_provider_id: str,
+    ):
         captured["market"] = market
         captured["ticker"] = ticker
         captured["model_id"] = model_id
         captured["assumptions_path"] = assumptions_path
+        captured["fundamentals_provider_id"] = fundamentals_provider_id
         return object()
 
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: AppConfig(live_fundamentals_provider="fake_fundamentals"),
+        raising=False,
+    )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
     monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n", raising=False)
@@ -605,10 +643,11 @@ def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path)
     assert captured["ticker"] == "AAPL"
     assert captured["model_id"] == "fcf_dcf_v1"
     assert captured["assumptions_path"] == assumptions_path
+    assert captured["fundamentals_provider_id"] == "fake_fundamentals"
 
 
 def test_cli_value_rejects_unknown_model(monkeypatch) -> None:
-    _install_value_cli_no_config_or_persistence_guards(monkeypatch)
+    _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
 
     def fail_model_lookup(model_id: str):
         raise ValidationError(f"unknown valuation model {model_id}")
@@ -616,6 +655,11 @@ def test_cli_value_rejects_unknown_model(monkeypatch) -> None:
     def fail_run_valuation(*args, **kwargs):
         raise AssertionError("run_valuation must not run for an unknown model")
 
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: (_ for _ in ()).throw(AssertionError("load_config must not run before model validation")),
+        raising=False,
+    )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", fail_model_lookup, raising=False)
     monkeypatch.setattr("universe_selector.cli.run_valuation", fail_run_valuation, raising=False)
     monkeypatch.setattr(

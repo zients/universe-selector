@@ -27,11 +27,11 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1" in text
     assert "--assumptions valuation_assumptions/us/AAPL.yaml" in text
     assert "`value` v1 prints markdown only." in normalized
-    assert "does not require `config.yaml`" in normalized
+    assert "requires `config.yaml` only for selecting `live.fundamentals_provider`" in normalized
     assert "does not read DuckDB" in normalized
     assert "does not persist the result" in normalized
     assert "The default assumptions path is `valuation_assumptions/{market}/{ticker}.yaml`" in normalized
-    assert "`valuation_assumptions/us/AAPL.yaml` file is a sample schema only" in normalized
+    assert "`valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml` are sample schemas only" in normalized
     assert "yfinance fundamentals are third-party convenience data" in normalized
     assert "model-implied scenario results" in normalized
     assert "not forecasts, expected outcomes, target cases, or recommendations" in normalized

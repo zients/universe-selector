@@ -272,11 +272,13 @@ def value(
         resolved_market = canonical_market(market)
         normalized_ticker = canonical_ticker(ticker)
         get_valuation_model(model)
+        config = load_config()
         result = run_valuation(
             market=resolved_market,
             ticker=normalized_ticker,
             model_id=model,
             assumptions_path=assumptions,
+            fundamentals_provider_id=config.live_fundamentals_provider,
         )
         typer.echo(render_valuation_markdown(result), nl=False)
 

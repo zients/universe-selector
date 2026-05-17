@@ -149,13 +149,19 @@ def test_run_valuation_loads_facts_assumptions_applies_overrides_and_calls_model
         factory=lambda: fake_provider,
     )
     spy_model = SpyValuationModel()
+
+    def resolve_registration(provider_id: str, market: Market) -> FundamentalsProviderRegistration:
+        assert provider_id == "fake_fundamentals"
+        assert market is Market.US
+        return fake_registration
+
     monkeypatch.setattr(
         "universe_selector.valuation.service.get_fundamentals_registration",
-        lambda provider_id, market: fake_registration,
+        resolve_registration,
     )
     monkeypatch.setattr("universe_selector.valuation.service.get_valuation_model", lambda model_id: spy_model)
 
-    result = run_valuation(Market.US, "aapl", "fcf_dcf_v1", assumptions_path)
+    result = run_valuation(Market.US, "aapl", "fcf_dcf_v1", assumptions_path, "fake_fundamentals")
 
     assert fake_provider.requests == [(Market.US, "AAPL")]
     assert len(spy_model.inputs) == 1
@@ -195,17 +201,17 @@ def test_run_valuation_uses_default_assumptions_path(monkeypatch, tmp_path: Path
         lambda provider_id, market: fake_registration,
     )
 
-    result = run_valuation(Market.US, "AAPL", "fcf_dcf_v1", None)
+    result = run_valuation(Market.US, "AAPL", "fcf_dcf_v1", None, "fake_fundamentals")
 
     assert result.run_input.assumptions.assumption_path.endswith("valuation_assumptions/us/AAPL.yaml")
 
 
 def test_run_valuation_rejects_unknown_model_and_missing_assumptions(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match="unknown valuation model"):
-        run_valuation(Market.US, "AAPL", "unknown_model", tmp_path / "missing.yaml")
+        run_valuation(Market.US, "AAPL", "unknown_model", tmp_path / "missing.yaml", "yfinance_fundamentals")
 
     with pytest.raises(ValidationError, match="missing valuation assumptions file"):
-        run_valuation(Market.US, "AAPL", "fcf_dcf_v1", tmp_path / "missing.yaml")
+        run_valuation(Market.US, "AAPL", "fcf_dcf_v1", tmp_path / "missing.yaml", "yfinance_fundamentals")
 
 
 def test_run_valuation_rejects_unsupported_fundamentals_market_before_loading_assumptions(monkeypatch, tmp_path: Path) -> None:
@@ -215,4 +221,4 @@ def test_run_valuation_rejects_unsupported_fundamentals_market_before_loading_as
     monkeypatch.setattr("universe_selector.valuation.service.load_valuation_assumptions", fail_load_assumptions)
 
     with pytest.raises(ValidationError, match="unsupported fundamentals provider for TW: yfinance_fundamentals"):
-        run_valuation(Market.TW, "2330", "fcf_dcf_v1", tmp_path / "missing.yaml")
+        run_valuation(Market.TW, "2330", "fcf_dcf_v1", tmp_path / "missing.yaml", "yfinance_fundamentals")

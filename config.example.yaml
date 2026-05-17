@@ -8,6 +8,7 @@ live:
     US: nasdaq_trader
     TW: twse_isin
   ohlcv_provider: yfinance
+  fundamentals_provider: yfinance_fundamentals
   ticker_limit: null
   yfinance:
     batch_size: 200

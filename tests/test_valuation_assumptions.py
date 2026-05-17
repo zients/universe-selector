@@ -10,19 +10,21 @@ from universe_selector.errors import ValidationError
 from universe_selector.valuation.assumptions import default_assumptions_path, load_valuation_assumptions
 
 
-FIXTURE = Path(__file__).parent / "fixtures" / "valuation_assumptions" / "us" / "AAPL.yaml"
+US_FIXTURE = Path(__file__).parent / "fixtures" / "valuation_assumptions" / "us" / "AAPL.yaml"
+TW_FIXTURE = Path(__file__).parent / "fixtures" / "valuation_assumptions" / "tw" / "2330.yaml"
 
 
 def _copy_fixture(tmp_path: Path) -> Path:
     target = tmp_path / "valuation_assumptions" / "us" / "AAPL.yaml"
     target.parent.mkdir(parents=True)
-    shutil.copyfile(FIXTURE, target)
+    shutil.copyfile(US_FIXTURE, target)
     return target
 
 
 def test_default_assumptions_path_uses_lowercase_market_and_canonical_ticker() -> None:
     assert default_assumptions_path(Market.US, "AAPL") == Path("valuation_assumptions/us/AAPL.yaml")
     assert default_assumptions_path(Market.US, "aapl") == Path("valuation_assumptions/us/AAPL.yaml")
+    assert default_assumptions_path(Market.TW, "2330") == Path("valuation_assumptions/tw/2330.yaml")
 
 
 def test_loads_default_assumptions_and_hash_is_path_independent(monkeypatch, tmp_path: Path) -> None:
@@ -54,6 +56,20 @@ def test_loads_default_assumptions_and_hash_is_path_independent(monkeypatch, tmp
     assert default_loaded.model_assumptions.scenario_order == ("conservative", "base", "upside")
 
 
+def test_loads_tw_2330_assumptions_fixture() -> None:
+    loaded = load_valuation_assumptions(
+        market=Market.TW,
+        ticker="2330",
+        model_id="fcf_dcf_v1",
+        assumptions_path=TW_FIXTURE,
+    )
+
+    assert loaded.market is Market.TW
+    assert loaded.ticker == "2330"
+    assert loaded.assumption_path == str(TW_FIXTURE)
+    assert loaded.model_id == "fcf_dcf_v1"
+
+
 def test_missing_default_assumptions_file_reports_expected_path(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
 
@@ -83,7 +99,12 @@ def test_rejects_market_ticker_unknown_keys_and_missing_model(tmp_path: Path) ->
         load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
 
     with pytest.raises(ValidationError, match="missing model assumptions"):
-        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="unknown_model", assumptions_path=FIXTURE)
+        load_valuation_assumptions(
+            market=Market.US,
+            ticker="AAPL",
+            model_id="unknown_model",
+            assumptions_path=US_FIXTURE,
+        )
 
 
 def test_rejects_missing_required_root_key(tmp_path: Path) -> None:

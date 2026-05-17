@@ -29,6 +29,7 @@ _REQUIRED_CONFIG_KEYS = (
     "live.listing_provider.US",
     "live.listing_provider.TW",
     "live.ohlcv_provider",
+    "live.fundamentals_provider",
     "live.ticker_limit",
     "live.yfinance",
     "live.yfinance.batch_size",
@@ -65,6 +66,7 @@ class AppConfig:
         default_factory=lambda: {Market.US: "nasdaq_trader", Market.TW: "twse_isin"}
     )
     live_ohlcv_provider: str = "yfinance"
+    live_fundamentals_provider: str = "yfinance_fundamentals"
     live_ticker_limit: int | None = None
     live_yfinance_batch_size: int = 200
 
@@ -94,6 +96,7 @@ class AppConfig:
             report_top_n=int(report["top_n"]),
             live_listing_provider={market: str(listing_provider[market.value]) for market in Market},
             live_ohlcv_provider=str(live["ohlcv_provider"]),
+            live_fundamentals_provider=str(live["fundamentals_provider"]),
             live_ticker_limit=_parse_live_ticker_limit(live["ticker_limit"], label="live.ticker_limit"),
             live_yfinance_batch_size=_parse_positive_int(
                 yfinance["batch_size"],
@@ -112,6 +115,8 @@ class AppConfig:
         for market in Market:
             get_listing_registration(self.live_listing_provider[market], market)
         get_ohlcv_registration(self.live_ohlcv_provider)
+        if not self.live_fundamentals_provider.strip():
+            raise ValidationError("live.fundamentals_provider must be a provider id")
         _parse_live_ticker_limit(self.live_ticker_limit, label="live.ticker_limit")
         _parse_positive_int(self.live_yfinance_batch_size, label="live.yfinance.batch_size")
 

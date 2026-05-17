@@ -20,10 +20,11 @@ def run_valuation(
     ticker: str,
     model_id: str,
     assumptions_path: Path | None,
+    fundamentals_provider_id: str,
 ) -> ValuationResult:
     normalized_ticker = canonical_ticker(ticker)
     model = get_valuation_model(model_id)
-    registration = get_fundamentals_registration("yfinance_fundamentals", market)
+    registration = get_fundamentals_registration(fundamentals_provider_id, market)
     assumptions = load_valuation_assumptions(
         market=market,
         ticker=normalized_ticker,

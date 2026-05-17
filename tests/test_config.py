@@ -60,6 +60,7 @@ COMPLETE_CONFIG: dict[str, object] = {
             "TW": "twse_isin",
         },
         "ohlcv_provider": "yfinance",
+        "fundamentals_provider": "yfinance_fundamentals",
         "ticker_limit": None,
         "yfinance": {
             "batch_size": 200,
@@ -121,6 +122,7 @@ def test_app_config_defaults_to_sample_price_trend_profile() -> None:
 
     assert isinstance(profile, SamplePriceTrendV1Profile)
     assert profile.profile_id == SAMPLE_PRICE_TREND_PROFILE_ID
+    assert config.live_fundamentals_provider == "yfinance_fundamentals"
     assert config.ranking_config_payload() == profile.ranking_config_payload()
 
 
@@ -530,3 +532,11 @@ def test_provider_config_hash_changes_when_live_provider_config_changes() -> Non
 
     assert default.provider_config_hash() != limited.provider_config_hash()
     assert config_module.DEFAULT_CONFIG_PATH == "config.yaml"
+
+
+def test_valuation_fundamentals_provider_is_not_part_of_batch_provider_hash() -> None:
+    default = AppConfig()
+    alternate_valuation_provider = AppConfig(live_fundamentals_provider="other_fundamentals")
+
+    assert default.provider_config_hash() == alternate_valuation_provider.provider_config_hash()
+    assert "fundamentals_provider" not in default.provider_config_payload()

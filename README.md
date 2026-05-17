@@ -155,6 +155,7 @@ live:
     US: nasdaq_trader
     TW: twse_isin
   ohlcv_provider: yfinance
+  fundamentals_provider: yfinance_fundamentals
   ticker_limit: null
   yfinance:
     batch_size: 200
@@ -247,11 +248,12 @@ uv run universe-selector value us --ticker AAPL \
   --assumptions valuation_assumptions/us/AAPL.yaml
 ```
 
-`value` v1 prints markdown only. It does not require `config.yaml`, does not read
-DuckDB, and does not persist the result. The default assumptions path is
+`value` v1 prints markdown only. It requires `config.yaml` only for selecting
+`live.fundamentals_provider`, does not read DuckDB, and does not persist the result.
+The default assumptions path is
 `valuation_assumptions/{market}/{ticker}.yaml`; the committed
-`valuation_assumptions/us/AAPL.yaml` file is a sample schema only and is not
-investment advice.
+`valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml`
+are sample schemas only and are not investment advice.
 
 `fcf_dcf_v1` is a simplified free-cash-flow DCF model. It uses normalized FCF as
 an enterprise cash-flow proxy, not verified unlevered FCFF, and computes
