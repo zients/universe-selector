@@ -51,6 +51,8 @@ def test_yfinance_fundamentals_uses_injected_fetcher_and_normalizes_contract(mon
     assert data.metadata.fundamentals_provider_id == "yfinance_fundamentals"
     assert data.metadata.fundamentals_source_ids == ("yahoo-finance:yfinance-ticker",)
     assert data.metadata.latest_source_date == date(2026, 5, 15)
+    assert "yfinance third-party convenience data" in data.metadata.source_risk_note
+    assert "currentPrice/regularMarketPrice" in data.metadata.field_mapping_note
     assert data.facts.market is Market.US
     assert data.facts.ticker == "AAPL"
     assert data.facts.reference_price_as_of_source == "provider_reported"

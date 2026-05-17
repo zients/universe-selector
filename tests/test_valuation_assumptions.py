@@ -137,6 +137,14 @@ def test_rejects_invalid_currency_and_amount_unit(tmp_path: Path) -> None:
         load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
 
 
+def test_rejects_datetime_as_of_values(tmp_path: Path) -> None:
+    path = _copy_fixture(tmp_path)
+    path.write_text(path.read_text().replace("as_of: 2026-05-17", "as_of: 2026-05-17 12:34:56", 1))
+
+    with pytest.raises(ValidationError, match="as_of must be an ISO date"):
+        load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
+
+
 def test_rejects_unknown_override_and_note_keys(tmp_path: Path) -> None:
     path = _copy_fixture(tmp_path)
     path.write_text(

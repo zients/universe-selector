@@ -7,7 +7,7 @@ from typing import Annotated, TypeVar
 
 import typer
 
-from universe_selector.config import AppConfig, load_config
+from universe_selector.config import AppConfig, load_config, load_live_fundamentals_provider_id
 from universe_selector.domain import Market, canonical_market, canonical_ticker
 from universe_selector.errors import NotFoundError, UniverseSelectorError, ValidationError
 from universe_selector.identifiers import parse_run_id
@@ -272,13 +272,12 @@ def value(
         resolved_market = canonical_market(market)
         normalized_ticker = canonical_ticker(ticker)
         get_valuation_model(model)
-        config = load_config()
         result = run_valuation(
             market=resolved_market,
             ticker=normalized_ticker,
             model_id=model,
             assumptions_path=assumptions,
-            fundamentals_provider_id=config.live_fundamentals_provider,
+            fundamentals_provider_id=load_live_fundamentals_provider_id(),
         )
         typer.echo(render_valuation_markdown(result), nl=False)
 

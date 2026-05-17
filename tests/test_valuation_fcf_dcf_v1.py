@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
 import pytest
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
+from universe_selector.providers.models import FundamentalFacts
 from universe_selector.valuation.fcf_dcf_v1 import FcfDcfV1Model
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     FcfDcfV1Assumptions,
     StartingFcfAssumption,
+    ValuationAssumptionSet,
     ValuationModelInput,
     ValuationScenarioAssumptions,
 )
@@ -63,6 +66,57 @@ def _assumptions(
     )
 
 
+def _facts() -> FundamentalFacts:
+    return FundamentalFacts(
+        market=Market.US,
+        ticker="AAA",
+        currency="USD",
+        reference_price=50.0,
+        reference_price_as_of=date(2026, 5, 15),
+        reference_price_as_of_source="provider_reported",
+        reference_price_as_of_note=None,
+        shares_outstanding=10.0,
+        cash_and_cash_equivalents=30.0,
+        total_debt=80.0,
+        balance_sheet_as_of=date(2026, 3, 31),
+        net_debt=50.0,
+        operating_cash_flow=120.0,
+        capital_expenditures=10.0,
+        free_cash_flow=110.0,
+        fiscal_period_end=date(2025, 12, 31),
+        fiscal_period_type="ttm",
+    )
+
+
+def _assumption_set(model_assumptions: FcfDcfV1Assumptions) -> ValuationAssumptionSet:
+    return ValuationAssumptionSet(
+        schema_version=1,
+        market=Market.US,
+        ticker="AAA",
+        purpose="research",
+        as_of=date(2026, 5, 17),
+        currency="USD",
+        amount_unit="currency_units",
+        assumption_source="analyst",
+        prepared_by="Universe Selector",
+        source_note="Unit test assumptions.",
+        assumption_path="/tmp/valuation_assumptions/us/AAA.yaml",
+        assumption_hash="abc123",
+        facts_overrides={
+            "shares_outstanding": None,
+            "net_debt": None,
+            "reference_price": 48.0,
+        },
+        facts_override_notes={
+            "shares_outstanding": None,
+            "net_debt": None,
+            "reference_price": "Reference price override for scenario review.",
+        },
+        model_id="fcf_dcf_v1",
+        model_assumptions=model_assumptions,
+    )
+
+
 def _value(inputs: EffectiveValuationInputs, assumptions: FcfDcfV1Assumptions):
     return FcfDcfV1Model().value(
         ValuationModelInput(
@@ -87,6 +141,45 @@ def test_fcf_dcf_v1_computes_deterministic_model_implied_spread() -> None:
     assert result.model_implied_value_per_share == pytest.approx(124.82954545)
     assert result.reference_price == pytest.approx(100.0)
     assert result.model_implied_spread_to_reference_price == pytest.approx(0.24829545)
+
+
+def test_fcf_dcf_v1_builds_effective_inputs_from_provider_ttm_fcf() -> None:
+    effective, provenance = FcfDcfV1Model().build_inputs(
+        facts=_facts(),
+        assumptions=_assumption_set(_assumptions()),
+    )
+
+    assert effective.starting_fcf == pytest.approx(110.0)
+    assert effective.shares_outstanding == pytest.approx(10.0)
+    assert effective.net_debt == pytest.approx(50.0)
+    assert effective.reference_price == pytest.approx(48.0)
+    assert effective.reference_price_as_of == date(2026, 5, 17)
+    assert effective.reference_price_as_of_source == "assumption_override"
+    assert effective.reference_price_as_of_note == "Reference price override for scenario review."
+    assert provenance.starting_fcf_source == "provider_ttm_fcf"
+    assert provenance.starting_fcf_note == "Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm."
+    assert provenance.reference_price_source == "assumption_override"
+    assert provenance.reference_price_note == "Reference price override for scenario review."
+
+
+def test_fcf_dcf_v1_builds_effective_inputs_from_override_starting_fcf() -> None:
+    model_assumptions = replace(
+        _assumptions(),
+        starting_fcf=StartingFcfAssumption(
+            method="override",
+            value=100.0,
+            note="Normalized for one-time working capital movement.",
+        ),
+    )
+
+    effective, provenance = FcfDcfV1Model().build_inputs(
+        facts=_facts(),
+        assumptions=_assumption_set(model_assumptions),
+    )
+
+    assert effective.starting_fcf == pytest.approx(100.0)
+    assert provenance.starting_fcf_source == "assumption_override"
+    assert provenance.starting_fcf_note == "Normalized for one-time working capital movement."
 
 
 def test_fcf_dcf_v1_adds_net_cash_and_handles_negative_fcf() -> None:

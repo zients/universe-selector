@@ -221,6 +221,30 @@ def _validate_required_config_key(data: dict[str, Any], key: str) -> None:
 
 
 def load_config() -> AppConfig:
+    loaded = _load_config_mapping()
+    _validate_required_config_keys(loaded)
+
+    config = AppConfig.from_mapping(loaded)
+    config.validate()
+    return config
+
+
+def load_live_fundamentals_provider_id() -> str:
+    loaded = _load_config_mapping()
+    live = loaded.get("live")
+    if not isinstance(live, dict):
+        raise ValidationError("config key live must be a mapping")
+    if "fundamentals_provider" not in live:
+        raise ValidationError("config missing required key: live.fundamentals_provider")
+    provider_id = _parse_provider_id(
+        live["fundamentals_provider"],
+        label="live.fundamentals_provider",
+    )
+    get_fundamentals_provider_registration(provider_id)
+    return provider_id
+
+
+def _load_config_mapping() -> dict[str, Any]:
     config_path = Path(DEFAULT_CONFIG_PATH)
     if not config_path.exists():
         raise ValidationError(_missing_config_message())
@@ -228,11 +252,7 @@ def load_config() -> AppConfig:
     loaded = yaml.safe_load(config_path.read_text())
     if not isinstance(loaded, dict):
         raise ValidationError("YAML config root must be a mapping")
-    _validate_required_config_keys(loaded)
-
-    config = AppConfig.from_mapping(loaded)
-    config.validate()
-    return config
+    return loaded
 
 
 def ensure_runtime_dirs(config: AppConfig) -> None:

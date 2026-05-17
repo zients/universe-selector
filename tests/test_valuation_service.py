@@ -10,7 +10,12 @@ from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata, FundamentalsRunData
 from universe_selector.providers.registration import FundamentalsProviderRegistration
-from universe_selector.valuation.models import ValuationModelInput, ValuationScenarioResult
+from universe_selector.valuation.models import (
+    EffectiveValuationInputs,
+    ValuationInputProvenance,
+    ValuationModelInput,
+    ValuationScenarioResult,
+)
 from universe_selector.valuation.service import run_valuation
 
 
@@ -43,10 +48,38 @@ class SpyValuationModel:
     model_id = "fcf_dcf_v1"
 
     def __init__(self) -> None:
+        self.build_input_requests: list[tuple[FundamentalFacts, object]] = []
         self.inputs: list[ValuationModelInput] = []
 
     def validate_assumptions(self, assumptions):
         raise AssertionError("service model spy must not validate YAML assumptions")
+
+    def build_inputs(self, *, facts: FundamentalFacts, assumptions: object):
+        self.build_input_requests.append((facts, assumptions))
+        return (
+            EffectiveValuationInputs(
+                starting_fcf=111.0,
+                shares_outstanding=facts.shares_outstanding,
+                net_debt=facts.net_debt,
+                reference_price=185.0,
+                currency=facts.currency,
+                fiscal_period_type=facts.fiscal_period_type,
+                fiscal_period_end=facts.fiscal_period_end,
+                reference_price_as_of=date(2026, 5, 16),
+                reference_price_as_of_source="model_resolved_override",
+                reference_price_as_of_note="Resolved by spy valuation model.",
+            ),
+            ValuationInputProvenance(
+                starting_fcf_source="model_resolved",
+                shares_outstanding_source="provider_fact",
+                net_debt_source="provider_fact",
+                reference_price_source="model_resolved_override",
+                starting_fcf_note="Resolved by spy valuation model.",
+                shares_outstanding_note=None,
+                net_debt_note=None,
+                reference_price_note="Resolved by spy valuation model.",
+            ),
+        )
 
     def value(self, model_input: ValuationModelInput) -> tuple[ValuationScenarioResult, ...]:
         self.inputs.append(model_input)
@@ -178,26 +211,28 @@ def test_run_valuation_uses_provider_ttm_fcf_starting_fcf_and_calls_model(monkey
     result = run_valuation(Market.US, "aapl", "fcf_dcf_v1", assumptions_path, "fake_fundamentals")
 
     assert fake_provider.requests == [(Market.US, "AAPL")]
+    assert len(spy_model.build_input_requests) == 1
+    request_facts, request_assumptions = spy_model.build_input_requests[0]
+    assert request_facts == _facts()
+    assert request_assumptions is result.run_input.assumptions
     assert len(spy_model.inputs) == 1
     assert spy_model.inputs[0].ticker == "AAPL"
     assert result.run_input.market is Market.US
     assert result.run_input.ticker == "AAPL"
     assert result.run_input.raw_facts.free_cash_flow == 110.0
-    assert result.run_input.effective_inputs.starting_fcf == 110.0
+    assert result.run_input.effective_inputs.starting_fcf == 111.0
     assert result.run_input.effective_inputs.shares_outstanding == 10.0
     assert result.run_input.effective_inputs.net_debt == 50.0
     assert result.run_input.effective_inputs.reference_price == 185.0
-    assert result.run_input.effective_inputs.reference_price_as_of == result.run_input.assumptions.as_of
-    assert result.run_input.effective_inputs.reference_price_as_of_source == "assumption_override"
-    assert result.run_input.effective_inputs.reference_price_as_of_note == "Reference price supplied for scenario review."
+    assert result.run_input.effective_inputs.reference_price_as_of == date(2026, 5, 16)
+    assert result.run_input.effective_inputs.reference_price_as_of_source == "model_resolved_override"
+    assert result.run_input.effective_inputs.reference_price_as_of_note == "Resolved by spy valuation model."
     assert result.run_input.raw_facts.reference_price_as_of_source == "provider_reported"
-    assert result.run_input.input_provenance.starting_fcf_source == "provider_ttm_fcf"
-    assert result.run_input.input_provenance.starting_fcf_note == (
-        "Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm."
-    )
+    assert result.run_input.input_provenance.starting_fcf_source == "model_resolved"
+    assert result.run_input.input_provenance.starting_fcf_note == "Resolved by spy valuation model."
     assert result.run_input.input_provenance.shares_outstanding_source == "provider_fact"
     assert result.run_input.input_provenance.net_debt_source == "provider_fact"
-    assert result.run_input.input_provenance.reference_price_source == "assumption_override"
+    assert result.run_input.input_provenance.reference_price_source == "model_resolved_override"
     assert result.scenario_results[0].scenario_id == "base"
 
 

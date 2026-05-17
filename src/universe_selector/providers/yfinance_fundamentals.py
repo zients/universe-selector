@@ -35,6 +35,16 @@ _FETCH_DATE_FALLBACK_NOTE = (
     "yfinance did not provide a usable quote timestamp; using fetch date, "
     "not a provider-reported quote timestamp."
 )
+_SOURCE_RISK_NOTE = (
+    "yfinance third-party convenience data may be stale, incomplete, restated, "
+    "mapped inconsistently, or unavailable. Facts should be independently verified "
+    "before research use."
+)
+_FIELD_MAPPING_NOTE = (
+    "reference price from currentPrice/regularMarketPrice; shares from sharesOutstanding; "
+    "raw free cash flow from Operating Cash Flow minus Capital Expenditure; cash and debt "
+    "from quarterly balance sheet fields."
+)
 
 
 class YFinanceFundamentalsProvider:
@@ -67,6 +77,8 @@ class YFinanceFundamentalsProvider:
                 fundamentals_source_ids=self.source_ids,
                 data_fetch_started_at=fetch_started_at,
                 latest_source_date=latest_source_date,
+                source_risk_note=_SOURCE_RISK_NOTE,
+                field_mapping_note=_FIELD_MAPPING_NOTE,
             ),
             facts=facts,
         )

@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -166,13 +166,18 @@ def _require_non_empty_str(value: object, field: str) -> str:
 
 
 def _parse_date(value: object, field: str) -> date:
+    if isinstance(value, datetime):
+        raise ValidationError(f"{field} must be an ISO date")
     if isinstance(value, date):
         return value
     if isinstance(value, str):
         try:
-            return date.fromisoformat(value)
+            parsed = date.fromisoformat(value)
         except ValueError as exc:
             raise ValidationError(f"{field} must be an ISO date") from exc
+        if parsed.isoformat() != value:
+            raise ValidationError(f"{field} must be an ISO date")
+        return parsed
     raise ValidationError(f"{field} must be a date")
 
 

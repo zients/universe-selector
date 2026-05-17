@@ -122,6 +122,16 @@ def _result() -> ValuationResult:
                 fundamentals_source_ids=("yfinance", "quote", "quarterly_cash_flow", "balance_sheet"),
                 data_fetch_started_at=datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc),
                 latest_source_date=date(2026, 5, 17),
+                source_risk_note=(
+                    "yfinance third-party convenience data may be stale, incomplete, "
+                    "restated, mapped inconsistently, or unavailable. Facts should be "
+                    "independently verified before research use."
+                ),
+                field_mapping_note=(
+                    "reference price from currentPrice/regularMarketPrice; shares from "
+                    "sharesOutstanding; raw free cash flow from Operating Cash Flow minus "
+                    "Capital Expenditure; cash and debt from quarterly balance sheet fields."
+                ),
             ),
             raw_facts=raw_facts,
             effective_inputs=effective_inputs,
@@ -290,6 +300,30 @@ def test_render_valuation_uses_currency_code_for_non_usd_amounts() -> None:
     assert "TWD 110.00B" in markdown
     assert "TWD 86.18" in markdown
     assert "$110.00B" not in markdown
+
+
+def test_render_valuation_uses_provider_metadata_notes_without_yfinance_fallback() -> None:
+    result = _result()
+    result = replace(
+        result,
+        run_input=replace(
+            result.run_input,
+            fundamentals_metadata=replace(
+                result.run_input.fundamentals_metadata,
+                fundamentals_provider_id="custom_fundamentals",
+                fundamentals_source_ids=("custom-facts",),
+                source_risk_note="Custom provider facts can be delayed.",
+                field_mapping_note="Custom field mapping is documented in the provider adapter.",
+            ),
+        ),
+    )
+
+    markdown = render_valuation_markdown(result)
+
+    assert "fundamentals_provider_id: custom_fundamentals" in markdown
+    assert "Source risk: Custom provider facts can be delayed." in markdown
+    assert "field mapping: Custom field mapping is documented in the provider adapter." in markdown
+    assert "yfinance" not in markdown
 
 
 def test_valuation_output_submodule_import_does_not_import_report_config_or_provider_registry() -> None:

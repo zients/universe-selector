@@ -542,7 +542,12 @@ def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> Non
 
     monkeypatch.setattr(
         "universe_selector.cli.load_config",
-        lambda: AppConfig(live_fundamentals_provider="fake_fundamentals"),
+        lambda: (_ for _ in ()).throw(AssertionError("value command must not load full config")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.load_live_fundamentals_provider_id",
+        lambda: "fake_fundamentals",
         raising=False,
     )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
@@ -585,7 +590,12 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
 
     monkeypatch.setattr(
         "universe_selector.cli.load_config",
-        lambda: AppConfig(live_fundamentals_provider="fake_fundamentals"),
+        lambda: (_ for _ in ()).throw(AssertionError("value command must not load full config")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.load_live_fundamentals_provider_id",
+        lambda: "fake_fundamentals",
         raising=False,
     )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
@@ -626,7 +636,12 @@ def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path)
 
     monkeypatch.setattr(
         "universe_selector.cli.load_config",
-        lambda: AppConfig(live_fundamentals_provider="fake_fundamentals"),
+        lambda: (_ for _ in ()).throw(AssertionError("value command must not load full config")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.load_live_fundamentals_provider_id",
+        lambda: "fake_fundamentals",
         raising=False,
     )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
@@ -658,6 +673,13 @@ def test_cli_value_rejects_unknown_model(monkeypatch) -> None:
     monkeypatch.setattr(
         "universe_selector.cli.load_config",
         lambda: (_ for _ in ()).throw(AssertionError("load_config must not run before model validation")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.load_live_fundamentals_provider_id",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("load_live_fundamentals_provider_id must not run before model validation")
+        ),
         raising=False,
     )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", fail_model_lookup, raising=False)

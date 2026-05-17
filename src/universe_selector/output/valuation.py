@@ -157,9 +157,7 @@ def render_valuation_markdown(result: ValuationResult) -> str:
             "discount rate, terminal growth, and terminal value assumptions."
         ),
         (
-            "- Source risk: yfinance third-party convenience data may be stale, incomplete, "
-            "restated, mapped inconsistently, or unavailable. Facts should be independently "
-            "verified before research use."
+            f"- Source risk: {_markdown_text(metadata.source_risk_note)}"
         ),
         "",
         "## Provider Context",
@@ -173,25 +171,26 @@ def render_valuation_markdown(result: ValuationResult) -> str:
             "- latest_source_date note: latest source date is the max of quote, "
             "cash-flow period, and balance-sheet dates; individual fact dates are shown below."
         ),
-        (
-            "- yfinance field mapping: reference price from currentPrice/regularMarketPrice; "
-            "shares from sharesOutstanding; raw free cash flow from Operating Cash Flow minus "
-            "Capital Expenditure; cash and debt from quarterly balance sheet fields."
-        ),
-        "",
-        "## Assumption Context",
-        "",
-        f"- schema_version: {assumptions.schema_version}",
-        f"- currency: {_markdown_text(assumptions.currency)}",
-        f"- amount_unit: {_markdown_text(assumptions.amount_unit)}",
-        f"- assumption_path: {_markdown_text(assumptions.assumption_path)}",
-        f"- assumption_hash: {_markdown_text(assumptions.assumption_hash)}",
-        f"- assumption_source: {_markdown_text(assumptions.assumption_source)}",
-        f"- prepared_by: {_markdown_text(assumptions.prepared_by)}",
-        f"- source_note: {_markdown_text(assumptions.source_note)}",
-        f"- as_of: {assumptions.as_of.isoformat()}",
-        "",
     ]
+    if metadata.field_mapping_note:
+        lines.append(f"- field mapping: {_markdown_text(metadata.field_mapping_note)}")
+    lines.extend(
+        [
+            "",
+            "## Assumption Context",
+            "",
+            f"- schema_version: {assumptions.schema_version}",
+            f"- currency: {_markdown_text(assumptions.currency)}",
+            f"- amount_unit: {_markdown_text(assumptions.amount_unit)}",
+            f"- assumption_path: {_markdown_text(assumptions.assumption_path)}",
+            f"- assumption_hash: {_markdown_text(assumptions.assumption_hash)}",
+            f"- assumption_source: {_markdown_text(assumptions.assumption_source)}",
+            f"- prepared_by: {_markdown_text(assumptions.prepared_by)}",
+            f"- source_note: {_markdown_text(assumptions.source_note)}",
+            f"- as_of: {assumptions.as_of.isoformat()}",
+            "",
+        ]
+    )
 
     lines.extend(_render_model_assumptions(result))
     lines.extend(

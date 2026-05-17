@@ -46,6 +46,11 @@ class FundamentalsMetadata:
     fundamentals_source_ids: tuple[str, ...]
     data_fetch_started_at: datetime
     latest_source_date: date
+    source_risk_note: str = (
+        "Provider data may be stale, incomplete, restated, mapped inconsistently, "
+        "or unavailable. Facts should be independently verified before research use."
+    )
+    field_mapping_note: str | None = None
 
 
 @dataclass(frozen=True)
