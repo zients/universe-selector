@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
+
 from universe_selector.errors import ValidationError
 from universe_selector.valuation.formatting import (
     _format_money,
@@ -12,10 +12,17 @@ from universe_selector.valuation.formatting import (
     _markdown_text,
 )
 from universe_selector.providers.models import FundamentalFacts
+from universe_selector.valuation.input_resolution import (
+    _SCENARIO_ORDER,
+    build_effective_inputs,
+    parse_starting_fcf,
+    require_int,
+    require_literal,
+    require_rate,
+)
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     FcfDcfV1Assumptions,
-    StartingFcfAssumption,
     ValuationAssumptionSet,
     ValuationInputProvenance,
     ValuationModelInput,
@@ -23,9 +30,12 @@ from universe_selector.valuation.models import (
     ValuationScenarioAssumptions,
     ValuationScenarioResult,
 )
+from universe_selector.valuation.output_sections import (
+    render_effective_inputs_section,
+    render_input_provenance_section,
+)
 
 
-_SCENARIO_ORDER = ("conservative", "base", "upside")
 _MODEL_KEYS = frozenset(
     {
         "forecast_years",
@@ -36,7 +46,6 @@ _MODEL_KEYS = frozenset(
         "scenarios",
     }
 )
-_STARTING_FCF_KEYS = frozenset({"method", "value", "note"})
 _SCENARIO_KEYS = frozenset({"growth_rate", "discount_rate", "terminal_growth_rate", "note"})
 
 
@@ -48,20 +57,20 @@ class FcfDcfV1Model:
         if unknown_keys:
             raise ValidationError(f"unknown fcf_dcf_v1 key: {unknown_keys[0]}")
 
-        forecast_years = _require_int(assumptions.get("forecast_years"), "forecast_years")
+        forecast_years = require_int(assumptions.get("forecast_years"), "forecast_years")
         if not 1 <= forecast_years <= 10:
             raise ValidationError("forecast_years must be from 1 through 10")
 
         terminal_method = assumptions.get("terminal_method")
         if terminal_method != "perpetual_growth":
             raise ValidationError("terminal_method must be perpetual_growth")
-        starting_fcf = _parse_starting_fcf(assumptions.get("starting_fcf"))
-        discount_rate_basis = _require_literal(
+        starting_fcf = parse_starting_fcf(assumptions.get("starting_fcf"))
+        discount_rate_basis = require_literal(
             assumptions.get("discount_rate_basis"),
             "discount_rate_basis",
             "nominal_wacc",
         )
-        terminal_growth_basis = _require_literal(
+        terminal_growth_basis = require_literal(
             assumptions.get("terminal_growth_basis"),
             "terminal_growth_basis",
             "nominal_perpetual_growth",
@@ -103,62 +112,11 @@ class FcfDcfV1Model:
         if not isinstance(assumptions.model_assumptions, FcfDcfV1Assumptions):
             raise ValidationError("fcf_dcf_v1 requires FcfDcfV1Assumptions")
 
-        starting_fcf, starting_fcf_source, starting_fcf_note = _resolve_starting_fcf(
-            model_assumptions=assumptions.model_assumptions,
-            provider_fcf=facts.free_cash_flow,
-            fiscal_period_type=facts.fiscal_period_type,
+        return build_effective_inputs(
+            facts=facts,
+            assumptions=assumptions,
+            starting_fcf=assumptions.model_assumptions.starting_fcf,
         )
-        effective_inputs = EffectiveValuationInputs(
-            starting_fcf=starting_fcf,
-            shares_outstanding=_effective_value(
-                "shares_outstanding",
-                facts.shares_outstanding,
-                assumptions.facts_overrides,
-            ),
-            net_debt=_effective_value("net_debt", facts.net_debt, assumptions.facts_overrides),
-            reference_price=_effective_value(
-                "reference_price",
-                facts.reference_price,
-                assumptions.facts_overrides,
-            ),
-            currency=facts.currency,
-            fiscal_period_type=facts.fiscal_period_type,
-            fiscal_period_end=facts.fiscal_period_end,
-            reference_price_as_of=(
-                assumptions.as_of
-                if assumptions.facts_overrides.get("reference_price") is not None
-                else facts.reference_price_as_of
-            ),
-            reference_price_as_of_source=(
-                "assumption_override"
-                if assumptions.facts_overrides.get("reference_price") is not None
-                else facts.reference_price_as_of_source
-            ),
-            reference_price_as_of_note=(
-                assumptions.facts_override_notes.get("reference_price")
-                if assumptions.facts_overrides.get("reference_price") is not None
-                else facts.reference_price_as_of_note
-            ),
-        )
-        provenance = ValuationInputProvenance(
-            starting_fcf_source=starting_fcf_source,
-            shares_outstanding_source=_source_for("shares_outstanding", assumptions.facts_overrides),
-            net_debt_source=_source_for("net_debt", assumptions.facts_overrides),
-            reference_price_source=_source_for("reference_price", assumptions.facts_overrides),
-            starting_fcf_note=starting_fcf_note,
-            shares_outstanding_note=_note_for(
-                "shares_outstanding",
-                assumptions.facts_overrides,
-                assumptions.facts_override_notes,
-            ),
-            net_debt_note=_note_for("net_debt", assumptions.facts_overrides, assumptions.facts_override_notes),
-            reference_price_note=_note_for(
-                "reference_price",
-                assumptions.facts_overrides,
-                assumptions.facts_override_notes,
-            ),
-        )
-        return effective_inputs, provenance
 
     def value(self, model_input: ValuationModelInput) -> tuple[ValuationScenarioResult, ...]:
         assumptions = model_input.model_assumptions
@@ -220,9 +178,9 @@ class FcfDcfV1Model:
         if unknown_keys:
             raise ValidationError(f"unknown fcf_dcf_v1 scenario key: {unknown_keys[0]}")
 
-        growth_rate = _require_rate(payload.get("growth_rate"), f"scenarios.{scenario_id}.growth_rate")
-        discount_rate = _require_rate(payload.get("discount_rate"), f"scenarios.{scenario_id}.discount_rate")
-        terminal_growth_rate = _require_rate(
+        growth_rate = require_rate(payload.get("growth_rate"), f"scenarios.{scenario_id}.growth_rate")
+        discount_rate = require_rate(payload.get("discount_rate"), f"scenarios.{scenario_id}.discount_rate")
+        terminal_growth_rate = require_rate(
             payload.get("terminal_growth_rate"),
             f"scenarios.{scenario_id}.terminal_growth_rate",
         )
@@ -275,70 +233,10 @@ class FcfDcfV1OutputRenderer:
         return _render_fcf_dcf_assumptions(assumptions)
 
     def render_effective_inputs(self, result: ValuationResult) -> list[str]:
-        effective = result.run_input.effective_inputs
-        lines = [
-            "",
-            "## Effective Inputs",
-            "",
-            (
-                "Starting FCF is used as an enterprise cash-flow proxy and is not verified "
-                "unlevered FCFF. provider_ttm_fcf uses raw provider FCF as the starting FCF proxy. "
-                "Use starting_fcf.method override when analyst-normalized FCF is needed."
-            ),
-            "",
-        ]
-        lines.extend(
-            _lines_table(
-                ("field", "value"),
-                (
-                    ("starting_fcf", _format_money(effective.starting_fcf, effective.currency)),
-                    ("shares_outstanding", _format_number(effective.shares_outstanding)),
-                    ("net_debt", _format_money(effective.net_debt, effective.currency)),
-                    ("reference_price", _format_money(effective.reference_price, effective.currency)),
-                    ("reference_price_as_of", effective.reference_price_as_of.isoformat()),
-                    ("reference_price_as_of_source", effective.reference_price_as_of_source),
-                    (
-                        "reference_price_as_of_note",
-                        _format_note(effective.reference_price_as_of_note),
-                    ),
-                    ("fiscal_period_end", effective.fiscal_period_end.isoformat()),
-                    ("fiscal_period_type", effective.fiscal_period_type),
-                ),
-            )
-        )
-        return lines
+        return render_effective_inputs_section(result)
 
     def render_input_provenance(self, result: ValuationResult) -> list[str]:
-        provenance = result.run_input.input_provenance
-        lines = [
-            "",
-            "## Input Provenance",
-            "",
-        ]
-        lines.extend(
-            _lines_table(
-                ("field", "source", "note"),
-                (
-                    (
-                        "starting_fcf",
-                        provenance.starting_fcf_source,
-                        _format_note(provenance.starting_fcf_note),
-                    ),
-                    (
-                        "shares_outstanding",
-                        provenance.shares_outstanding_source,
-                        _format_note(provenance.shares_outstanding_note),
-                    ),
-                    ("net_debt", provenance.net_debt_source, _format_note(provenance.net_debt_note)),
-                    (
-                        "reference_price",
-                        provenance.reference_price_source,
-                        _format_note(provenance.reference_price_note),
-                    ),
-                ),
-            )
-        )
-        return lines
+        return render_input_provenance_section(result)
 
     def render_scenario_results(self, result: ValuationResult) -> list[str]:
         effective = result.run_input.effective_inputs
@@ -412,100 +310,3 @@ def _render_fcf_dcf_assumptions(assumptions: FcfDcfV1Assumptions) -> list[str]:
         )
     )
     return lines
-
-
-def _require_int(value: object, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValidationError(f"{field} must be an integer")
-    return value
-
-
-def _require_literal(value: object, field: str, expected: str) -> str:
-    if value != expected:
-        raise ValidationError(f"{field} must be {expected}")
-    return expected
-
-
-def _parse_starting_fcf(value: object) -> StartingFcfAssumption:
-    if not isinstance(value, Mapping):
-        raise ValidationError("starting_fcf must be a mapping")
-    unknown_keys = sorted(set(value) - _STARTING_FCF_KEYS)
-    if unknown_keys:
-        raise ValidationError(f"unknown starting_fcf key: {unknown_keys[0]}")
-
-    method = value.get("method")
-    if method == "provider_ttm_fcf":
-        if "value" in value:
-            raise ValidationError("starting_fcf.value is only allowed when method is override")
-        if "note" in value:
-            raise ValidationError("starting_fcf.note is only allowed when method is override")
-        return StartingFcfAssumption(method="provider_ttm_fcf", value=None, note=None)
-
-    if method == "override":
-        override_value = _require_finite_float(value.get("value"), "starting_fcf.value")
-        note = value.get("note")
-        if not isinstance(note, str) or not note.strip():
-            raise ValidationError("starting_fcf.note is required when method is override")
-        return StartingFcfAssumption(method="override", value=override_value, note=note)
-
-    raise ValidationError("starting_fcf.method must be provider_ttm_fcf or override")
-
-
-def _resolve_starting_fcf(
-    *,
-    model_assumptions: FcfDcfV1Assumptions,
-    provider_fcf: float,
-    fiscal_period_type: str,
-) -> tuple[float, str, str | None]:
-    starting_fcf = model_assumptions.starting_fcf
-    if starting_fcf.method == "override":
-        assert starting_fcf.value is not None
-        return starting_fcf.value, "assumption_override", starting_fcf.note
-    if starting_fcf.method == "provider_ttm_fcf":
-        return (
-            provider_fcf,
-            "provider_ttm_fcf",
-            f"Provider raw FCF used as starting FCF proxy; fiscal_period_type={fiscal_period_type}.",
-        )
-    raise ValidationError(f"unsupported starting_fcf method: {starting_fcf.method}")
-
-
-def _effective_value(field: str, provider_value: float, overrides: Mapping[str, float | None]) -> float:
-    override = overrides.get(field)
-    if override is not None:
-        return override
-    return provider_value
-
-
-def _source_for(field: str, overrides: Mapping[str, float | None]) -> str:
-    if overrides.get(field) is not None:
-        return "assumption_override"
-    return "provider_fact"
-
-
-def _note_for(
-    field: str,
-    overrides: Mapping[str, float | None],
-    notes: Mapping[str, str | None],
-) -> str | None:
-    if overrides.get(field) is not None:
-        return notes.get(field)
-    return None
-
-
-def _require_finite_float(value: object, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ValidationError(f"{field} must be a finite number")
-    number = float(value)
-    if not math.isfinite(number):
-        raise ValidationError(f"{field} must be finite")
-    return number
-
-
-def _require_rate(value: object, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ValidationError(f"{field} must be a number")
-    rate = float(value)
-    if not math.isfinite(rate):
-        raise ValidationError(f"{field} must be finite")
-    return rate

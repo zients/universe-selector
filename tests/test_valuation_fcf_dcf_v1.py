@@ -142,6 +142,19 @@ def test_fcf_dcf_v1_computes_deterministic_model_implied_spread() -> None:
     assert result.model_implied_value_per_share == pytest.approx(124.82954545)
     assert result.reference_price == pytest.approx(100.0)
     assert result.model_implied_spread_to_reference_price == pytest.approx(0.24829545)
+    assert result.model_metrics == {}
+
+
+def test_valuation_scenario_result_model_metrics_are_immutable_and_copied() -> None:
+    metrics = {"example": 1.0}
+    result = _value(_inputs(), _assumptions())[0]
+    result = replace(result, model_metrics=metrics)
+
+    metrics["example"] = 2.0
+
+    assert result.model_metrics["example"] == pytest.approx(1.0)
+    with pytest.raises(TypeError):
+        result.model_metrics["example"] = 3.0  # type: ignore[index]
 
 
 def test_fcf_dcf_v1_builds_effective_inputs_from_provider_ttm_fcf() -> None:

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
+from types import MappingProxyType
 
 from universe_selector.domain import Market
 from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
+
+
+def _empty_model_metrics() -> Mapping[str, float]:
+    return MappingProxyType({})
 
 
 @dataclass(frozen=True)
@@ -115,6 +120,10 @@ class ValuationScenarioResult:
     model_implied_value_per_share: float
     reference_price: float
     model_implied_spread_to_reference_price: float
+    model_metrics: Mapping[str, float] = field(default_factory=_empty_model_metrics)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "model_metrics", MappingProxyType(dict(self.model_metrics)))
 
 
 @dataclass(frozen=True)

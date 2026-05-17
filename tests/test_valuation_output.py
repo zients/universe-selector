@@ -469,3 +469,30 @@ for module_name in (
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_valuation_output_sections_import_does_not_import_provider_registry() -> None:
+    root = Path(__file__).resolve().parents[1]
+    script = """
+import sys
+import universe_selector.valuation.output_sections
+for module_name in (
+    "universe_selector.output.report",
+    "universe_selector.config",
+    "universe_selector.providers",
+    "universe_selector.providers.models",
+    "universe_selector.providers.registry",
+    "universe_selector.valuation.registry",
+):
+    assert module_name not in sys.modules, module_name
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
