@@ -111,7 +111,7 @@ Clone the repository, install dependencies, and create a local runtime config:
 ```bash
 git clone https://github.com/zients/universe-selector.git
 cd universe-selector
-uv sync --locked
+uv sync
 cp config.example.yaml config.yaml
 ```
 
@@ -451,7 +451,7 @@ liquidity, or tradability.
 Run tests:
 
 ```bash
-uv run --locked pytest
+uv run pytest
 ```
 
 Build package artifacts:
