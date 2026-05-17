@@ -235,6 +235,14 @@ def test_render_valuation_rejects_missing_model_output_renderer_without_fcf_fall
         render_valuation_markdown(result)
 
 
+def test_fcf_dcf_output_renderer_is_owned_by_model_module() -> None:
+    from universe_selector.output import valuation as valuation_output
+
+    renderer = valuation_output._output_renderer("fcf_dcf_v1")
+
+    assert renderer.__class__.__module__ == "universe_selector.valuation.fcf_dcf_v1"
+
+
 def test_render_valuation_includes_provenance_and_model_implied_scenarios_without_recommendations() -> None:
     markdown = render_valuation_markdown(_result())
 

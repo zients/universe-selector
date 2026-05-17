@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-import re
+from collections.abc import Callable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Protocol
 
 from universe_selector.errors import ValidationError
+from universe_selector.output.valuation_format import (
+    _format_money,
+    _format_note,
+    _format_number,
+    _lines_table,
+    _markdown_text,
+)
 
 if TYPE_CHECKING:
     from universe_selector.valuation.models import ValuationResult
@@ -14,241 +20,35 @@ if TYPE_CHECKING:
 VALUATION_RESEARCH_DISCLAIMER = (
     "This valuation report is for quantitative research only and is not investment advice."
 )
-_PROHIBITED_PHRASE_RE = re.compile(
-    r"target price|fair value|undervalued|overvalued|expected return",
-    re.IGNORECASE,
-)
-_PROHIBITED_WORD_RE = re.compile(r"\b(?:buy|sell|hold)\b", re.IGNORECASE)
+
+class ValuationOutputRenderer(Protocol):
+    def render_risk_disclosures(self, result: ValuationResult) -> list[str]: ...
+
+    def render_model_assumptions(self, result: ValuationResult) -> list[str]: ...
+
+    def render_effective_inputs(self, result: ValuationResult) -> list[str]: ...
+
+    def render_input_provenance(self, result: ValuationResult) -> list[str]: ...
+
+    def render_scenario_results(self, result: ValuationResult) -> list[str]: ...
 
 
-def _sanitize_text(value: object) -> str:
-    text = str(value).replace("\r", " ").replace("\n", " ")
-    text = " ".join(text.split())
-    text = _PROHIBITED_PHRASE_RE.sub("[redacted]", text)
-    return _PROHIBITED_WORD_RE.sub("[redacted]", text)
+def _fcf_dcf_v1_output_renderer() -> ValuationOutputRenderer:
+    from universe_selector.valuation.fcf_dcf_v1 import FcfDcfV1OutputRenderer
+
+    return FcfDcfV1OutputRenderer()
 
 
-def _table_cell(value: object) -> str:
-    return _sanitize_text(value).replace("|", r"\|")
-
-
-def _markdown_text(value: object) -> str:
-    return _sanitize_text(value).replace("|", r"\|")
-
-
-def _compact_number(value: float) -> str:
-    abs_value = abs(value)
-    if abs_value >= 1_000_000_000_000:
-        return f"{value / 1_000_000_000_000:.2f}T"
-    if abs_value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.2f}B"
-    if abs_value >= 1_000_000:
-        return f"{value / 1_000_000:.2f}M"
-    return f"{value:.2f}"
-
-
-def _format_money(value: float, currency: str) -> str:
-    compact = _compact_number(value)
-    currency_code = _sanitize_text(currency.upper())
-    if currency_code == "USD":
-        return f"${compact}"
-    if currency_code:
-        return f"{currency_code} {compact}"
-    return compact
-
-
-def _format_number(value: float) -> str:
-    return _compact_number(value)
-
-
-def _format_pct(value: float) -> str:
-    return f"{value * 100:.2f}%"
-
-
-def _format_note(note: str | None) -> str:
-    if note is None:
-        return ""
-    return _sanitize_text(note)
-
-
-def _lines_table(headers: tuple[str, ...], rows: Iterable[tuple[str, ...]]) -> list[str]:
-    lines = [
-        "| " + " | ".join(headers) + " |",
-        "| " + " | ".join("---" for _ in headers) + " |",
-    ]
-    lines.extend("| " + " | ".join(_table_cell(cell) for cell in row) + " |" for row in rows)
-    return lines
-
-
-def _render_fcf_dcf_assumptions(assumptions: Any) -> list[str]:
-    lines = [
-        "## Model Assumptions",
-        "",
-        f"- forecast_years: {assumptions.forecast_years}",
-        f"- terminal_method: {_markdown_text(assumptions.terminal_method)}",
-        f"- starting_fcf_method: {_markdown_text(assumptions.starting_fcf.method)}",
-        f"- discount_rate_basis: {_markdown_text(assumptions.discount_rate_basis)}",
-        f"- terminal_growth_basis: {_markdown_text(assumptions.terminal_growth_basis)}",
-        "",
-    ]
-    if assumptions.starting_fcf.method == "override":
-        lines.extend(
-            [
-                f"- starting_fcf_value: {_format_number(assumptions.starting_fcf.value)}",
-                f"- starting_fcf_note: {_markdown_text(assumptions.starting_fcf.note)}",
-                "",
-            ]
-        )
-    rows = []
-    for scenario_id in assumptions.scenario_order:
-        scenario = assumptions.scenarios[scenario_id]
-        rows.append(
-            (
-                scenario.scenario_id,
-                _format_pct(scenario.growth_rate),
-                _format_pct(scenario.discount_rate),
-                _format_pct(scenario.terminal_growth_rate),
-                _format_note(scenario.note),
-            )
-        )
-    lines.extend(
-        _lines_table(
-            ("scenario", "growth_rate", "discount_rate", "terminal_growth_rate", "note"),
-            rows,
-        )
-    )
-    return lines
-
-
-class FcfDcfV1OutputRenderer:
-    model_id = "fcf_dcf_v1"
-
-    def render_risk_disclosures(self, result: ValuationResult) -> list[str]:
-        del result
-        return [
-            (
-                "- Model risk: fcf_dcf_v1 is a simplified constant-growth explicit forecast "
-                "with perpetual-growth terminal value."
-            ),
-            (
-                "- Sensitivity risk: outputs are highly sensitive to starting FCF, share count, "
-                "discount rate, terminal growth, and terminal value assumptions."
-            ),
-        ]
-
-    def render_model_assumptions(self, result: ValuationResult) -> list[str]:
-        return _render_fcf_dcf_assumptions(result.run_input.assumptions.model_assumptions)
-
-    def render_effective_inputs(self, result: ValuationResult) -> list[str]:
-        effective = result.run_input.effective_inputs
-        lines = [
-            "",
-            "## Effective Inputs",
-            "",
-            (
-                "Starting FCF is used as an enterprise cash-flow proxy and is not verified "
-                "unlevered FCFF. provider_ttm_fcf uses raw provider FCF as the starting FCF proxy. "
-                "Use starting_fcf.method override when analyst-normalized FCF is needed."
-            ),
-            "",
-        ]
-        lines.extend(
-            _lines_table(
-                ("field", "value"),
-                (
-                    ("starting_fcf", _format_money(effective.starting_fcf, effective.currency)),
-                    ("shares_outstanding", _format_number(effective.shares_outstanding)),
-                    ("net_debt", _format_money(effective.net_debt, effective.currency)),
-                    ("reference_price", _format_money(effective.reference_price, effective.currency)),
-                    ("reference_price_as_of", effective.reference_price_as_of.isoformat()),
-                    ("reference_price_as_of_source", effective.reference_price_as_of_source),
-                    (
-                        "reference_price_as_of_note",
-                        _format_note(effective.reference_price_as_of_note),
-                    ),
-                    ("fiscal_period_end", effective.fiscal_period_end.isoformat()),
-                    ("fiscal_period_type", effective.fiscal_period_type),
-                ),
-            )
-        )
-        return lines
-
-    def render_input_provenance(self, result: ValuationResult) -> list[str]:
-        provenance = result.run_input.input_provenance
-        lines = [
-            "",
-            "## Input Provenance",
-            "",
-        ]
-        lines.extend(
-            _lines_table(
-                ("field", "source", "note"),
-                (
-                    (
-                        "starting_fcf",
-                        provenance.starting_fcf_source,
-                        _format_note(provenance.starting_fcf_note),
-                    ),
-                    (
-                        "shares_outstanding",
-                        provenance.shares_outstanding_source,
-                        _format_note(provenance.shares_outstanding_note),
-                    ),
-                    ("net_debt", provenance.net_debt_source, _format_note(provenance.net_debt_note)),
-                    (
-                        "reference_price",
-                        provenance.reference_price_source,
-                        _format_note(provenance.reference_price_note),
-                    ),
-                ),
-            )
-        )
-        return lines
-
-    def render_scenario_results(self, result: ValuationResult) -> list[str]:
-        effective = result.run_input.effective_inputs
-        lines = [
-            "",
-            "## Scenario Results",
-            "",
-            (
-                "Scenario rows are illustrative scenarios, not probabilities, forecasts, "
-                "expected outcomes, target cases, or recommendations."
-            ),
-            "",
-        ]
-        lines.extend(
-            _lines_table(
-                (
-                    "scenario",
-                    "model-implied value per share",
-                    "reference price",
-                    "model-implied spread vs reference price",
-                ),
-                (
-                    (
-                        scenario.scenario_id,
-                        _format_money(scenario.model_implied_value_per_share, effective.currency),
-                        _format_money(scenario.reference_price, effective.currency),
-                        _format_pct(scenario.model_implied_spread_to_reference_price),
-                    )
-                    for scenario in result.scenario_results
-                ),
-            )
-        )
-        return lines
-
-
-_OUTPUT_RENDERERS: Mapping[str, FcfDcfV1OutputRenderer] = MappingProxyType(
-    {FcfDcfV1OutputRenderer.model_id: FcfDcfV1OutputRenderer()}
+_OUTPUT_RENDERER_FACTORIES: Mapping[str, Callable[[], ValuationOutputRenderer]] = MappingProxyType(
+    {"fcf_dcf_v1": _fcf_dcf_v1_output_renderer}
 )
 
 
-def _output_renderer(model_id: str) -> FcfDcfV1OutputRenderer:
-    renderer = _OUTPUT_RENDERERS.get(model_id)
-    if renderer is None:
+def _output_renderer(model_id: str) -> ValuationOutputRenderer:
+    renderer_factory = _OUTPUT_RENDERER_FACTORIES.get(model_id)
+    if renderer_factory is None:
         raise ValidationError(f"missing valuation output renderer for {model_id}")
-    return renderer
+    return renderer_factory()
 
 
 def render_valuation_markdown(result: ValuationResult) -> str:
