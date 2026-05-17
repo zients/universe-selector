@@ -61,12 +61,10 @@ class YFinanceFundamentalsProvider:
         self._fetcher = fetcher or self._default_fetcher
 
     def load_fundamentals(self, market: Market, ticker: str) -> FundamentalsRunData:
-        if market is not Market.US:
-            raise ProviderDataError(f"unsupported fundamentals provider for {market.value}: {self.provider_id}")
-
         normalized_ticker = canonical_ticker(ticker)
+        request_symbol = _request_symbol(market, normalized_ticker)
         fetch_started_at = self._clock()
-        payload = self._fetcher(normalized_ticker)
+        payload = self._fetcher(request_symbol)
         facts = self._normalize_payload(market, normalized_ticker, payload)
         latest_source_date = max(facts.fiscal_period_end, facts.reference_price_as_of, facts.balance_sheet_as_of)
 
@@ -206,6 +204,18 @@ def _first_present(payload: Mapping[str, object], keys: tuple[str, ...]) -> obje
     return None
 
 
+def _request_symbol(market: Market, ticker: str) -> str:
+    if market is Market.US:
+        return ticker
+    if market is Market.TW:
+        if ticker.endswith((".TW", ".TWO")):
+            return ticker
+        return f"{ticker}.TW"
+    raise ProviderDataError(
+        f"unsupported fundamentals provider for {market.value}: {YFinanceFundamentalsProvider.provider_id}"
+    )
+
+
 def _cash_flow_from_frame(frame: object, *, periods: int) -> dict[str, object] | None:
     if not isinstance(frame, pd.DataFrame) or frame.empty:
         return None
@@ -335,7 +345,7 @@ def _date_from_value(value: object) -> date | None:
 
 YFINANCE_FUNDAMENTALS_REGISTRATION = FundamentalsProviderRegistration(
     provider_id=YFinanceFundamentalsProvider.provider_id,
-    supported_markets=frozenset({Market.US}),
+    supported_markets=frozenset({Market.US, Market.TW}),
     source_ids=YFinanceFundamentalsProvider.source_ids,
     factory=YFinanceFundamentalsProvider,
 )

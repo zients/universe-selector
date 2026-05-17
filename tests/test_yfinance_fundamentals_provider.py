@@ -64,14 +64,22 @@ def test_yfinance_fundamentals_uses_injected_fetcher_and_normalizes_contract(mon
     assert data.facts.fiscal_period_type == "ttm"
 
 
-def test_yfinance_fundamentals_rejects_unsupported_market_before_fetch() -> None:
+def test_yfinance_fundamentals_maps_tw_ticker_to_yfinance_tw_symbol() -> None:
+    requested = []
+
     def fetcher(symbol: str) -> dict[str, object]:
-        raise AssertionError(f"fetcher should not be called for {symbol}")
+        requested.append(symbol)
+        payload = valid_payload()
+        payload["currency"] = "TWD"
+        return payload
 
     provider = YFinanceFundamentalsProvider(fetcher=fetcher)
+    data = provider.load_fundamentals(Market.TW, "2330")
 
-    with pytest.raises(ProviderDataError, match="unsupported fundamentals provider for TW"):
-        provider.load_fundamentals(Market.TW, "2330")
+    assert requested == ["2330.TW"]
+    assert data.facts.market is Market.TW
+    assert data.facts.ticker == "2330"
+    assert data.facts.currency == "TWD"
 
 
 @pytest.mark.parametrize(

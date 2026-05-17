@@ -17,7 +17,7 @@ This project is an alpha-stage research tool. It is not investment advice.
 - Public alpha quality.
 - Command-line interface only.
 - Supported markets: `US` and `TW`.
-- Valuation command: `value` uses US-only yfinance fundamentals in v1.
+- Valuation command: `value` uses yfinance fundamentals for `US` and `TW` in v1.
 - Runtime config source: `config.yaml` in the current working directory.
 - Default example ranking profile: `sample_price_trend_v1`.
 - Supported ranking profiles: `sample_price_trend_v1`, `momentum_v1`,
@@ -246,6 +246,8 @@ uv run universe-selector value us --ticker AAPL
 uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1
 uv run universe-selector value us --ticker AAPL \
   --assumptions valuation_assumptions/us/AAPL.yaml
+uv run universe-selector value tw --ticker 2330 \
+  --assumptions valuation_assumptions/tw/2330.yaml
 ```
 
 `value` v1 prints markdown only. It requires `config.yaml` only for selecting
@@ -271,7 +273,8 @@ sensitive to starting FCF, share count, discount rate, terminal growth, and
 terminal value assumptions. Scenarios are illustrative and are not forecasts,
 expected outcomes, target cases, or recommendations.
 
-`value` uses yfinance fundamentals for v1 live facts. yfinance fundamentals are
+`value` uses yfinance fundamentals for v1 `US` and `TW` live facts. TW tickers
+default to the yfinance `.TW` request suffix. yfinance fundamentals are
 third-party convenience data and may be stale, incomplete, restated, mapped
 inconsistently, or unavailable. Independently verify provider facts and validate
 or override assumptions before relying on model-implied outputs.

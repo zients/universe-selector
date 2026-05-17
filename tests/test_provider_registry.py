@@ -168,16 +168,18 @@ def test_unknown_ohlcv_provider_id_reports_supported_ids() -> None:
         get_ohlcv_registration("unknown")
 
 
-def test_fundamentals_provider_registry_exposes_yfinance_for_us_only() -> None:
+def test_fundamentals_provider_registry_exposes_yfinance_for_us_and_tw() -> None:
     assert supported_fundamentals_provider_ids(Market.US) == ("yfinance_fundamentals",)
-    assert supported_fundamentals_provider_ids(Market.TW) == ()
+    assert supported_fundamentals_provider_ids(Market.TW) == ("yfinance_fundamentals",)
 
     id_registration = get_fundamentals_provider_registration("yfinance_fundamentals")
     registration = get_fundamentals_registration("yfinance_fundamentals", Market.US)
+    tw_registration = get_fundamentals_registration("yfinance_fundamentals", Market.TW)
 
     assert id_registration is registration
+    assert tw_registration is registration
     assert registration.provider_id == "yfinance_fundamentals"
-    assert registration.supported_markets == frozenset({Market.US})
+    assert registration.supported_markets == frozenset({Market.US, Market.TW})
     assert registration.source_ids == ("yahoo-finance:yfinance-ticker",)
     assert callable(registration.factory)
 
@@ -185,9 +187,6 @@ def test_fundamentals_provider_registry_exposes_yfinance_for_us_only() -> None:
 def test_fundamentals_provider_registry_rejects_unsupported_market_and_provider() -> None:
     with pytest.raises(ValidationError, match="unsupported fundamentals provider: unknown"):
         get_fundamentals_provider_registration("unknown")
-
-    with pytest.raises(ValidationError, match="unsupported fundamentals provider for TW"):
-        get_fundamentals_registration("yfinance_fundamentals", Market.TW)
 
     with pytest.raises(ValidationError, match="unsupported fundamentals provider for US: unknown"):
         get_fundamentals_registration("unknown", Market.US)

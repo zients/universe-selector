@@ -20,6 +20,7 @@ from universe_selector.valuation.service import run_valuation
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "valuation_assumptions" / "us" / "AAPL.yaml"
+TW_FIXTURE = Path(__file__).parent / "fixtures" / "valuation_assumptions" / "tw" / "2330.yaml"
 
 
 class FakeFundamentalsProvider:
@@ -308,11 +309,44 @@ def test_run_valuation_rejects_unknown_model_and_missing_assumptions(tmp_path: P
         run_valuation(Market.US, "AAPL", "fcf_dcf_v1", tmp_path / "missing.yaml", "yfinance_fundamentals")
 
 
-def test_run_valuation_rejects_unsupported_fundamentals_market_before_loading_assumptions(monkeypatch, tmp_path: Path) -> None:
-    def fail_load_assumptions(*args, **kwargs):
-        raise AssertionError("assumptions must not load before unsupported fundamentals market is rejected")
+def test_run_valuation_loads_tw_assumptions_after_resolving_supported_provider(monkeypatch, tmp_path: Path) -> None:
+    fake_provider = FakeFundamentalsProvider(
+        FundamentalFacts(
+            market=Market.TW,
+            ticker="2330",
+            currency="TWD",
+            reference_price=800.0,
+            reference_price_as_of=date(2026, 5, 15),
+            reference_price_as_of_source="provider_reported",
+            reference_price_as_of_note=None,
+            shares_outstanding=25_900_000_000.0,
+            cash_and_cash_equivalents=2_000_000_000_000.0,
+            total_debt=1_000_000_000_000.0,
+            balance_sheet_as_of=date(2026, 3, 31),
+            net_debt=-1_000_000_000_000.0,
+            operating_cash_flow=1_000_000_000_000.0,
+            capital_expenditures=300_000_000_000.0,
+            free_cash_flow=700_000_000_000.0,
+            fiscal_period_end=date(2025, 12, 31),
+            fiscal_period_type="ttm",
+        )
+    )
+    fake_registration = FundamentalsProviderRegistration(
+        provider_id=fake_provider.provider_id,
+        supported_markets=frozenset({Market.TW}),
+        source_ids=fake_provider.source_ids,
+        factory=lambda: fake_provider,
+    )
 
-    monkeypatch.setattr("universe_selector.valuation.service.load_valuation_assumptions", fail_load_assumptions)
+    monkeypatch.setattr(
+        "universe_selector.valuation.service.get_fundamentals_registration",
+        lambda provider_id, market: fake_registration,
+    )
 
-    with pytest.raises(ValidationError, match="unsupported fundamentals provider for TW: yfinance_fundamentals"):
-        run_valuation(Market.TW, "2330", "fcf_dcf_v1", tmp_path / "missing.yaml", "yfinance_fundamentals")
+    result = run_valuation(Market.TW, "2330", "fcf_dcf_v1", TW_FIXTURE, "fake_fundamentals")
+
+    assert fake_provider.requests == [(Market.TW, "2330")]
+    assert result.run_input.market is Market.TW
+    assert result.run_input.ticker == "2330"
+    assert result.run_input.assumptions.assumption_path.endswith("valuation_assumptions/tw/2330.yaml")
+    assert result.run_input.effective_inputs.currency == "TWD"

@@ -7,7 +7,10 @@ from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from universe_selector.domain import Market
+from universe_selector.errors import ValidationError
 from universe_selector.output.valuation import VALUATION_RESEARCH_DISCLAIMER, render_valuation_markdown
 from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
 from universe_selector.valuation.models import (
@@ -213,6 +216,25 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "Provider quote timestamp unavailable; using fetch date." in markdown
 
 
+def test_render_valuation_rejects_missing_model_output_renderer_without_fcf_fallback() -> None:
+    result = _result()
+    result = replace(
+        result,
+        run_input=replace(
+            result.run_input,
+            model_id="other_model",
+            assumptions=replace(
+                result.run_input.assumptions,
+                model_id="other_model",
+                model_assumptions=object(),
+            ),
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="missing valuation output renderer for other_model"):
+        render_valuation_markdown(result)
+
+
 def test_render_valuation_includes_provenance_and_model_implied_scenarios_without_recommendations() -> None:
     markdown = render_valuation_markdown(_result())
 
@@ -254,7 +276,6 @@ def test_render_valuation_redacts_prohibited_free_text_and_escapes_markdown_tabl
         run_input=replace(
             result.run_input,
             ticker="sell",
-            model_id="hold",
             assumptions=assumptions,
             raw_facts=raw_facts,
             input_provenance=provenance,
