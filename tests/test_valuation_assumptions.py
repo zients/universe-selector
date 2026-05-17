@@ -36,7 +36,7 @@ def test_loads_default_assumptions_and_hash_is_path_independent(monkeypatch, tmp
     default_loaded = load_valuation_assumptions(
         market=Market.US,
         ticker="AAPL",
-        model_id="fcf_dcf_v1",
+        model_id=None,
         assumptions_path=None,
     )
     explicit_loaded = load_valuation_assumptions(
@@ -50,6 +50,7 @@ def test_loads_default_assumptions_and_hash_is_path_independent(monkeypatch, tmp
     assert default_loaded.ticker == "AAPL"
     assert default_loaded.currency == "USD"
     assert default_loaded.amount_unit == "currency_units"
+    assert default_loaded.default_model == "fcf_dcf_v1"
     assert default_loaded.assumption_path == str(default_path)
     assert explicit_loaded.assumption_path == str(explicit_path)
     assert default_loaded.assumption_hash == explicit_loaded.assumption_hash
@@ -65,7 +66,7 @@ def test_loads_tw_2330_assumptions_fixture() -> None:
     loaded = load_valuation_assumptions(
         market=Market.TW,
         ticker="2330",
-        model_id="fcf_dcf_v1",
+        model_id=None,
         assumptions_path=TW_FIXTURE,
     )
 
@@ -73,6 +74,7 @@ def test_loads_tw_2330_assumptions_fixture() -> None:
     assert loaded.ticker == "2330"
     assert loaded.currency == "TWD"
     assert loaded.amount_unit == "currency_units"
+    assert loaded.default_model == "fcf_dcf_v1"
     assert loaded.assumption_path == str(TW_FIXTURE)
     assert loaded.model_id == "fcf_dcf_v1"
     assert loaded.model_assumptions.starting_fcf.method == "provider_ttm_fcf"
@@ -106,13 +108,38 @@ def test_rejects_market_ticker_unknown_keys_and_missing_model(tmp_path: Path) ->
     with pytest.raises(ValidationError, match="unknown assumptions key"):
         load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
 
-    with pytest.raises(ValidationError, match="missing model assumptions"):
+    with pytest.raises(ValidationError, match="unknown valuation model unknown_model"):
         load_valuation_assumptions(
             market=Market.US,
             ticker="AAPL",
             model_id="unknown_model",
             assumptions_path=US_FIXTURE,
         )
+
+
+def test_rejects_invalid_default_model(tmp_path: Path) -> None:
+    path = _copy_fixture(tmp_path)
+    text = path.read_text()
+
+    path.write_text(text.replace("default_model: fcf_dcf_v1", "default_model: missing_model"))
+    with pytest.raises(ValidationError, match="default_model must exist in models"):
+        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id=None, assumptions_path=path)
+
+    path.write_text(
+        text.replace("default_model: fcf_dcf_v1", "default_model: unknown_model").replace(
+            "models:\n  fcf_dcf_v1:",
+            "models:\n  unknown_model: {}\n  fcf_dcf_v1:",
+        )
+    )
+    with pytest.raises(ValidationError, match="unknown valuation model unknown_model"):
+        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id=None, assumptions_path=path)
+
+
+def test_rejects_empty_requested_model_without_falling_back_to_default(tmp_path: Path) -> None:
+    path = _copy_fixture(tmp_path)
+
+    with pytest.raises(ValidationError, match="model_id must be a non-empty string"):
+        load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="", assumptions_path=path)
 
 
 def test_rejects_missing_required_root_key(tmp_path: Path) -> None:
@@ -122,6 +149,12 @@ def test_rejects_missing_required_root_key(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError, match="prepared_by"):
         load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
+
+    path = _copy_fixture(tmp_path / "default-model")
+    path.write_text(path.read_text().replace("default_model: fcf_dcf_v1\n", ""))
+
+    with pytest.raises(ValidationError, match="default_model"):
+        load_valuation_assumptions(Market.US, "AAPL", None, path)
 
 
 def test_rejects_invalid_currency_and_amount_unit(tmp_path: Path) -> None:

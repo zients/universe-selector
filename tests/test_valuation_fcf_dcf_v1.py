@@ -93,6 +93,7 @@ def _assumption_set(model_assumptions: FcfDcfV1Assumptions) -> ValuationAssumpti
         schema_version=1,
         market=Market.US,
         ticker="AAA",
+        default_model="fcf_dcf_v1",
         purpose="research",
         as_of=date(2026, 5, 17),
         currency="USD",

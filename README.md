@@ -71,8 +71,9 @@ valuation_assumptions/{market}/{ticker}.yaml + fundamentals provider -> valuatio
 - `persistence/` owns DuckDB migrations and read/write access for run logs,
   provider metadata, ticker snapshots, rankings, and report artifacts.
 - `output/` renders markdown reports and per-ticker inspect output from persisted
-  data, plus ephemeral valuation markdown.
-- `valuation/` owns valuation assumptions, model logic, and orchestration.
+  data, plus thin command output adapters.
+- `valuation/` owns valuation assumptions, model logic, orchestration, and
+  valuation markdown output.
 - `cli.py` is the Typer command layer for `batch`, `report`, `inspect`, and
   `value`.
 
@@ -255,10 +256,13 @@ uv run universe-selector value tw --ticker 2330 \
 The default assumptions path is
 `valuation_assumptions/{market}/{ticker}.yaml`; the committed
 `valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml`
-are sample schemas only and are not investment advice. The committed valuation
-assumption files are repository templates; installed wheels do not copy them
-into your working directory. Create your own assumptions file in the working
-directory or pass `--assumptions`.
+are sample schemas only and are not investment advice. Each valuation assumptions
+file declares a root `default_model`; `value` uses the assumptions file
+`default_model` when `--model` is omitted. `--model` explicitly overrides the
+assumptions file default model. Assumption schema `1` requires root
+`default_model`. The committed valuation assumption files are repository
+templates; installed wheels do not copy them into your working directory. Create
+your own assumptions file in the working directory or pass `--assumptions`.
 
 `fcf_dcf_v1` uses `models.fcf_dcf_v1.starting_fcf` to choose the DCF starting
 FCF. The committed templates default to `starting_fcf.method: provider_ttm_fcf`,

@@ -40,6 +40,7 @@ class ValuationAssumptionSet:
     schema_version: int
     market: Market
     ticker: str
+    default_model: str
     purpose: str
     as_of: date
     currency: str

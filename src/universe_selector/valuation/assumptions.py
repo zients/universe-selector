@@ -21,6 +21,7 @@ _ROOT_KEYS = frozenset(
         "schema_version",
         "market",
         "ticker",
+        "default_model",
         "purpose",
         "as_of",
         "currency",
@@ -38,6 +39,7 @@ _REQUIRED_ROOT_KEYS = frozenset(
         "schema_version",
         "market",
         "ticker",
+        "default_model",
         "purpose",
         "as_of",
         "currency",
@@ -58,7 +60,7 @@ def default_assumptions_path(market: Market, ticker: str) -> Path:
 def load_valuation_assumptions(
     market: Market,
     ticker: str,
-    model_id: str,
+    model_id: str | None,
     assumptions_path: Path | None,
 ) -> ValuationAssumptionSet:
     normalized_ticker = canonical_ticker(ticker)
@@ -91,6 +93,7 @@ def load_valuation_assumptions(
     if canonical_ticker(str(yaml_ticker)) != normalized_ticker:
         raise ValidationError(f"ticker must match requested ticker {normalized_ticker}")
 
+    default_model = _require_non_empty_str(payload["default_model"], "default_model")
     purpose = _require_non_empty_str(payload["purpose"], "purpose")
     as_of = _parse_date(payload["as_of"], "as_of")
     currency = _parse_currency(payload["currency"])
@@ -112,15 +115,23 @@ def load_valuation_assumptions(
     models = payload["models"]
     if not isinstance(models, Mapping):
         raise ValidationError("models must be a mapping")
-    model_payload = models.get(model_id)
-    if not isinstance(model_payload, Mapping):
-        raise ValidationError(f"missing model assumptions for {model_id}")
+    if default_model not in models:
+        raise ValidationError("default_model must exist in models")
+    get_valuation_model(default_model)
 
-    parsed_model_assumptions = get_valuation_model(model_id).validate_assumptions(model_payload)
+    selected_model_id = default_model if model_id is None else _require_non_empty_str(model_id, "model_id")
+    get_valuation_model(selected_model_id)
+
+    model_payload = models.get(selected_model_id)
+    if not isinstance(model_payload, Mapping):
+        raise ValidationError(f"missing model assumptions for {selected_model_id}")
+
+    parsed_model_assumptions = get_valuation_model(selected_model_id).validate_assumptions(model_payload)
     normalized_payload = {
         "schema_version": schema_version,
         "market": market.value,
         "ticker": normalized_ticker,
+        "default_model": default_model,
         "purpose": purpose,
         "as_of": as_of.isoformat(),
         "currency": currency,
@@ -137,6 +148,7 @@ def load_valuation_assumptions(
         schema_version=schema_version,
         market=market,
         ticker=normalized_ticker,
+        default_model=default_model,
         purpose=purpose,
         as_of=as_of,
         currency=currency,
@@ -148,7 +160,7 @@ def load_valuation_assumptions(
         assumption_hash=hashlib.sha256(_canonical_json(normalized_payload).encode()).hexdigest(),
         facts_overrides=facts_overrides,
         facts_override_notes=facts_override_notes,
-        model_id=model_id,
+        model_id=selected_model_id,
         model_assumptions=parsed_model_assumptions,
     )
 

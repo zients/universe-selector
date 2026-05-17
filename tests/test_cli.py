@@ -529,7 +529,7 @@ def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> Non
         *,
         market: Market,
         ticker: str,
-        model_id: str,
+        model_id: str | None,
         assumptions_path: Path | None,
         fundamentals_provider_id: str,
     ):
@@ -550,7 +550,11 @@ def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> Non
         lambda: "fake_fundamentals",
         raising=False,
     )
-    monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
+    monkeypatch.setattr(
+        "universe_selector.cli.get_valuation_model",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("get_valuation_model")),
+        raising=False,
+    )
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
     monkeypatch.setattr(
         "universe_selector.cli.render_valuation_markdown",
@@ -564,9 +568,17 @@ def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> Non
     assert result.output == "# rendered valuation\n"
     assert captured["market"] is Market.US
     assert captured["ticker"] == "AAPL"
-    assert captured["model_id"] == "fcf_dcf_v1"
+    assert captured["model_id"] is None
     assert captured["assumptions_path"] is None
     assert captured["fundamentals_provider_id"] == "fake_fundamentals"
+
+
+def test_cli_value_help_documents_model_default_source() -> None:
+    result = runner.invoke(app, ["value", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "default_model" in result.output
+    assert "override" in result.output.lower()
 
 
 def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypatch) -> None:
@@ -577,7 +589,7 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
         *,
         market: Market,
         ticker: str,
-        model_id: str,
+        model_id: str | None,
         assumptions_path: Path | None,
         fundamentals_provider_id: str,
     ):
@@ -623,7 +635,7 @@ def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path)
         *,
         market: Market,
         ticker: str,
-        model_id: str,
+        model_id: str | None,
         assumptions_path: Path | None,
         fundamentals_provider_id: str,
     ):
@@ -656,7 +668,7 @@ def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path)
     assert result.exit_code == 0, result.output
     assert captured["market"] is Market.US
     assert captured["ticker"] == "AAPL"
-    assert captured["model_id"] == "fcf_dcf_v1"
+    assert captured["model_id"] is None
     assert captured["assumptions_path"] == assumptions_path
     assert captured["fundamentals_provider_id"] == "fake_fundamentals"
 

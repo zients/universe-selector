@@ -209,7 +209,7 @@ def test_run_valuation_uses_provider_ttm_fcf_starting_fcf_and_calls_model(monkey
     )
     monkeypatch.setattr("universe_selector.valuation.service.get_valuation_model", lambda model_id: spy_model)
 
-    result = run_valuation(Market.US, "aapl", "fcf_dcf_v1", assumptions_path, "fake_fundamentals")
+    result = run_valuation(Market.US, "aapl", None, assumptions_path, "fake_fundamentals")
 
     assert fake_provider.requests == [(Market.US, "AAPL")]
     assert len(spy_model.build_input_requests) == 1
@@ -220,6 +220,7 @@ def test_run_valuation_uses_provider_ttm_fcf_starting_fcf_and_calls_model(monkey
     assert spy_model.inputs[0].ticker == "AAPL"
     assert result.run_input.market is Market.US
     assert result.run_input.ticker == "AAPL"
+    assert result.run_input.model_id == "fcf_dcf_v1"
     assert result.run_input.raw_facts.free_cash_flow == 110.0
     assert result.run_input.effective_inputs.starting_fcf == 111.0
     assert result.run_input.effective_inputs.shares_outstanding == 10.0
@@ -296,7 +297,7 @@ def test_run_valuation_uses_default_assumptions_path(monkeypatch, tmp_path: Path
         lambda provider_id, market: fake_registration,
     )
 
-    result = run_valuation(Market.US, "AAPL", "fcf_dcf_v1", None, "fake_fundamentals")
+    result = run_valuation(Market.US, "AAPL", None, None, "fake_fundamentals")
 
     assert result.run_input.assumptions.assumption_path.endswith("valuation_assumptions/us/AAPL.yaml")
 

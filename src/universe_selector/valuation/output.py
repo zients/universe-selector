@@ -77,6 +77,7 @@ def render_valuation_markdown(result: ValuationResult) -> str:
             "## Assumption Context",
             "",
             f"- schema_version: {assumptions.schema_version}",
+            f"- default_model: {_markdown_text(assumptions.default_model)}",
             f"- currency: {_markdown_text(assumptions.currency)}",
             f"- amount_unit: {_markdown_text(assumptions.amount_unit)}",
             f"- assumption_path: {_markdown_text(assumptions.assumption_path)}",

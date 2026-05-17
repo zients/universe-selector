@@ -31,6 +31,7 @@ def _result() -> ValuationResult:
         schema_version=1,
         market=Market.US,
         ticker="AAPL",
+        default_model="fcf_dcf_v1",
         purpose="research",
         as_of=date(2026, 5, 16),
         currency="USD",
@@ -188,6 +189,7 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "facts_as_of" not in markdown
     assert "latest source date is the max of quote, cash-flow period, and balance-sheet dates" in markdown
     assert "## Assumption Context" in markdown
+    assert "default_model: fcf_dcf_v1" in markdown
     assert "assumption_path: /repo/valuation_assumptions/us/AAPL.yaml" in markdown
     assert "assumption_hash: abc123" in markdown
     assert "assumption_source: analyst" in markdown

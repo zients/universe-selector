@@ -265,13 +265,20 @@ def inspect(
 def value(
     market: Annotated[str, typer.Argument()],
     ticker: Annotated[str, typer.Option("--ticker")],
-    model: Annotated[str, typer.Option("--model")] = "fcf_dcf_v1",
+    model: Annotated[
+        str | None,
+        typer.Option(
+            "--model",
+            help="Valuation model override. When omitted, uses the assumptions YAML default_model.",
+        ),
+    ] = None,
     assumptions: Annotated[Path | None, typer.Option("--assumptions")] = None,
 ) -> None:
     def action() -> None:
         resolved_market = canonical_market(market)
         normalized_ticker = canonical_ticker(ticker)
-        get_valuation_model(model)
+        if model is not None:
+            get_valuation_model(model)
         result = run_valuation(
             market=resolved_market,
             ticker=normalized_ticker,

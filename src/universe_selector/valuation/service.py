@@ -17,12 +17,12 @@ from universe_selector.valuation.registry import get_valuation_model
 def run_valuation(
     market: Market,
     ticker: str,
-    model_id: str,
+    model_id: str | None,
     assumptions_path: Path | None,
     fundamentals_provider_id: str,
 ) -> ValuationResult:
     normalized_ticker = canonical_ticker(ticker)
-    model = get_valuation_model(model_id)
+    model = get_valuation_model(model_id) if model_id is not None else None
     registration = get_fundamentals_registration(fundamentals_provider_id, market)
     assumptions = load_valuation_assumptions(
         market=market,
@@ -30,6 +30,7 @@ def run_valuation(
         model_id=model_id,
         assumptions_path=assumptions_path,
     )
+    model = model or get_valuation_model(assumptions.model_id)
     provider = registration.factory()
     fundamentals = provider.load_fundamentals(market, normalized_ticker)
     facts = fundamentals.facts
@@ -41,7 +42,7 @@ def run_valuation(
     run_input = ValuationRunInput(
         market=market,
         ticker=normalized_ticker,
-        model_id=model_id,
+        model_id=assumptions.model_id,
         fundamentals_metadata=fundamentals.metadata,
         raw_facts=facts,
         effective_inputs=effective_inputs,
@@ -52,7 +53,7 @@ def run_valuation(
         ValuationModelInput(
             market=market,
             ticker=normalized_ticker,
-            model_id=model_id,
+            model_id=assumptions.model_id,
             effective_inputs=effective_inputs,
             model_assumptions=assumptions.model_assumptions,
         )
