@@ -12,7 +12,7 @@ from universe_selector.domain import Market, canonical_market, canonical_ticker
 from universe_selector.errors import NotFoundError, UniverseSelectorError, ValidationError
 from universe_selector.identifiers import parse_run_id
 from universe_selector.output.inspect import render_inspect
-from universe_selector.output.valuation import render_valuation_markdown
+from universe_selector.output.value import render_value_markdown as render_valuation_markdown
 from universe_selector.persistence.repository import DuckDbRepository, ResolvedRun
 from universe_selector.persistence.schema import validate_schema
 from universe_selector.pipeline import BatchResult, MultiProfileBatchError, run_batch, run_batch_profiles

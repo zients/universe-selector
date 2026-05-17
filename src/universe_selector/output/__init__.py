@@ -3,6 +3,8 @@ from __future__ import annotations
 __all__ = [
     "render_inspect",
     "render_markdown_report",
+    "render_value",
+    "render_value_markdown",
     "render_valuation",
     "render_valuation_markdown",
 ]
@@ -17,8 +19,12 @@ def __getattr__(name: str):
         from universe_selector.output.report import render_markdown_report
 
         return render_markdown_report
-    if name in {"render_valuation", "render_valuation_markdown"}:
-        from universe_selector.output.valuation import render_valuation_markdown
+    if name in {"render_value", "render_valuation"}:
+        from universe_selector.output.value import render_value
 
-        return render_valuation_markdown
+        return render_value
+    if name in {"render_value_markdown", "render_valuation_markdown"}:
+        from universe_selector.output.value import render_value_markdown
+
+        return render_value_markdown
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

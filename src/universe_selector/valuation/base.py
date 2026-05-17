@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from universe_selector.providers.models import FundamentalFacts
-from universe_selector.valuation.models import (
-    EffectiveValuationInputs,
-    ValuationAssumptionSet,
-    ValuationInputProvenance,
-    ValuationModelInput,
-    ValuationScenarioResult,
-)
+if TYPE_CHECKING:
+    from universe_selector.providers.models import FundamentalFacts
+    from universe_selector.valuation.models import (
+        EffectiveValuationInputs,
+        ValuationAssumptionSet,
+        ValuationInputProvenance,
+        ValuationModelInput,
+        ValuationResult,
+        ValuationScenarioResult,
+    )
 
 
 class ValuationModel(Protocol):
@@ -28,4 +30,21 @@ class ValuationModel(Protocol):
         raise NotImplementedError
 
     def value(self, model_input: ValuationModelInput) -> tuple[ValuationScenarioResult, ...]:
+        raise NotImplementedError
+
+
+class ValuationOutputRenderer(Protocol):
+    def render_risk_disclosures(self, result: ValuationResult) -> list[str]:
+        raise NotImplementedError
+
+    def render_model_assumptions(self, result: ValuationResult) -> list[str]:
+        raise NotImplementedError
+
+    def render_effective_inputs(self, result: ValuationResult) -> list[str]:
+        raise NotImplementedError
+
+    def render_input_provenance(self, result: ValuationResult) -> list[str]:
+        raise NotImplementedError
+
+    def render_scenario_results(self, result: ValuationResult) -> list[str]:
         raise NotImplementedError

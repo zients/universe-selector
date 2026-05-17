@@ -11,7 +11,7 @@ import pytest
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
-from universe_selector.output.valuation import VALUATION_RESEARCH_DISCLAIMER, render_valuation_markdown
+from universe_selector.valuation.output import VALUATION_RESEARCH_DISCLAIMER, render_valuation_markdown
 from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
@@ -216,7 +216,7 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "Provider quote timestamp unavailable; using fetch date." in markdown
 
 
-def test_render_valuation_rejects_missing_model_output_renderer_without_fcf_fallback() -> None:
+def test_render_valuation_rejects_unknown_model_without_fcf_fallback() -> None:
     result = _result()
     result = replace(
         result,
@@ -231,16 +231,48 @@ def test_render_valuation_rejects_missing_model_output_renderer_without_fcf_fall
         ),
     )
 
-    with pytest.raises(ValidationError, match="missing valuation output renderer for other_model"):
+    with pytest.raises(ValidationError, match="unknown valuation model other_model"):
         render_valuation_markdown(result)
 
 
 def test_fcf_dcf_output_renderer_is_owned_by_model_module() -> None:
-    from universe_selector.output import valuation as valuation_output
+    from universe_selector.valuation.registry import get_valuation_output_renderer
 
-    renderer = valuation_output._output_renderer("fcf_dcf_v1")
+    renderer = get_valuation_output_renderer("fcf_dcf_v1")
 
     assert renderer.__class__.__module__ == "universe_selector.valuation.fcf_dcf_v1"
+
+
+def test_every_supported_valuation_model_has_output_renderer() -> None:
+    from universe_selector.valuation.registry import (
+        get_valuation_output_renderer,
+        supported_valuation_model_ids,
+    )
+
+    for model_id in supported_valuation_model_ids():
+        assert get_valuation_output_renderer(model_id).model_id == model_id
+
+
+def test_value_output_adapter_delegates_to_valuation_output() -> None:
+    from universe_selector.output.value import render_value, render_value_markdown, render_valuation
+
+    assert render_value_markdown is render_valuation_markdown
+    assert render_value is render_valuation_markdown
+    assert render_valuation is render_valuation_markdown
+
+
+def test_output_package_value_and_valuation_exports_delegate_to_valuation_output() -> None:
+    from universe_selector.output import (
+        render_value,
+        render_value_markdown,
+        render_valuation,
+        render_valuation_markdown as public_render_valuation_markdown,
+    )
+
+    assert render_value is render_valuation_markdown
+    assert render_value_markdown is render_valuation_markdown
+    assert render_valuation is render_valuation_markdown
+    assert public_render_valuation_markdown is render_valuation_markdown
 
 
 def test_render_valuation_includes_provenance_and_model_implied_scenarios_without_recommendations() -> None:
@@ -359,10 +391,12 @@ def test_valuation_output_submodule_import_does_not_import_report_config_or_prov
     root = Path(__file__).resolve().parents[1]
     script = """
 import sys
-import universe_selector.output.valuation
+import universe_selector.valuation.output
 for module_name in (
     "universe_selector.output.report",
     "universe_selector.config",
+    "universe_selector.providers",
+    "universe_selector.providers.models",
     "universe_selector.providers.registry",
 ):
     assert module_name not in sys.modules, module_name
@@ -393,6 +427,32 @@ for module_name in (
     "universe_selector.providers.fixture",
     "universe_selector.providers.models",
     "universe_selector.providers.registration",
+    "universe_selector.providers.registry",
+):
+    assert module_name not in sys.modules, module_name
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_value_output_adapter_import_does_not_import_report_config_or_provider_registry() -> None:
+    root = Path(__file__).resolve().parents[1]
+    script = """
+import sys
+import universe_selector.output.value
+for module_name in (
+    "universe_selector.output.report",
+    "universe_selector.config",
+    "universe_selector.providers",
+    "universe_selector.providers.models",
     "universe_selector.providers.registry",
 ):
     assert module_name not in sys.modules, module_name

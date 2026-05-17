@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
-from universe_selector.errors import ValidationError
-from universe_selector.output.valuation_format import (
+from universe_selector.valuation.formatting import (
     _format_money,
     _format_note,
     _format_number,
@@ -14,6 +11,7 @@ from universe_selector.output.valuation_format import (
 )
 
 if TYPE_CHECKING:
+    from universe_selector.valuation.base import ValuationOutputRenderer
     from universe_selector.valuation.models import ValuationResult
 
 
@@ -21,34 +19,11 @@ VALUATION_RESEARCH_DISCLAIMER = (
     "This valuation report is for quantitative research only and is not investment advice."
 )
 
-class ValuationOutputRenderer(Protocol):
-    def render_risk_disclosures(self, result: ValuationResult) -> list[str]: ...
-
-    def render_model_assumptions(self, result: ValuationResult) -> list[str]: ...
-
-    def render_effective_inputs(self, result: ValuationResult) -> list[str]: ...
-
-    def render_input_provenance(self, result: ValuationResult) -> list[str]: ...
-
-    def render_scenario_results(self, result: ValuationResult) -> list[str]: ...
-
-
-def _fcf_dcf_v1_output_renderer() -> ValuationOutputRenderer:
-    from universe_selector.valuation.fcf_dcf_v1 import FcfDcfV1OutputRenderer
-
-    return FcfDcfV1OutputRenderer()
-
-
-_OUTPUT_RENDERER_FACTORIES: Mapping[str, Callable[[], ValuationOutputRenderer]] = MappingProxyType(
-    {"fcf_dcf_v1": _fcf_dcf_v1_output_renderer}
-)
-
 
 def _output_renderer(model_id: str) -> ValuationOutputRenderer:
-    renderer_factory = _OUTPUT_RENDERER_FACTORIES.get(model_id)
-    if renderer_factory is None:
-        raise ValidationError(f"missing valuation output renderer for {model_id}")
-    return renderer_factory()
+    from universe_selector.valuation.registry import get_valuation_output_renderer
+
+    return get_valuation_output_renderer(model_id)
 
 
 def render_valuation_markdown(result: ValuationResult) -> str:

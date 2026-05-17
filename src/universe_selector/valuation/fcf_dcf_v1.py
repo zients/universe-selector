@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from universe_selector.errors import ValidationError
-from universe_selector.output.valuation_format import (
+from universe_selector.valuation.formatting import (
     _format_money,
     _format_note,
     _format_number,
