@@ -7,7 +7,7 @@ import polars as pl
 
 from universe_selector.domain import Market
 from universe_selector.providers.context import ProviderRunContext
-from universe_selector.providers.models import ListingCandidate, ProviderRunData
+from universe_selector.providers.models import FundamentalsRunData, ListingCandidate, ProviderRunData
 
 
 class MarketDataProvider(ABC):
@@ -34,4 +34,12 @@ class OhlcvProvider(Protocol):
         market: Market,
         listings: list[ListingCandidate],
     ) -> pl.DataFrame:
+        raise NotImplementedError
+
+
+class FundamentalsProvider(Protocol):
+    provider_id: str
+    source_ids: tuple[str, ...]
+
+    def load_fundamentals(self, market: Market, ticker: str) -> FundamentalsRunData:
         raise NotImplementedError

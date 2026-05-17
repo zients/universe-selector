@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+import math
+from collections.abc import Mapping
+from universe_selector.errors import ValidationError
+from universe_selector.valuation.models import (
+    FcfDcfV1Assumptions,
+    ValuationModelInput,
+    ValuationScenarioAssumptions,
+    ValuationScenarioResult,
+)
+
+
+_SCENARIO_ORDER = ("conservative", "base", "upside")
+_MODEL_KEYS = frozenset({"forecast_years", "terminal_method", "scenarios"})
+_SCENARIO_KEYS = frozenset({"growth_rate", "discount_rate", "terminal_growth_rate", "note"})
+
+
+class FcfDcfV1Model:
+    model_id = "fcf_dcf_v1"
+
+    def validate_assumptions(self, assumptions: Mapping[str, object]) -> FcfDcfV1Assumptions:
+        unknown_keys = sorted(set(assumptions) - _MODEL_KEYS)
+        if unknown_keys:
+            raise ValidationError(f"unknown fcf_dcf_v1 key: {unknown_keys[0]}")
+
+        forecast_years = _require_int(assumptions.get("forecast_years"), "forecast_years")
+        if not 1 <= forecast_years <= 10:
+            raise ValidationError("forecast_years must be from 1 through 10")
+
+        terminal_method = assumptions.get("terminal_method")
+        if terminal_method != "perpetual_growth":
+            raise ValidationError("terminal_method must be perpetual_growth")
+
+        scenarios_payload = assumptions.get("scenarios")
+        if not isinstance(scenarios_payload, Mapping):
+            raise ValidationError("scenarios must be a mapping")
+
+        scenario_ids = set(scenarios_payload)
+        if scenario_ids != set(_SCENARIO_ORDER):
+            raise ValidationError("scenarios must contain conservative, base, and upside")
+
+        scenarios: dict[str, ValuationScenarioAssumptions] = {}
+        for scenario_id in _SCENARIO_ORDER:
+            payload = scenarios_payload[scenario_id]
+            if not isinstance(payload, Mapping):
+                raise ValidationError(f"scenario {scenario_id} must be a mapping")
+            scenarios[scenario_id] = self._parse_scenario(scenario_id, payload)
+
+        return FcfDcfV1Assumptions(
+            forecast_years=forecast_years,
+            terminal_method=terminal_method,
+            scenario_order=_SCENARIO_ORDER,
+            scenarios=scenarios,
+        )
+
+    def value(self, model_input: ValuationModelInput) -> tuple[ValuationScenarioResult, ...]:
+        assumptions = model_input.model_assumptions
+        if not isinstance(assumptions, FcfDcfV1Assumptions):
+            raise ValidationError("fcf_dcf_v1 requires FcfDcfV1Assumptions")
+
+        inputs = model_input.effective_inputs
+        if inputs.shares_outstanding <= 0:
+            raise ValidationError("shares_outstanding must be greater than zero")
+        if inputs.reference_price <= 0:
+            raise ValidationError("reference_price must be greater than zero")
+
+        results = []
+        for scenario_id in assumptions.scenario_order:
+            scenario = assumptions.scenarios[scenario_id]
+            projected_fcf = tuple(
+                inputs.normalized_fcf * (1.0 + scenario.growth_rate) ** year
+                for year in range(1, assumptions.forecast_years + 1)
+            )
+            present_value_projected_fcf = tuple(
+                fcf / (1.0 + scenario.discount_rate) ** year
+                for year, fcf in enumerate(projected_fcf, start=1)
+            )
+            terminal_value = (
+                projected_fcf[-1]
+                * (1.0 + scenario.terminal_growth_rate)
+                / (scenario.discount_rate - scenario.terminal_growth_rate)
+            )
+            present_value_terminal_value = terminal_value / (
+                (1.0 + scenario.discount_rate) ** assumptions.forecast_years
+            )
+            enterprise_value = sum(present_value_projected_fcf) + present_value_terminal_value
+            equity_value = enterprise_value - inputs.net_debt
+            model_implied_value_per_share = equity_value / inputs.shares_outstanding
+            model_implied_spread_to_reference_price = model_implied_value_per_share / inputs.reference_price - 1.0
+
+            results.append(
+                ValuationScenarioResult(
+                    scenario_id=scenario_id,
+                    projected_fcf=projected_fcf,
+                    present_value_projected_fcf=present_value_projected_fcf,
+                    terminal_value=terminal_value,
+                    present_value_terminal_value=present_value_terminal_value,
+                    enterprise_value=enterprise_value,
+                    equity_value=equity_value,
+                    model_implied_value_per_share=model_implied_value_per_share,
+                    reference_price=inputs.reference_price,
+                    model_implied_spread_to_reference_price=model_implied_spread_to_reference_price,
+                )
+            )
+        return tuple(results)
+
+    def _parse_scenario(
+        self,
+        scenario_id: str,
+        payload: Mapping[str, object],
+    ) -> ValuationScenarioAssumptions:
+        unknown_keys = sorted(set(payload) - _SCENARIO_KEYS)
+        if unknown_keys:
+            raise ValidationError(f"unknown fcf_dcf_v1 scenario key: {unknown_keys[0]}")
+
+        growth_rate = _require_rate(payload.get("growth_rate"), f"scenarios.{scenario_id}.growth_rate")
+        discount_rate = _require_rate(payload.get("discount_rate"), f"scenarios.{scenario_id}.discount_rate")
+        terminal_growth_rate = _require_rate(
+            payload.get("terminal_growth_rate"),
+            f"scenarios.{scenario_id}.terminal_growth_rate",
+        )
+        note = payload.get("note")
+        if not isinstance(note, str) or not note.strip():
+            raise ValidationError(f"scenarios.{scenario_id}.note is required")
+
+        if not -1.0 < growth_rate <= 1.0:
+            raise ValidationError(f"scenarios.{scenario_id}.growth_rate must be greater than -1.0 and at most 1.0")
+        if not 0.0 < discount_rate <= 0.50:
+            raise ValidationError(f"scenarios.{scenario_id}.discount_rate must be greater than 0.0 and at most 0.50")
+        if not -0.05 <= terminal_growth_rate <= 0.05:
+            raise ValidationError(
+                f"scenarios.{scenario_id}.terminal_growth_rate must be between -0.05 and 0.05"
+            )
+        if discount_rate - terminal_growth_rate < 0.03:
+            raise ValidationError(
+                f"scenarios.{scenario_id}.discount_rate - terminal_growth_rate must be at least 0.03"
+            )
+
+        return ValuationScenarioAssumptions(
+            scenario_id=scenario_id,
+            growth_rate=growth_rate,
+            discount_rate=discount_rate,
+            terminal_growth_rate=terminal_growth_rate,
+            note=note,
+        )
+
+
+def _require_int(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValidationError(f"{field} must be an integer")
+    return value
+
+
+def _require_rate(value: object, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValidationError(f"{field} must be a number")
+    rate = float(value)
+    if not math.isfinite(rate):
+        raise ValidationError(f"{field} must be finite")
+    return rate

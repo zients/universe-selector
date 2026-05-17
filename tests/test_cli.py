@@ -481,3 +481,150 @@ def test_cli_reports_config_errors(monkeypatch, tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "config file not found: config.yaml" in result.output
+
+
+def _install_value_cli_no_config_or_persistence_guards(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: (_ for _ in ()).throw(AssertionError("load_config")),
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.ensure_runtime_dirs",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("ensure_runtime_dirs")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.DuckDbRepository",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("DuckDbRepository")),
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.validate_schema",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("validate_schema")),
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.run_batch",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_batch")),
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.run_batch_profiles",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_batch_profiles")),
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli._read_repo",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("_read_repo")),
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.render_inspect",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("render_inspect")),
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.get_ranking_profile",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("get_ranking_profile")),
+    )
+
+
+def test_cli_value_runs_without_config_and_prints_markdown(monkeypatch) -> None:
+    _install_value_cli_no_config_or_persistence_guards(monkeypatch)
+    captured: dict[str, object] = {}
+    sentinel_result = object()
+
+    def fake_run_valuation(*, market: Market, ticker: str, model_id: str, assumptions_path: Path | None):
+        captured["market"] = market
+        captured["ticker"] = ticker
+        captured["model_id"] = model_id
+        captured["assumptions_path"] = assumptions_path
+        return sentinel_result
+
+    monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
+    monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
+    monkeypatch.setattr(
+        "universe_selector.cli.render_valuation_markdown",
+        lambda result: "# rendered valuation\n" if result is sentinel_result else "wrong\n",
+        raising=False,
+    )
+
+    result = runner.invoke(app, ["value", "us", "--ticker", "aapl"])
+
+    assert result.exit_code == 0, result.output
+    assert result.output == "# rendered valuation\n"
+    assert captured["market"] is Market.US
+    assert captured["ticker"] == "AAPL"
+    assert captured["model_id"] == "fcf_dcf_v1"
+    assert captured["assumptions_path"] is None
+
+
+def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypatch) -> None:
+    _install_value_cli_no_config_or_persistence_guards(monkeypatch)
+    captured: dict[str, object] = {}
+
+    def fake_run_valuation(*, market: Market, ticker: str, model_id: str, assumptions_path: Path | None):
+        captured["market"] = market
+        captured["ticker"] = ticker
+        captured["model_id"] = model_id
+        captured["assumptions_path"] = assumptions_path
+        return object()
+
+    monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
+    monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
+    monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n", raising=False)
+
+    result = runner.invoke(app, ["value", "us", "--ticker", "aapl", "--model", "fcf_dcf_v1"])
+
+    assert result.exit_code == 0, result.output
+    assert captured == {
+        "market": Market.US,
+        "ticker": "AAPL",
+        "model_id": "fcf_dcf_v1",
+        "assumptions_path": None,
+    }
+
+
+def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path) -> None:
+    _install_value_cli_no_config_or_persistence_guards(monkeypatch)
+    captured: dict[str, object] = {}
+    assumptions_path = tmp_path / "valuation_assumptions" / "us" / "AAPL.yaml"
+
+    def fake_run_valuation(*, market: Market, ticker: str, model_id: str, assumptions_path: Path | None):
+        captured["market"] = market
+        captured["ticker"] = ticker
+        captured["model_id"] = model_id
+        captured["assumptions_path"] = assumptions_path
+        return object()
+
+    monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
+    monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
+    monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n", raising=False)
+
+    result = runner.invoke(
+        app,
+        ["value", "us", "--ticker", "aapl", "--assumptions", str(assumptions_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["market"] is Market.US
+    assert captured["ticker"] == "AAPL"
+    assert captured["model_id"] == "fcf_dcf_v1"
+    assert captured["assumptions_path"] == assumptions_path
+
+
+def test_cli_value_rejects_unknown_model(monkeypatch) -> None:
+    _install_value_cli_no_config_or_persistence_guards(monkeypatch)
+
+    def fail_model_lookup(model_id: str):
+        raise ValidationError(f"unknown valuation model {model_id}")
+
+    def fail_run_valuation(*args, **kwargs):
+        raise AssertionError("run_valuation must not run for an unknown model")
+
+    monkeypatch.setattr("universe_selector.cli.get_valuation_model", fail_model_lookup, raising=False)
+    monkeypatch.setattr("universe_selector.cli.run_valuation", fail_run_valuation, raising=False)
+    monkeypatch.setattr(
+        "universe_selector.cli.render_valuation_markdown",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("render_valuation_markdown")),
+        raising=False,
+    )
+
+    result = runner.invoke(app, ["value", "us", "--ticker", "AAPL", "--model", "unknown_model"])
+
+    assert result.exit_code == ValidationError.exit_code
+    assert "unknown valuation model unknown_model" in result.output
