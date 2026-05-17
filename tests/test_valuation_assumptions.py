@@ -48,6 +48,8 @@ def test_loads_default_assumptions_and_hash_is_path_independent(monkeypatch, tmp
 
     assert default_loaded.market is Market.US
     assert default_loaded.ticker == "AAPL"
+    assert default_loaded.currency == "USD"
+    assert default_loaded.amount_unit == "currency_units"
     assert default_loaded.assumption_path == str(default_path)
     assert explicit_loaded.assumption_path == str(explicit_path)
     assert default_loaded.assumption_hash == explicit_loaded.assumption_hash
@@ -66,6 +68,8 @@ def test_loads_tw_2330_assumptions_fixture() -> None:
 
     assert loaded.market is Market.TW
     assert loaded.ticker == "2330"
+    assert loaded.currency == "TWD"
+    assert loaded.amount_unit == "currency_units"
     assert loaded.assumption_path == str(TW_FIXTURE)
     assert loaded.model_id == "fcf_dcf_v1"
 
@@ -113,6 +117,19 @@ def test_rejects_missing_required_root_key(tmp_path: Path) -> None:
     path.write_text(data)
 
     with pytest.raises(ValidationError, match="prepared_by"):
+        load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
+
+
+def test_rejects_invalid_currency_and_amount_unit(tmp_path: Path) -> None:
+    path = _copy_fixture(tmp_path)
+    text = path.read_text()
+
+    path.write_text(text.replace("currency: USD", "currency: usd"))
+    with pytest.raises(ValidationError, match="currency"):
+        load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
+
+    path.write_text(text.replace("amount_unit: currency_units", "amount_unit: millions"))
+    with pytest.raises(ValidationError, match="amount_unit"):
         load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
 
 

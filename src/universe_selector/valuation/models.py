@@ -21,6 +21,9 @@ class ValuationScenarioAssumptions:
 class FcfDcfV1Assumptions:
     forecast_years: int
     terminal_method: str
+    cash_flow_basis: str
+    discount_rate_basis: str
+    terminal_growth_basis: str
     scenario_order: tuple[str, ...]
     scenarios: Mapping[str, ValuationScenarioAssumptions]
 
@@ -32,6 +35,8 @@ class ValuationAssumptionSet:
     ticker: str
     purpose: str
     as_of: date
+    currency: str
+    amount_unit: str
     assumption_source: str
     prepared_by: str
     source_note: str

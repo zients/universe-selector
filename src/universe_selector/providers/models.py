@@ -45,7 +45,7 @@ class FundamentalsMetadata:
     fundamentals_provider_id: str
     fundamentals_source_ids: tuple[str, ...]
     data_fetch_started_at: datetime
-    facts_as_of: date
+    latest_source_date: date
 
 
 @dataclass(frozen=True)

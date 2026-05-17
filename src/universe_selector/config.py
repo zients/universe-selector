@@ -11,7 +11,11 @@ import yaml
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
-from universe_selector.providers.registry import get_listing_registration, get_ohlcv_registration
+from universe_selector.providers.registry import (
+    get_fundamentals_provider_registration,
+    get_listing_registration,
+    get_ohlcv_registration,
+)
 from universe_selector.ranking_profiles import RankingProfile, get_ranking_profile
 
 
@@ -96,7 +100,10 @@ class AppConfig:
             report_top_n=int(report["top_n"]),
             live_listing_provider={market: str(listing_provider[market.value]) for market in Market},
             live_ohlcv_provider=str(live["ohlcv_provider"]),
-            live_fundamentals_provider=str(live["fundamentals_provider"]),
+            live_fundamentals_provider=_parse_provider_id(
+                live["fundamentals_provider"],
+                label="live.fundamentals_provider",
+            ),
             live_ticker_limit=_parse_live_ticker_limit(live["ticker_limit"], label="live.ticker_limit"),
             live_yfinance_batch_size=_parse_positive_int(
                 yfinance["batch_size"],
@@ -115,8 +122,7 @@ class AppConfig:
         for market in Market:
             get_listing_registration(self.live_listing_provider[market], market)
         get_ohlcv_registration(self.live_ohlcv_provider)
-        if not self.live_fundamentals_provider.strip():
-            raise ValidationError("live.fundamentals_provider must be a provider id")
+        get_fundamentals_provider_registration(self.live_fundamentals_provider)
         _parse_live_ticker_limit(self.live_ticker_limit, label="live.ticker_limit")
         _parse_positive_int(self.live_yfinance_batch_size, label="live.yfinance.batch_size")
 
@@ -163,6 +169,12 @@ def _parse_live_ticker_limit(value: object, *, label: str) -> int | None:
             raise ValidationError(f"{label} must be null or a positive integer")
         return value
     raise ValidationError(f"{label} must be null or a positive integer")
+
+
+def _parse_provider_id(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValidationError(f"{label} must be a provider id")
+    return value
 
 
 def _parse_positive_int(value: object, *, label: str) -> int:

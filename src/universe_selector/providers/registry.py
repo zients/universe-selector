@@ -79,6 +79,16 @@ def get_fundamentals_registration(provider_id: str, market: Market) -> _Fundamen
     return registration
 
 
+def get_fundamentals_provider_registration(provider_id: str) -> _FundamentalsProviderRegistration:
+    registration = _FUNDAMENTALS_PROVIDER_REGISTRY.get(provider_id)
+    if registration is None:
+        raise ValidationError(
+            f"unsupported fundamentals provider: {provider_id}; "
+            f"supported ids: {_supported_message(tuple(sorted(_FUNDAMENTALS_PROVIDER_REGISTRY)))}"
+        )
+    return registration
+
+
 def get_listing_registration(provider_id: str, market: Market) -> _ListingProviderRegistration:
     supported_ids = supported_listing_provider_ids(market)
     registration = _LISTING_PROVIDER_REGISTRY.get(provider_id)

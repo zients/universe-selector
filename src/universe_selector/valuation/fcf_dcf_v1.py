@@ -12,7 +12,16 @@ from universe_selector.valuation.models import (
 
 
 _SCENARIO_ORDER = ("conservative", "base", "upside")
-_MODEL_KEYS = frozenset({"forecast_years", "terminal_method", "scenarios"})
+_MODEL_KEYS = frozenset(
+    {
+        "forecast_years",
+        "terminal_method",
+        "cash_flow_basis",
+        "discount_rate_basis",
+        "terminal_growth_basis",
+        "scenarios",
+    }
+)
 _SCENARIO_KEYS = frozenset({"growth_rate", "discount_rate", "terminal_growth_rate", "note"})
 
 
@@ -31,6 +40,21 @@ class FcfDcfV1Model:
         terminal_method = assumptions.get("terminal_method")
         if terminal_method != "perpetual_growth":
             raise ValidationError("terminal_method must be perpetual_growth")
+        cash_flow_basis = _require_literal(
+            assumptions.get("cash_flow_basis"),
+            "cash_flow_basis",
+            "normalized_fcf_enterprise_proxy",
+        )
+        discount_rate_basis = _require_literal(
+            assumptions.get("discount_rate_basis"),
+            "discount_rate_basis",
+            "nominal_wacc",
+        )
+        terminal_growth_basis = _require_literal(
+            assumptions.get("terminal_growth_basis"),
+            "terminal_growth_basis",
+            "nominal_perpetual_growth",
+        )
 
         scenarios_payload = assumptions.get("scenarios")
         if not isinstance(scenarios_payload, Mapping):
@@ -50,6 +74,9 @@ class FcfDcfV1Model:
         return FcfDcfV1Assumptions(
             forecast_years=forecast_years,
             terminal_method=terminal_method,
+            cash_flow_basis=cash_flow_basis,
+            discount_rate_basis=discount_rate_basis,
+            terminal_growth_basis=terminal_growth_basis,
             scenario_order=_SCENARIO_ORDER,
             scenarios=scenarios,
         )
@@ -150,6 +177,12 @@ def _require_int(value: object, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValidationError(f"{field} must be an integer")
     return value
+
+
+def _require_literal(value: object, field: str, expected: str) -> str:
+    if value != expected:
+        raise ValidationError(f"{field} must be {expected}")
+    return expected
 
 
 def _require_rate(value: object, field: str) -> float:

@@ -58,7 +58,7 @@ class YFinanceFundamentalsProvider:
         fetch_started_at = self._clock()
         payload = self._fetcher(normalized_ticker)
         facts = self._normalize_payload(market, normalized_ticker, payload)
-        facts_as_of = max(facts.fiscal_period_end, facts.reference_price_as_of, facts.balance_sheet_as_of)
+        latest_source_date = max(facts.fiscal_period_end, facts.reference_price_as_of, facts.balance_sheet_as_of)
 
         return FundamentalsRunData(
             metadata=FundamentalsMetadata(
@@ -66,7 +66,7 @@ class YFinanceFundamentalsProvider:
                 fundamentals_provider_id=self.provider_id,
                 fundamentals_source_ids=self.source_ids,
                 data_fetch_started_at=fetch_started_at,
-                facts_as_of=facts_as_of,
+                latest_source_date=latest_source_date,
             ),
             facts=facts,
         )

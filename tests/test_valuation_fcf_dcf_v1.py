@@ -46,6 +46,9 @@ def _assumptions(
     return FcfDcfV1Assumptions(
         forecast_years=2,
         terminal_method="perpetual_growth",
+        cash_flow_basis="normalized_fcf_enterprise_proxy",
+        discount_rate_basis="nominal_wacc",
+        terminal_growth_basis="nominal_perpetual_growth",
         scenario_order=("base",),
         scenarios={
             "base": ValuationScenarioAssumptions(
@@ -110,6 +113,9 @@ def test_fcf_dcf_v1_validates_model_assumption_payload() -> None:
         {
             "forecast_years": 5,
             "terminal_method": "perpetual_growth",
+            "cash_flow_basis": "normalized_fcf_enterprise_proxy",
+            "discount_rate_basis": "nominal_wacc",
+            "terminal_growth_basis": "nominal_perpetual_growth",
             "scenarios": {
                 "base": {
                     "growth_rate": 0.05,
@@ -134,6 +140,9 @@ def test_fcf_dcf_v1_validates_model_assumption_payload() -> None:
     )
 
     assert assumptions.forecast_years == 5
+    assert assumptions.cash_flow_basis == "normalized_fcf_enterprise_proxy"
+    assert assumptions.discount_rate_basis == "nominal_wacc"
+    assert assumptions.terminal_growth_basis == "nominal_perpetual_growth"
     assert assumptions.scenario_order == ("conservative", "base", "upside")
     assert tuple(assumptions.scenarios) == ("conservative", "base", "upside")
     assert assumptions.scenarios["conservative"].growth_rate == pytest.approx(-0.999)
@@ -145,6 +154,9 @@ def test_fcf_dcf_v1_validates_model_assumption_payload() -> None:
     [
         ({"forecast_years": 0}, "forecast_years"),
         ({"terminal_method": "exit_multiple"}, "terminal_method"),
+        ({"cash_flow_basis": "raw_provider_fcf"}, "cash_flow_basis"),
+        ({"discount_rate_basis": "cost_of_equity"}, "discount_rate_basis"),
+        ({"terminal_growth_basis": "real_growth"}, "terminal_growth_basis"),
         ({"unexpected": "nope"}, "unknown fcf_dcf_v1 key"),
     ],
 )
@@ -152,6 +164,9 @@ def test_fcf_dcf_v1_rejects_invalid_model_payload(patch: dict[str, object], mess
     payload: dict[str, object] = {
         "forecast_years": 5,
         "terminal_method": "perpetual_growth",
+        "cash_flow_basis": "normalized_fcf_enterprise_proxy",
+        "discount_rate_basis": "nominal_wacc",
+        "terminal_growth_basis": "nominal_perpetual_growth",
         "scenarios": {
             "conservative": {
                 "growth_rate": 0.03,
@@ -184,6 +199,9 @@ def test_fcf_dcf_v1_rejects_invalid_rates_and_scenarios() -> None:
     payload = {
         "forecast_years": 5,
         "terminal_method": "perpetual_growth",
+        "cash_flow_basis": "normalized_fcf_enterprise_proxy",
+        "discount_rate_basis": "nominal_wacc",
+        "terminal_growth_basis": "nominal_perpetual_growth",
         "scenarios": {
             "base": {
                 "growth_rate": 0.05,
@@ -206,7 +224,7 @@ def test_fcf_dcf_v1_rejects_invalid_rates_and_scenarios() -> None:
         },
         "base": {
             "growth_rate": 0.05,
-                "discount_rate": 0.0,
+            "discount_rate": 0.0,
             "terminal_growth_rate": 0.025,
             "note": "Middle illustrative scenario.",
         },

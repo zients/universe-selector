@@ -23,6 +23,8 @@ _ROOT_KEYS = frozenset(
         "ticker",
         "purpose",
         "as_of",
+        "currency",
+        "amount_unit",
         "facts_overrides",
         "facts_override_notes",
         "assumption_source",
@@ -38,6 +40,8 @@ _REQUIRED_ROOT_KEYS = frozenset(
         "ticker",
         "purpose",
         "as_of",
+        "currency",
+        "amount_unit",
         "assumption_source",
         "prepared_by",
         "source_note",
@@ -89,6 +93,8 @@ def load_valuation_assumptions(
 
     purpose = _require_non_empty_str(payload["purpose"], "purpose")
     as_of = _parse_date(payload["as_of"], "as_of")
+    currency = _parse_currency(payload["currency"])
+    amount_unit = _parse_amount_unit(payload["amount_unit"])
     assumption_source = _require_non_empty_str(payload["assumption_source"], "assumption_source")
     prepared_by = _require_non_empty_str(payload["prepared_by"], "prepared_by")
     source_note = _require_non_empty_str(payload["source_note"], "source_note")
@@ -117,6 +123,8 @@ def load_valuation_assumptions(
         "ticker": normalized_ticker,
         "purpose": purpose,
         "as_of": as_of.isoformat(),
+        "currency": currency,
+        "amount_unit": amount_unit,
         "facts_overrides": facts_overrides,
         "facts_override_notes": facts_override_notes,
         "assumption_source": assumption_source,
@@ -131,6 +139,8 @@ def load_valuation_assumptions(
         ticker=normalized_ticker,
         purpose=purpose,
         as_of=as_of,
+        currency=currency,
+        amount_unit=amount_unit,
         assumption_source=assumption_source,
         prepared_by=prepared_by,
         source_note=source_note,
@@ -164,6 +174,20 @@ def _parse_date(value: object, field: str) -> date:
         except ValueError as exc:
             raise ValidationError(f"{field} must be an ISO date") from exc
     raise ValidationError(f"{field} must be a date")
+
+
+def _parse_currency(value: object) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValidationError("currency must be an ISO currency code")
+    if value != value.upper() or len(value) != 3 or not value.isalpha():
+        raise ValidationError("currency must be an uppercase ISO currency code")
+    return value
+
+
+def _parse_amount_unit(value: object) -> str:
+    if value != "currency_units":
+        raise ValidationError("amount_unit must be currency_units")
+    return "currency_units"
 
 
 def _parse_optional_float_map(value: object, field: str) -> dict[str, float | None]:

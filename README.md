@@ -253,7 +253,13 @@ uv run universe-selector value us --ticker AAPL \
 The default assumptions path is
 `valuation_assumptions/{market}/{ticker}.yaml`; the committed
 `valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml`
-are sample schemas only and are not investment advice.
+are sample schemas only and are not investment advice. The committed valuation
+assumption files are repository templates; installed wheels do not copy them
+into your working directory. Create your own assumptions file in the working
+directory or pass `--assumptions`.
+
+Before running `fcf_dcf_v1`, fill `facts_overrides.normalized_fcf` and its note.
+Raw provider free cash flow is OCF minus capex and is not used as normalized FCF.
 
 `fcf_dcf_v1` is a simplified free-cash-flow DCF model. It uses normalized FCF as
 an enterprise cash-flow proxy, not verified unlevered FCFF, and computes

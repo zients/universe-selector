@@ -20,6 +20,7 @@ from universe_selector.providers.registration import (
     build_ohlcv_provider_registration_map,
 )
 from universe_selector.providers.registry import (
+    get_fundamentals_provider_registration,
     get_fundamentals_registration,
     get_listing_registration,
     get_ohlcv_registration,
@@ -171,8 +172,10 @@ def test_fundamentals_provider_registry_exposes_yfinance_for_us_only() -> None:
     assert supported_fundamentals_provider_ids(Market.US) == ("yfinance_fundamentals",)
     assert supported_fundamentals_provider_ids(Market.TW) == ()
 
+    id_registration = get_fundamentals_provider_registration("yfinance_fundamentals")
     registration = get_fundamentals_registration("yfinance_fundamentals", Market.US)
 
+    assert id_registration is registration
     assert registration.provider_id == "yfinance_fundamentals"
     assert registration.supported_markets == frozenset({Market.US})
     assert registration.source_ids == ("yahoo-finance:yfinance-ticker",)
@@ -180,6 +183,9 @@ def test_fundamentals_provider_registry_exposes_yfinance_for_us_only() -> None:
 
 
 def test_fundamentals_provider_registry_rejects_unsupported_market_and_provider() -> None:
+    with pytest.raises(ValidationError, match="unsupported fundamentals provider: unknown"):
+        get_fundamentals_provider_registration("unknown")
+
     with pytest.raises(ValidationError, match="unsupported fundamentals provider for TW"):
         get_fundamentals_registration("yfinance_fundamentals", Market.TW)
 

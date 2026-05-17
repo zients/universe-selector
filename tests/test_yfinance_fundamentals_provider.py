@@ -50,7 +50,7 @@ def test_yfinance_fundamentals_uses_injected_fetcher_and_normalizes_contract(mon
     assert data.metadata.data_mode == "live"
     assert data.metadata.fundamentals_provider_id == "yfinance_fundamentals"
     assert data.metadata.fundamentals_source_ids == ("yahoo-finance:yfinance-ticker",)
-    assert data.metadata.facts_as_of == date(2026, 5, 15)
+    assert data.metadata.latest_source_date == date(2026, 5, 15)
     assert data.facts.market is Market.US
     assert data.facts.ticker == "AAPL"
     assert data.facts.reference_price_as_of_source == "provider_reported"
@@ -165,7 +165,7 @@ def test_default_yfinance_adapter_derives_ttm_from_quarterly_cash_flow(monkeypat
     assert data.facts.fiscal_period_end == date(2026, 3, 31)
     assert data.facts.reference_price_as_of == date(2026, 5, 15)
     assert data.facts.reference_price_as_of_source == "provider_reported"
-    assert data.metadata.facts_as_of == date(2026, 5, 15)
+    assert data.metadata.latest_source_date == date(2026, 5, 15)
 
 
 def test_default_yfinance_adapter_falls_back_to_yearly_and_fetch_date_price_timestamp(monkeypatch) -> None:
@@ -228,7 +228,7 @@ def test_default_yfinance_adapter_falls_back_to_yearly_and_fetch_date_price_time
         "yfinance did not provide a usable quote timestamp; using fetch date, "
         "not a provider-reported quote timestamp."
     )
-    assert data.metadata.facts_as_of == date(2026, 5, 17)
+    assert data.metadata.latest_source_date == date(2026, 5, 17)
 
 
 def test_default_yfinance_adapter_rejects_quote_and_financial_currency_mismatch(monkeypatch) -> None:

@@ -83,6 +83,9 @@ def _render_fcf_dcf_assumptions(assumptions: Any) -> list[str]:
         "",
         f"- forecast_years: {assumptions.forecast_years}",
         f"- terminal_method: {_markdown_text(assumptions.terminal_method)}",
+        f"- cash_flow_basis: {_markdown_text(assumptions.cash_flow_basis)}",
+        f"- discount_rate_basis: {_markdown_text(assumptions.discount_rate_basis)}",
+        f"- terminal_growth_basis: {_markdown_text(assumptions.terminal_growth_basis)}",
         "",
     ]
     rows = []
@@ -157,11 +160,22 @@ def render_valuation_markdown(result: ValuationResult) -> str:
         f"- fundamentals_provider_id: {_markdown_text(metadata.fundamentals_provider_id)}",
         f"- fundamentals_source_ids: {_markdown_text(', '.join(metadata.fundamentals_source_ids))}",
         f"- data_fetch_started_at: {metadata.data_fetch_started_at.isoformat()}",
-        f"- facts_as_of: {metadata.facts_as_of.isoformat()}",
+        f"- latest_source_date: {metadata.latest_source_date.isoformat()}",
+        (
+            "- latest_source_date note: latest source date is the max of quote, "
+            "cash-flow period, and balance-sheet dates; individual fact dates are shown below."
+        ),
+        (
+            "- yfinance field mapping: reference price from currentPrice/regularMarketPrice; "
+            "shares from sharesOutstanding; raw free cash flow from Operating Cash Flow minus "
+            "Capital Expenditure; cash and debt from quarterly balance sheet fields."
+        ),
         "",
         "## Assumption Context",
         "",
         f"- schema_version: {assumptions.schema_version}",
+        f"- currency: {_markdown_text(assumptions.currency)}",
+        f"- amount_unit: {_markdown_text(assumptions.amount_unit)}",
         f"- assumption_path: {_markdown_text(assumptions.assumption_path)}",
         f"- assumption_hash: {_markdown_text(assumptions.assumption_hash)}",
         f"- assumption_source: {_markdown_text(assumptions.assumption_source)}",
@@ -219,8 +233,8 @@ def render_valuation_markdown(result: ValuationResult) -> str:
             "",
             (
                 "Normalized FCF is used as an enterprise cash-flow proxy and is not verified "
-                "unlevered FCFF. Analysts should validate or override normalized FCF before "
-                "relying on model-implied outputs."
+                "unlevered FCFF. Normalized FCF must come from assumptions, not raw provider FCF. "
+                "Raw provider FCF is OCF minus capex and remains in Raw Provider Facts only."
             ),
             "",
         ]

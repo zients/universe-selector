@@ -29,6 +29,8 @@ def _result() -> ValuationResult:
         ticker="AAPL",
         purpose="research",
         as_of=date(2026, 5, 16),
+        currency="USD",
+        amount_unit="currency_units",
         assumption_source="analyst",
         prepared_by="Universe Selector",
         source_note="Demonstration assumptions for schema validation only; not investment advice.",
@@ -50,6 +52,9 @@ def _result() -> ValuationResult:
         model_assumptions=FcfDcfV1Assumptions(
             forecast_years=5,
             terminal_method="perpetual_growth",
+            cash_flow_basis="normalized_fcf_enterprise_proxy",
+            discount_rate_basis="nominal_wacc",
+            terminal_growth_basis="nominal_perpetual_growth",
             scenario_order=("conservative", "base", "upside"),
             scenarios={
                 "conservative": ValuationScenarioAssumptions(
@@ -117,7 +122,7 @@ def _result() -> ValuationResult:
                 fundamentals_provider_id="yfinance_fundamentals",
                 fundamentals_source_ids=("yfinance", "quote", "quarterly_cash_flow", "balance_sheet"),
                 data_fetch_started_at=datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc),
-                facts_as_of=date(2026, 5, 17),
+                latest_source_date=date(2026, 5, 17),
             ),
             raw_facts=raw_facts,
             effective_inputs=effective_inputs,
@@ -167,15 +172,23 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "fundamentals_provider_id: yfinance_fundamentals" in markdown
     assert "fundamentals_source_ids: yfinance, quote, quarterly_cash_flow, balance_sheet" in markdown
     assert "data_fetch_started_at: 2026-05-17T12:00:00+00:00" in markdown
+    assert "latest_source_date: 2026-05-17" in markdown
+    assert "facts_as_of" not in markdown
+    assert "latest source date is the max of quote, cash-flow period, and balance-sheet dates" in markdown
     assert "## Assumption Context" in markdown
     assert "assumption_path: /repo/valuation_assumptions/us/AAPL.yaml" in markdown
     assert "assumption_hash: abc123" in markdown
     assert "assumption_source: analyst" in markdown
     assert "prepared_by: Universe Selector" in markdown
     assert "as_of: 2026-05-16" in markdown
+    assert "currency: USD" in markdown
+    assert "amount_unit: currency_units" in markdown
     assert "Demonstration assumptions for schema validation only; not investment advice." in markdown
     assert "forecast_years: 5" in markdown
     assert "terminal_method: perpetual_growth" in markdown
+    assert "cash_flow_basis: normalized_fcf_enterprise_proxy" in markdown
+    assert "discount_rate_basis: nominal_wacc" in markdown
+    assert "terminal_growth_basis: nominal_perpetual_growth" in markdown
     assert "| conservative | 3.00% | 10.00% | 2.00% | Lower illustrative scenario. |" in markdown
     assert "## Raw Provider Facts" in markdown
     assert "free_cash_flow" in markdown
@@ -185,7 +198,8 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "## Effective Inputs" in markdown
     assert "enterprise cash-flow proxy" in markdown
     assert "not verified unlevered FCFF" in markdown
-    assert "Analysts should validate or override normalized FCF before relying on model-implied outputs." in markdown
+    assert "Normalized FCF must come from assumptions, not raw provider FCF." in markdown
+    assert "Raw provider FCF is OCF minus capex and remains in Raw Provider Facts only." in markdown
     assert "fetch_date_fallback" in markdown
     assert "Provider quote timestamp unavailable; using fetch date." in markdown
 

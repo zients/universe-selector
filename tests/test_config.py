@@ -506,6 +506,20 @@ def test_load_config_rejects_extra_ranking_keys(monkeypatch: pytest.MonkeyPatch,
         load_config()
 
 
+def test_load_config_rejects_invalid_fundamentals_provider(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _use_config(monkeypatch, tmp_path, {"live": {"fundamentals_provider": "unknown"}})
+
+    with pytest.raises(ValidationError, match="unsupported fundamentals provider: unknown"):
+        load_config()
+
+
+def test_load_config_rejects_null_fundamentals_provider(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _use_config(monkeypatch, tmp_path, {"live": {"fundamentals_provider": None}})
+
+    with pytest.raises(ValidationError, match="live.fundamentals_provider must be a provider id"):
+        load_config()
+
+
 def test_missing_config_message_points_to_example(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
 

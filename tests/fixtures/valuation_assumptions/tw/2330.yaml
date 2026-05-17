@@ -3,6 +3,8 @@ market: TW
 ticker: 2330
 purpose: sample_schema_only
 as_of: 2026-05-17
+currency: TWD
+amount_unit: currency_units
 
 facts_overrides:
   normalized_fcf: null
@@ -24,6 +26,9 @@ models:
   fcf_dcf_v1:
     forecast_years: 5
     terminal_method: perpetual_growth
+    cash_flow_basis: normalized_fcf_enterprise_proxy
+    discount_rate_basis: nominal_wacc
+    terminal_growth_basis: nominal_perpetual_growth
     scenarios:
       conservative:
         growth_rate: 0.03

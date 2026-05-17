@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from universe_selector.domain import Market, canonical_ticker
+from universe_selector.errors import ValidationError
 from universe_selector.providers.registry import get_fundamentals_registration
 from universe_selector.valuation.assumptions import load_valuation_assumptions
 from universe_selector.valuation.models import (
@@ -31,9 +32,14 @@ def run_valuation(
         model_id=model_id,
         assumptions_path=assumptions_path,
     )
+    _validate_required_assumption_overrides(model_id, assumptions.facts_overrides)
     provider = registration.factory()
     fundamentals = provider.load_fundamentals(market, normalized_ticker)
     facts = fundamentals.facts
+    if assumptions.currency != facts.currency:
+        raise ValidationError(
+            f"assumptions currency {assumptions.currency} must match provider facts currency {facts.currency}"
+        )
 
     effective_inputs = EffectiveValuationInputs(
         normalized_fcf=_effective_value("normalized_fcf", facts.free_cash_flow, assumptions.facts_overrides),
@@ -96,6 +102,14 @@ def _effective_value(field: str, provider_value: float, overrides) -> float:
     if override is not None:
         return override
     return provider_value
+
+
+def _validate_required_assumption_overrides(model_id: str, overrides) -> None:
+    if model_id == "fcf_dcf_v1" and overrides.get("normalized_fcf") is None:
+        raise ValidationError(
+            "facts_overrides.normalized_fcf is required for fcf_dcf_v1; "
+            "raw provider free_cash_flow is not used as normalized FCF"
+        )
 
 
 def _source_for(field: str, overrides) -> str:

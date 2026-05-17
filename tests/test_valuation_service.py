@@ -33,7 +33,7 @@ class FakeFundamentalsProvider:
                 fundamentals_provider_id=self.provider_id,
                 fundamentals_source_ids=self.source_ids,
                 data_fetch_started_at=datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc),
-                facts_as_of=date(2026, 5, 15),
+                latest_source_date=date(2026, 5, 15),
             ),
             facts=self._facts,
         )
@@ -111,6 +111,13 @@ def _copy_fixture_with_overrides(tmp_path: Path) -> Path:
     return target
 
 
+def _copy_fixture_without_normalized_fcf_override(tmp_path: Path) -> Path:
+    target = tmp_path / "valuation_assumptions" / "us" / "AAPL.yaml"
+    target.parent.mkdir(parents=True)
+    shutil.copyfile(FIXTURE, target)
+    return target
+
+
 def _install_no_ranking_no_persistence_guards(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "universe_selector.config.load_config",
@@ -183,6 +190,47 @@ def test_run_valuation_loads_facts_assumptions_applies_overrides_and_calls_model
     assert result.run_input.input_provenance.net_debt_source == "provider_fact"
     assert result.run_input.input_provenance.reference_price_source == "assumption_override"
     assert result.scenario_results[0].scenario_id == "base"
+
+
+def test_run_valuation_requires_explicit_normalized_fcf_override(monkeypatch, tmp_path: Path) -> None:
+    _install_no_ranking_no_persistence_guards(monkeypatch)
+    assumptions_path = _copy_fixture_without_normalized_fcf_override(tmp_path)
+    fake_provider = FakeFundamentalsProvider(_facts())
+    fake_registration = FundamentalsProviderRegistration(
+        provider_id=fake_provider.provider_id,
+        supported_markets=frozenset({Market.US}),
+        source_ids=fake_provider.source_ids,
+        factory=lambda: fake_provider,
+    )
+    monkeypatch.setattr(
+        "universe_selector.valuation.service.get_fundamentals_registration",
+        lambda provider_id, market: fake_registration,
+    )
+
+    with pytest.raises(ValidationError, match="facts_overrides.normalized_fcf is required for fcf_dcf_v1"):
+        run_valuation(Market.US, "AAPL", "fcf_dcf_v1", assumptions_path, "fake_fundamentals")
+
+    assert fake_provider.requests == []
+
+
+def test_run_valuation_rejects_assumption_currency_mismatch(monkeypatch, tmp_path: Path) -> None:
+    _install_no_ranking_no_persistence_guards(monkeypatch)
+    assumptions_path = _copy_fixture_with_overrides(tmp_path)
+    assumptions_path.write_text(assumptions_path.read_text().replace("currency: USD", "currency: TWD"))
+    fake_provider = FakeFundamentalsProvider(_facts())
+    fake_registration = FundamentalsProviderRegistration(
+        provider_id=fake_provider.provider_id,
+        supported_markets=frozenset({Market.US}),
+        source_ids=fake_provider.source_ids,
+        factory=lambda: fake_provider,
+    )
+    monkeypatch.setattr(
+        "universe_selector.valuation.service.get_fundamentals_registration",
+        lambda provider_id, market: fake_registration,
+    )
+
+    with pytest.raises(ValidationError, match="assumptions currency TWD must match provider facts currency USD"):
+        run_valuation(Market.US, "AAPL", "fcf_dcf_v1", assumptions_path, "fake_fundamentals")
 
 
 def test_run_valuation_uses_default_assumptions_path(monkeypatch, tmp_path: Path) -> None:
