@@ -6,20 +6,25 @@ import universe_selector.providers as providers
 from universe_selector.config import AppConfig
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
-from universe_selector.providers.base import ListingProvider, OhlcvProvider
+from universe_selector.providers.base import FundamentalsProvider, ListingProvider, OhlcvProvider
 from universe_selector.providers.nasdaq_trader import (
     NASDAQ_TRADER_LISTING_REGISTRATION,
     NasdaqTraderListingProvider,
 )
 from universe_selector.providers.registration import (
+    FundamentalsProviderRegistration,
     ListingProviderRegistration,
     OhlcvProviderRegistration,
+    build_fundamentals_provider_registration_map,
     build_listing_provider_registration_map,
     build_ohlcv_provider_registration_map,
 )
 from universe_selector.providers.registry import (
+    get_fundamentals_provider_registration,
+    get_fundamentals_registration,
     get_listing_registration,
     get_ohlcv_registration,
+    supported_fundamentals_provider_ids,
     supported_listing_provider_ids,
     supported_ohlcv_provider_ids,
 )
@@ -31,11 +36,13 @@ from universe_selector.providers.yfinance_ohlcv import YFINANCE_OHLCV_REGISTRATI
 
 
 def test_provider_adapter_contracts_live_in_base_module() -> None:
+    assert FundamentalsProvider.__module__ == "universe_selector.providers.base"
     assert ListingProvider.__module__ == "universe_selector.providers.base"
     assert OhlcvProvider.__module__ == "universe_selector.providers.base"
 
 
 def test_providers_package_root_exposes_registration_contracts() -> None:
+    assert providers.FundamentalsProviderRegistration is FundamentalsProviderRegistration
     assert providers.ListingProviderRegistration is ListingProviderRegistration
     assert providers.OhlcvProviderRegistration is OhlcvProviderRegistration
 
@@ -50,8 +57,13 @@ def test_provider_modules_own_their_registrations() -> None:
 
 
 def test_provider_registration_maps_are_immutable() -> None:
+    fundamentals_registration = get_fundamentals_registration("yfinance_fundamentals", Market.US)
+    fundamentals_map = build_fundamentals_provider_registration_map((fundamentals_registration,))
     listing_map = build_listing_provider_registration_map((NASDAQ_TRADER_LISTING_REGISTRATION,))
     ohlcv_map = build_ohlcv_provider_registration_map((YFINANCE_OHLCV_REGISTRATION,))
+
+    with pytest.raises(TypeError):
+        fundamentals_map["probe"] = fundamentals_registration
 
     with pytest.raises(TypeError):
         listing_map["probe"] = NASDAQ_TRADER_LISTING_REGISTRATION
@@ -61,6 +73,10 @@ def test_provider_registration_maps_are_immutable() -> None:
 
 
 def test_provider_registration_maps_reject_duplicate_provider_ids() -> None:
+    fundamentals_registration = get_fundamentals_registration("yfinance_fundamentals", Market.US)
+    with pytest.raises(ValueError, match="duplicate fundamentals provider registration yfinance_fundamentals"):
+        build_fundamentals_provider_registration_map((fundamentals_registration, fundamentals_registration))
+
     with pytest.raises(ValueError, match="duplicate listing provider registration nasdaq_trader"):
         build_listing_provider_registration_map(
             (NASDAQ_TRADER_LISTING_REGISTRATION, NASDAQ_TRADER_LISTING_REGISTRATION)
@@ -71,6 +87,7 @@ def test_provider_registration_maps_reject_duplicate_provider_ids() -> None:
 
 
 def test_provider_registrations_have_specific_types() -> None:
+    assert isinstance(get_fundamentals_registration("yfinance_fundamentals", Market.US), FundamentalsProviderRegistration)
     assert isinstance(get_listing_registration("nasdaq_trader", Market.US), ListingProviderRegistration)
     assert isinstance(get_listing_registration("twse_isin", Market.TW), ListingProviderRegistration)
     assert isinstance(get_ohlcv_registration("yfinance"), OhlcvProviderRegistration)
@@ -149,3 +166,27 @@ def test_listing_provider_registered_for_other_market_reports_supported_ids() ->
 def test_unknown_ohlcv_provider_id_reports_supported_ids() -> None:
     with pytest.raises(ValidationError, match="yfinance"):
         get_ohlcv_registration("unknown")
+
+
+def test_fundamentals_provider_registry_exposes_yfinance_for_us_and_tw() -> None:
+    assert supported_fundamentals_provider_ids(Market.US) == ("yfinance_fundamentals",)
+    assert supported_fundamentals_provider_ids(Market.TW) == ("yfinance_fundamentals",)
+
+    id_registration = get_fundamentals_provider_registration("yfinance_fundamentals")
+    registration = get_fundamentals_registration("yfinance_fundamentals", Market.US)
+    tw_registration = get_fundamentals_registration("yfinance_fundamentals", Market.TW)
+
+    assert id_registration is registration
+    assert tw_registration is registration
+    assert registration.provider_id == "yfinance_fundamentals"
+    assert registration.supported_markets == frozenset({Market.US, Market.TW})
+    assert registration.source_ids == ("yahoo-finance:yfinance-ticker",)
+    assert callable(registration.factory)
+
+
+def test_fundamentals_provider_registry_rejects_unsupported_market_and_provider() -> None:
+    with pytest.raises(ValidationError, match="unsupported fundamentals provider: unknown"):
+        get_fundamentals_provider_registration("unknown")
+
+    with pytest.raises(ValidationError, match="unsupported fundamentals provider for US: unknown"):
+        get_fundamentals_registration("unknown", Market.US)

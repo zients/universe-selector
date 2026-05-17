@@ -9,7 +9,13 @@ import yaml
 
 import universe_selector.config as config_module
 import universe_selector.ranking_profiles as ranking_profiles
-from universe_selector.config import AppConfig, canonical_json, ensure_runtime_dirs, load_config
+from universe_selector.config import (
+    AppConfig,
+    canonical_json,
+    ensure_runtime_dirs,
+    load_config,
+    load_live_fundamentals_provider_id,
+)
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.ranking_profiles import (
@@ -60,6 +66,7 @@ COMPLETE_CONFIG: dict[str, object] = {
             "TW": "twse_isin",
         },
         "ohlcv_provider": "yfinance",
+        "fundamentals_provider": "yfinance_fundamentals",
         "ticker_limit": None,
         "yfinance": {
             "batch_size": 200,
@@ -121,7 +128,20 @@ def test_app_config_defaults_to_sample_price_trend_profile() -> None:
 
     assert isinstance(profile, SamplePriceTrendV1Profile)
     assert profile.profile_id == SAMPLE_PRICE_TREND_PROFILE_ID
+    assert config.live_fundamentals_provider == "yfinance_fundamentals"
     assert config.ranking_config_payload() == profile.ranking_config_payload()
+
+
+def test_load_live_fundamentals_provider_id_reads_minimal_value_config(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        """
+live:
+  fundamentals_provider: yfinance_fundamentals
+""".lstrip()
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert load_live_fundamentals_provider_id() == "yfinance_fundamentals"
 
 
 def test_sample_price_trend_profile_public_api_and_payload() -> None:
@@ -504,6 +524,20 @@ def test_load_config_rejects_extra_ranking_keys(monkeypatch: pytest.MonkeyPatch,
         load_config()
 
 
+def test_load_config_rejects_invalid_fundamentals_provider(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _use_config(monkeypatch, tmp_path, {"live": {"fundamentals_provider": "unknown"}})
+
+    with pytest.raises(ValidationError, match="unsupported fundamentals provider: unknown"):
+        load_config()
+
+
+def test_load_config_rejects_null_fundamentals_provider(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _use_config(monkeypatch, tmp_path, {"live": {"fundamentals_provider": None}})
+
+    with pytest.raises(ValidationError, match="live.fundamentals_provider must be a provider id"):
+        load_config()
+
+
 def test_missing_config_message_points_to_example(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
 
@@ -530,3 +564,11 @@ def test_provider_config_hash_changes_when_live_provider_config_changes() -> Non
 
     assert default.provider_config_hash() != limited.provider_config_hash()
     assert config_module.DEFAULT_CONFIG_PATH == "config.yaml"
+
+
+def test_valuation_fundamentals_provider_is_not_part_of_batch_provider_hash() -> None:
+    default = AppConfig()
+    alternate_valuation_provider = AppConfig(live_fundamentals_provider="other_fundamentals")
+
+    assert default.provider_config_hash() == alternate_valuation_provider.provider_config_hash()
+    assert "fundamentals_provider" not in default.provider_config_payload()

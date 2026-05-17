@@ -37,3 +37,44 @@ class ProviderRunData:
     metadata: ProviderMetadata
     listings: list[ListingCandidate]
     bars: pl.DataFrame
+
+
+@dataclass(frozen=True)
+class FundamentalsMetadata:
+    data_mode: str
+    fundamentals_provider_id: str
+    fundamentals_source_ids: tuple[str, ...]
+    data_fetch_started_at: datetime
+    latest_source_date: date
+    source_risk_note: str = (
+        "Provider data may be stale, incomplete, restated, mapped inconsistently, "
+        "or unavailable. Facts should be independently verified before research use."
+    )
+    field_mapping_note: str | None = None
+
+
+@dataclass(frozen=True)
+class FundamentalFacts:
+    market: Market
+    ticker: str
+    currency: str
+    reference_price: float
+    reference_price_as_of: date
+    reference_price_as_of_source: str
+    reference_price_as_of_note: str | None
+    shares_outstanding: float
+    cash_and_cash_equivalents: float
+    total_debt: float
+    balance_sheet_as_of: date
+    net_debt: float
+    operating_cash_flow: float
+    capital_expenditures: float
+    free_cash_flow: float
+    fiscal_period_end: date
+    fiscal_period_type: str
+
+
+@dataclass(frozen=True)
+class FundamentalsRunData:
+    metadata: FundamentalsMetadata
+    facts: FundamentalFacts

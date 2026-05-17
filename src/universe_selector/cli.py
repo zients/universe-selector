@@ -2,19 +2,23 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 from typing import Annotated, TypeVar
 
 import typer
 
-from universe_selector.config import AppConfig, load_config
+from universe_selector.config import AppConfig, load_config, load_live_fundamentals_provider_id
 from universe_selector.domain import Market, canonical_market, canonical_ticker
 from universe_selector.errors import NotFoundError, UniverseSelectorError, ValidationError
 from universe_selector.identifiers import parse_run_id
 from universe_selector.output.inspect import render_inspect
+from universe_selector.output.value import render_value_markdown as render_valuation_markdown
 from universe_selector.persistence.repository import DuckDbRepository, ResolvedRun
 from universe_selector.persistence.schema import validate_schema
 from universe_selector.pipeline import BatchResult, MultiProfileBatchError, run_batch, run_batch_profiles
 from universe_selector.ranking_profiles import get_ranking_profile
+from universe_selector.valuation.registry import get_valuation_model
+from universe_selector.valuation.service import run_valuation
 
 
 app = typer.Typer(no_args_is_help=True)
@@ -253,5 +257,35 @@ def inspect(
             ),
             nl=False,
         )
+
+    _guard(action)
+
+
+@app.command()
+def value(
+    market: Annotated[str, typer.Argument()],
+    ticker: Annotated[str, typer.Option("--ticker")],
+    model: Annotated[
+        str | None,
+        typer.Option(
+            "--model",
+            help="Valuation model override. When omitted, uses the assumptions YAML default_model.",
+        ),
+    ] = None,
+    assumptions: Annotated[Path | None, typer.Option("--assumptions")] = None,
+) -> None:
+    def action() -> None:
+        resolved_market = canonical_market(market)
+        normalized_ticker = canonical_ticker(ticker)
+        if model is not None:
+            get_valuation_model(model)
+        result = run_valuation(
+            market=resolved_market,
+            ticker=normalized_ticker,
+            model_id=model,
+            assumptions_path=assumptions,
+            fundamentals_provider_id=load_live_fundamentals_provider_id(),
+        )
+        typer.echo(render_valuation_markdown(result), nl=False)
 
     _guard(action)

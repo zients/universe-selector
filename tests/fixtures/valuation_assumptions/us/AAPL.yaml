@@ -1,0 +1,53 @@
+schema_version: 1
+market: US
+ticker: AAPL
+default_model: fcf_dcf_v1
+purpose: sample_schema_only
+as_of: 2026-05-17
+currency: USD
+amount_unit: currency_units
+
+facts_overrides:
+  shares_outstanding: null
+  net_debt: null
+  reference_price: null
+
+facts_override_notes:
+  shares_outstanding: null
+  net_debt: null
+  reference_price: null
+
+assumption_source: demo_template
+prepared_by: universe-selector maintainers
+source_note: Demonstration assumptions for schema validation only; not investment advice.
+
+models:
+  fcf_dcf_v1:
+    forecast_years: 5
+    terminal_method: perpetual_growth
+    starting_fcf:
+      # method options:
+      # - provider_ttm_fcf: use provider raw TTM or annual FCF as the starting proxy.
+      # - override: use analyst-supplied FCF from value/note below.
+      method: provider_ttm_fcf
+      # Required only when method: override.
+      # value: 100000000000
+      # note: Adjusted for one-time working capital movement.
+    discount_rate_basis: nominal_wacc
+    terminal_growth_basis: nominal_perpetual_growth
+    scenarios:
+      conservative:
+        growth_rate: 0.03
+        discount_rate: 0.10
+        terminal_growth_rate: 0.02
+        note: Lower illustrative growth and higher illustrative discount rate.
+      base:
+        growth_rate: 0.05
+        discount_rate: 0.09
+        terminal_growth_rate: 0.025
+        note: Middle illustrative scenario; not a target case or recommendation.
+      upside:
+        growth_rate: 0.07
+        discount_rate: 0.085
+        terminal_growth_rate: 0.03
+        note: Higher illustrative growth and lower illustrative discount rate.

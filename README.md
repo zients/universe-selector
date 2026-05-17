@@ -17,6 +17,7 @@ This project is an alpha-stage research tool. It is not investment advice.
 - Public alpha quality.
 - Command-line interface only.
 - Supported markets: `US` and `TW`.
+- Valuation command: `value` uses yfinance fundamentals for `US` and `TW` in v1.
 - Runtime config source: `config.yaml` in the current working directory.
 - Default example ranking profile: `sample_price_trend_v1`.
 - Supported ranking profiles: `sample_price_trend_v1`, `momentum_v1`,
@@ -26,7 +27,7 @@ This project is an alpha-stage research tool. It is not investment advice.
 
 ## What It Does
 
-The CLI has three command families:
+The CLI has four command families:
 
 - `batch MARKET`: fetch provider data, run one or more ranking profiles, persist
   each run, and render report artifacts.
@@ -38,8 +39,11 @@ The CLI has three command families:
   profile, or for a `--ranking-profile` override.
 - `inspect --run-id RUN_ID --ticker TICKER`: inspect one ticker from one explicit
   persisted successful run.
+- `value MARKET --ticker TICKER`: run a live ephemeral single-ticker valuation
+  analysis and print markdown to stdout.
 
 `report` and `inspect` read persisted results. They do not recompute a batch run.
+`value` does not read or write persisted ranking runs.
 
 ## Architecture
 
@@ -47,6 +51,12 @@ The runtime flow is intentionally small and explicit:
 
 ```text
 config.yaml -> provider -> ranking profile -> DuckDB -> report / inspect
+```
+
+Valuation is intentionally separate from ranking persistence:
+
+```text
+valuation_assumptions/{market}/{ticker}.yaml + fundamentals provider -> valuation model -> stdout
 ```
 
 - `config.py` loads `config.yaml`, validates provider/profile IDs, and computes
@@ -61,13 +71,22 @@ config.yaml -> provider -> ranking profile -> DuckDB -> report / inspect
 - `persistence/` owns DuckDB migrations and read/write access for run logs,
   provider metadata, ticker snapshots, rankings, and report artifacts.
 - `output/` renders markdown reports and per-ticker inspect output from persisted
-  data.
-- `cli.py` is the Typer command layer for `batch`, `report`, and `inspect`.
+  data, plus thin command output adapters.
+- `valuation/` owns valuation assumptions, model logic, orchestration, and
+  valuation markdown output.
+- `cli.py` is the Typer command layer for `batch`, `report`, `inspect`, and
+  `value`.
 
-`batch` is the only command that fetches data or computes rankings. `report` and
+`batch` is the only command that computes and persists ranking runs. `report` and
 `inspect` resolve a persisted successful run, then read DuckDB. This keeps output
 reproducible for a specific run and prevents report rendering from silently
 changing when provider data changes later.
+
+`value` fetches fundamentals for valuation separately from ranking runs.
+
+batch remains the only command that computes persisted rankings. `report` and
+`inspect` still only read persisted ranking runs. `value` is a live ephemeral
+single-ticker valuation analysis and is not persisted in v1.
 
 When `batch` receives more than one `--ranking-profile`, provider data is loaded
 once and then reused for each selected profile. Each profile is persisted as a
@@ -137,6 +156,7 @@ live:
     US: nasdaq_trader
     TW: twse_isin
   ohlcv_provider: yfinance
+  fundamentals_provider: yfinance_fundamentals
   ticker_limit: null
   yfinance:
     batch_size: 200
@@ -219,6 +239,49 @@ uv run universe-selector inspect --run-id us-00000000-0000-4000-8000-00000000000
 
 `--run-id` reads one persisted run directly. Do not combine it with
 `--ranking-profile`; the run already records its ranking profile.
+
+Run an ephemeral valuation analysis:
+
+```bash
+uv run universe-selector value us --ticker AAPL
+uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1
+uv run universe-selector value us --ticker AAPL \
+  --assumptions valuation_assumptions/us/AAPL.yaml
+uv run universe-selector value tw --ticker 2330 \
+  --assumptions valuation_assumptions/tw/2330.yaml
+```
+
+`value` v1 prints markdown only. It requires `config.yaml` only for selecting
+`live.fundamentals_provider`, does not read DuckDB, and does not persist the result.
+The default assumptions path is
+`valuation_assumptions/{market}/{ticker}.yaml`; the committed
+`valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml`
+are sample schemas only and are not investment advice. Each valuation assumptions
+file declares a root `default_model`; `value` uses the assumptions file
+`default_model` when `--model` is omitted. `--model` explicitly overrides the
+assumptions file default model. Assumption schema `1` requires root
+`default_model`. The committed valuation assumption files are repository
+templates; installed wheels do not copy them into your working directory. Create
+your own assumptions file in the working directory or pass `--assumptions`.
+
+`fcf_dcf_v1` uses `models.fcf_dcf_v1.starting_fcf` to choose the DCF starting
+FCF. The committed templates default to `starting_fcf.method: provider_ttm_fcf`,
+which uses provider raw FCF as a starting proxy so the command can run directly.
+Set `starting_fcf.method: override` with `value` and `note` when using an
+analyst-normalized FCF.
+
+`fcf_dcf_v1` is a simplified free-cash-flow DCF model. It uses starting FCF as
+an enterprise cash-flow proxy, not verified unlevered FCFF, and computes
+model-implied scenario results against a reference price. Results are highly
+sensitive to starting FCF, share count, discount rate, terminal growth, and
+terminal value assumptions. Scenarios are illustrative and are not forecasts,
+expected outcomes, target cases, or recommendations.
+
+`value` uses yfinance fundamentals for v1 `US` and `TW` live facts. TW tickers
+default to the yfinance `.TW` request suffix. yfinance fundamentals are
+third-party convenience data and may be stale, incomplete, restated, mapped
+inconsistently, or unavailable. Independently verify provider facts and validate
+or override assumptions before relying on model-implied outputs.
 
 ## Ranking Profiles
 

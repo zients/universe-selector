@@ -11,7 +11,11 @@ import yaml
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
-from universe_selector.providers.registry import get_listing_registration, get_ohlcv_registration
+from universe_selector.providers.registry import (
+    get_fundamentals_provider_registration,
+    get_listing_registration,
+    get_ohlcv_registration,
+)
 from universe_selector.ranking_profiles import RankingProfile, get_ranking_profile
 
 
@@ -29,6 +33,7 @@ _REQUIRED_CONFIG_KEYS = (
     "live.listing_provider.US",
     "live.listing_provider.TW",
     "live.ohlcv_provider",
+    "live.fundamentals_provider",
     "live.ticker_limit",
     "live.yfinance",
     "live.yfinance.batch_size",
@@ -65,6 +70,7 @@ class AppConfig:
         default_factory=lambda: {Market.US: "nasdaq_trader", Market.TW: "twse_isin"}
     )
     live_ohlcv_provider: str = "yfinance"
+    live_fundamentals_provider: str = "yfinance_fundamentals"
     live_ticker_limit: int | None = None
     live_yfinance_batch_size: int = 200
 
@@ -94,6 +100,10 @@ class AppConfig:
             report_top_n=int(report["top_n"]),
             live_listing_provider={market: str(listing_provider[market.value]) for market in Market},
             live_ohlcv_provider=str(live["ohlcv_provider"]),
+            live_fundamentals_provider=_parse_provider_id(
+                live["fundamentals_provider"],
+                label="live.fundamentals_provider",
+            ),
             live_ticker_limit=_parse_live_ticker_limit(live["ticker_limit"], label="live.ticker_limit"),
             live_yfinance_batch_size=_parse_positive_int(
                 yfinance["batch_size"],
@@ -112,6 +122,7 @@ class AppConfig:
         for market in Market:
             get_listing_registration(self.live_listing_provider[market], market)
         get_ohlcv_registration(self.live_ohlcv_provider)
+        get_fundamentals_provider_registration(self.live_fundamentals_provider)
         _parse_live_ticker_limit(self.live_ticker_limit, label="live.ticker_limit")
         _parse_positive_int(self.live_yfinance_batch_size, label="live.yfinance.batch_size")
 
@@ -160,6 +171,12 @@ def _parse_live_ticker_limit(value: object, *, label: str) -> int | None:
     raise ValidationError(f"{label} must be null or a positive integer")
 
 
+def _parse_provider_id(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValidationError(f"{label} must be a provider id")
+    return value
+
+
 def _parse_positive_int(value: object, *, label: str) -> int:
     if isinstance(value, bool):
         raise ValidationError(f"{label} must be a positive integer")
@@ -204,6 +221,30 @@ def _validate_required_config_key(data: dict[str, Any], key: str) -> None:
 
 
 def load_config() -> AppConfig:
+    loaded = _load_config_mapping()
+    _validate_required_config_keys(loaded)
+
+    config = AppConfig.from_mapping(loaded)
+    config.validate()
+    return config
+
+
+def load_live_fundamentals_provider_id() -> str:
+    loaded = _load_config_mapping()
+    live = loaded.get("live")
+    if not isinstance(live, dict):
+        raise ValidationError("config key live must be a mapping")
+    if "fundamentals_provider" not in live:
+        raise ValidationError("config missing required key: live.fundamentals_provider")
+    provider_id = _parse_provider_id(
+        live["fundamentals_provider"],
+        label="live.fundamentals_provider",
+    )
+    get_fundamentals_provider_registration(provider_id)
+    return provider_id
+
+
+def _load_config_mapping() -> dict[str, Any]:
     config_path = Path(DEFAULT_CONFIG_PATH)
     if not config_path.exists():
         raise ValidationError(_missing_config_message())
@@ -211,11 +252,7 @@ def load_config() -> AppConfig:
     loaded = yaml.safe_load(config_path.read_text())
     if not isinstance(loaded, dict):
         raise ValidationError("YAML config root must be a mapping")
-    _validate_required_config_keys(loaded)
-
-    config = AppConfig.from_mapping(loaded)
-    config.validate()
-    return config
+    return loaded
 
 
 def ensure_runtime_dirs(config: AppConfig) -> None:
