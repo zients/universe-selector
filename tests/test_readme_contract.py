@@ -29,7 +29,11 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1" in text
     assert "`value` uses the assumptions file `default_model` when `--model` is omitted" in normalized
     assert "`--model` explicitly overrides the assumptions file default model" in normalized
-    assert "Assumption schema `1` requires root `default_model`." in normalized
+    assert (
+        "Assumption schema `1` requires root `default_model`, "
+        "`share_basis: ordinary_share`, and a non-empty `valuation_basis_note`."
+    ) in normalized
+    assert "The basis note is rendered in Assumption Context" in normalized
     assert "--assumptions valuation_assumptions/us/AAPL.yaml" in text
     assert "uv run universe-selector value tw --ticker 2330" in text
     assert "--assumptions valuation_assumptions/tw/2330.yaml" in text

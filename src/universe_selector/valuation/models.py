@@ -59,6 +59,10 @@ class ValuationAssumptionSet:
     facts_override_notes: Mapping[str, str | None]
     model_id: str
     model_assumptions: object
+    share_basis: str = "ordinary_share"
+    valuation_basis_note: str = (
+        "Uses ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied."
+    )
 
 
 @dataclass(frozen=True)

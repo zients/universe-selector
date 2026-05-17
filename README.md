@@ -260,9 +260,12 @@ are sample schemas only and are not investment advice. Each valuation assumption
 file declares a root `default_model`; `value` uses the assumptions file
 `default_model` when `--model` is omitted. `--model` explicitly overrides the
 assumptions file default model. Assumption schema `1` requires root
-`default_model`. The committed valuation assumption files are repository
-templates; installed wheels do not copy them into your working directory. Create
-your own assumptions file in the working directory or pass `--assumptions`.
+`default_model`, `share_basis: ordinary_share`, and a non-empty
+`valuation_basis_note`. The basis note is rendered in Assumption Context with
+the same markdown escaping and prohibited-term redaction as other assumption
+text. The committed valuation assumption files are repository templates;
+installed wheels do not copy them into your working directory. Create your own
+assumptions file in the working directory or pass `--assumptions`.
 
 `fcf_dcf_v1` uses `models.fcf_dcf_v1.starting_fcf` to choose the DCF starting
 FCF. The committed templates default to `starting_fcf.method: provider_ttm_fcf`,

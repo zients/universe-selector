@@ -6,6 +6,8 @@ purpose: sample_schema_only
 as_of: 2026-05-17
 currency: TWD
 amount_unit: currency_units
+share_basis: ordinary_share
+valuation_basis_note: Uses TWD ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied.
 
 facts_overrides:
   shares_outstanding: null
