@@ -47,8 +47,25 @@ def _format_money(value: float, currency: str) -> str:
     return compact
 
 
+def _format_money_precise(value: float, currency: str, decimals: int = 4) -> str:
+    precise = f"{value:.{decimals}f}"
+    currency_code = _sanitize_text(currency.upper())
+    if currency_code == "USD":
+        return f"${precise}"
+    if currency_code:
+        return f"{currency_code} {precise}"
+    return precise
+
+
 def _format_number(value: float) -> str:
     return _compact_number(value)
+
+
+def _format_multiple(value: float) -> str:
+    text = f"{value:.4f}".rstrip("0").rstrip(".")
+    if "." not in text:
+        text = f"{text}.0"
+    return f"{text}x"
 
 
 def _format_pct(value: float) -> str:

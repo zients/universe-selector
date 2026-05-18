@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
+from types import MappingProxyType
 
 from universe_selector.domain import Market
 from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
+
+
+def _empty_model_metrics() -> Mapping[str, float]:
+    return MappingProxyType({})
 
 
 @dataclass(frozen=True)
@@ -36,6 +41,51 @@ class FcfDcfV1Assumptions:
 
 
 @dataclass(frozen=True)
+class ReverseDcfScenarioAssumptions:
+    scenario_id: str
+    discount_rate: float
+    terminal_growth_rate: float
+    implied_growth_lower_bound: float
+    implied_growth_upper_bound: float
+    note: str
+
+
+@dataclass(frozen=True)
+class ReverseDcfV1Assumptions:
+    forecast_years: int
+    terminal_method: str
+    starting_fcf: StartingFcfAssumption
+    discount_rate_basis: str
+    terminal_growth_basis: str
+    implied_growth_basis: str
+    solver_abs_tolerance: float
+    solver_max_iterations: int
+    scenario_order: tuple[str, ...]
+    scenarios: Mapping[str, ReverseDcfScenarioAssumptions]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scenarios", MappingProxyType(dict(self.scenarios)))
+
+
+@dataclass(frozen=True)
+class MultipleValuationScenarioAssumptions:
+    scenario_id: str
+    ev_to_fcf_multiple: float
+    note: str
+
+
+@dataclass(frozen=True)
+class MultipleValuationV1Assumptions:
+    starting_fcf: StartingFcfAssumption
+    multiple_basis: str
+    scenario_order: tuple[str, ...]
+    scenarios: Mapping[str, MultipleValuationScenarioAssumptions]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scenarios", MappingProxyType(dict(self.scenarios)))
+
+
+@dataclass(frozen=True)
 class ValuationAssumptionSet:
     schema_version: int
     market: Market
@@ -54,6 +104,10 @@ class ValuationAssumptionSet:
     facts_override_notes: Mapping[str, str | None]
     model_id: str
     model_assumptions: object
+    share_basis: str = "ordinary_share"
+    valuation_basis_note: str = (
+        "Uses ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied."
+    )
 
 
 @dataclass(frozen=True)
@@ -115,6 +169,10 @@ class ValuationScenarioResult:
     model_implied_value_per_share: float
     reference_price: float
     model_implied_spread_to_reference_price: float
+    model_metrics: Mapping[str, float] = field(default_factory=_empty_model_metrics)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "model_metrics", MappingProxyType(dict(self.model_metrics)))
 
 
 @dataclass(frozen=True)

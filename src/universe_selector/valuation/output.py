@@ -80,6 +80,8 @@ def render_valuation_markdown(result: ValuationResult) -> str:
             f"- default_model: {_markdown_text(assumptions.default_model)}",
             f"- currency: {_markdown_text(assumptions.currency)}",
             f"- amount_unit: {_markdown_text(assumptions.amount_unit)}",
+            f"- share_basis: {_markdown_text(assumptions.share_basis)}",
+            f"- valuation_basis_note: {_markdown_text(assumptions.valuation_basis_note)}",
             f"- assumption_path: {_markdown_text(assumptions.assumption_path)}",
             f"- assumption_hash: {_markdown_text(assumptions.assumption_hash)}",
             f"- assumption_source: {_markdown_text(assumptions.assumption_source)}",

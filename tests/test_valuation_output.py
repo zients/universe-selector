@@ -36,6 +36,8 @@ def _result() -> ValuationResult:
         as_of=date(2026, 5, 16),
         currency="USD",
         amount_unit="currency_units",
+        share_basis="ordinary_share",
+        valuation_basis_note="Uses USD ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied.",
         assumption_source="analyst",
         prepared_by="Universe Selector",
         source_note="Demonstration assumptions for schema validation only; not investment advice.",
@@ -197,6 +199,11 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "as_of: 2026-05-16" in markdown
     assert "currency: USD" in markdown
     assert "amount_unit: currency_units" in markdown
+    assert "share_basis: ordinary_share" in markdown
+    assert (
+        "valuation_basis_note: Uses USD ordinary-share basis; no ADR ratio, "
+        "board-lot, or currency adjustment is applied."
+    ) in markdown
     assert "Demonstration assumptions for schema validation only; not investment advice." in markdown
     assert "forecast_years: 5" in markdown
     assert "terminal_method: perpetual_growth" in markdown
@@ -303,6 +310,7 @@ def test_render_valuation_redacts_prohibited_free_text_and_escapes_markdown_tabl
     assumptions = replace(
         result.run_input.assumptions,
         source_note="sell | fair value\nsource line",
+        valuation_basis_note="buy | target price\nbasis line",
         model_assumptions=replace(model_assumptions, scenarios=scenarios),
     )
     raw_facts = replace(
@@ -343,6 +351,7 @@ def test_render_valuation_redacts_prohibited_free_text_and_escapes_markdown_tabl
     assert "\\|" in markdown
     assert "[redacted] \\| [redacted] second line" in markdown
     assert "[redacted] \\| [redacted] source line" in markdown
+    assert "[redacted] \\| [redacted] basis line" in markdown
     assert "[redacted] \\| [redacted] provider line" in markdown
     assert "[redacted] \\| [redacted] provenance line" in markdown
 
@@ -456,6 +465,33 @@ for module_name in (
     "universe_selector.providers",
     "universe_selector.providers.models",
     "universe_selector.providers.registry",
+):
+    assert module_name not in sys.modules, module_name
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_valuation_output_sections_import_does_not_import_provider_registry() -> None:
+    root = Path(__file__).resolve().parents[1]
+    script = """
+import sys
+import universe_selector.valuation.output_sections
+for module_name in (
+    "universe_selector.output.report",
+    "universe_selector.config",
+    "universe_selector.providers",
+    "universe_selector.providers.models",
+    "universe_selector.providers.registry",
+    "universe_selector.valuation.registry",
 ):
     assert module_name not in sys.modules, module_name
 """

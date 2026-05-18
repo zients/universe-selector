@@ -27,9 +27,20 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "`value` fetches fundamentals for valuation separately from ranking runs." in normalized
     assert "uv run universe-selector value us --ticker AAPL" in text
     assert "uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1" in text
+    assert "uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1" in text
+    assert "uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1" in text
     assert "`value` uses the assumptions file `default_model` when `--model` is omitted" in normalized
     assert "`--model` explicitly overrides the assumptions file default model" in normalized
-    assert "Assumption schema `1` requires root `default_model`." in normalized
+    assert "Supported valuation models are `fcf_dcf_v1`, `reverse_dcf_v1`, and `multiple_valuation_v1`." in normalized
+    assert "`reverse_dcf_v1` solves the explicit-period FCF growth" in normalized
+    assert "`multiple_valuation_v1` applies analyst-supplied EV / FCF multiples" in normalized
+    assert "Assumptions YAML may omit supported model blocks that are not selected" in normalized
+    assert "present supported model blocks are validated even when unselected" in normalized
+    assert (
+        "Assumption schema `1` requires root `default_model`, "
+        "`share_basis: ordinary_share`, and a non-empty `valuation_basis_note`."
+    ) in normalized
+    assert "The basis note is rendered in Assumption Context" in normalized
     assert "--assumptions valuation_assumptions/us/AAPL.yaml" in text
     assert "uv run universe-selector value tw --ticker 2330" in text
     assert "--assumptions valuation_assumptions/tw/2330.yaml" in text
@@ -50,3 +61,4 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "uses provider raw FCF as a starting proxy so the command can run directly" in normalized
     assert "model-implied scenario results" in normalized
     assert "not forecasts, expected outcomes, target cases, or recommendations" in normalized
+    assert "TW valuation templates use TWD ordinary-share basis with no ADR-ratio, board-lot, or currency adjustment" in normalized

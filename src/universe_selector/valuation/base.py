@@ -34,6 +34,8 @@ class ValuationModel(Protocol):
 
 
 class ValuationOutputRenderer(Protocol):
+    model_id: str
+
     def render_risk_disclosures(self, result: ValuationResult) -> list[str]:
         raise NotImplementedError
 

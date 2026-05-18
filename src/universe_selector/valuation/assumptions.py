@@ -13,7 +13,7 @@ import yaml
 from universe_selector.domain import Market, canonical_ticker
 from universe_selector.errors import ValidationError
 from universe_selector.valuation.models import ValuationAssumptionSet
-from universe_selector.valuation.registry import get_valuation_model
+from universe_selector.valuation.registry import get_valuation_model, supported_valuation_model_ids
 
 
 _ROOT_KEYS = frozenset(
@@ -26,6 +26,8 @@ _ROOT_KEYS = frozenset(
         "as_of",
         "currency",
         "amount_unit",
+        "share_basis",
+        "valuation_basis_note",
         "facts_overrides",
         "facts_override_notes",
         "assumption_source",
@@ -44,6 +46,8 @@ _REQUIRED_ROOT_KEYS = frozenset(
         "as_of",
         "currency",
         "amount_unit",
+        "share_basis",
+        "valuation_basis_note",
         "assumption_source",
         "prepared_by",
         "source_note",
@@ -55,6 +59,14 @@ _FACT_OVERRIDE_KEYS = ("shares_outstanding", "net_debt", "reference_price")
 
 def default_assumptions_path(market: Market, ticker: str) -> Path:
     return Path("valuation_assumptions") / market.value.lower() / f"{canonical_ticker(ticker)}.yaml"
+
+
+def _get_valuation_model(model_id: str):
+    return get_valuation_model(model_id)
+
+
+def _supported_valuation_model_ids() -> tuple[str, ...]:
+    return supported_valuation_model_ids()
 
 
 def load_valuation_assumptions(
@@ -98,6 +110,8 @@ def load_valuation_assumptions(
     as_of = _parse_date(payload["as_of"], "as_of")
     currency = _parse_currency(payload["currency"])
     amount_unit = _parse_amount_unit(payload["amount_unit"])
+    share_basis = _parse_share_basis(payload["share_basis"])
+    valuation_basis_note = _require_non_empty_str(payload["valuation_basis_note"], "valuation_basis_note")
     assumption_source = _require_non_empty_str(payload["assumption_source"], "assumption_source")
     prepared_by = _require_non_empty_str(payload["prepared_by"], "prepared_by")
     source_note = _require_non_empty_str(payload["source_note"], "source_note")
@@ -115,18 +129,36 @@ def load_valuation_assumptions(
     models = payload["models"]
     if not isinstance(models, Mapping):
         raise ValidationError("models must be a mapping")
-    if default_model not in models:
-        raise ValidationError("default_model must exist in models")
-    get_valuation_model(default_model)
-
+    supported_model_ids = set(_supported_valuation_model_ids())
+    if default_model not in supported_model_ids:
+        raise ValidationError(f"unknown valuation model {default_model}")
+    _get_valuation_model(default_model)
     selected_model_id = default_model if model_id is None else _require_non_empty_str(model_id, "model_id")
-    get_valuation_model(selected_model_id)
+    if selected_model_id not in supported_model_ids:
+        raise ValidationError(f"unknown valuation model {selected_model_id}")
+    _get_valuation_model(selected_model_id)
 
-    model_payload = models.get(selected_model_id)
-    if not isinstance(model_payload, Mapping):
+    for item in models:
+        if not isinstance(item, str):
+            raise ValidationError("model id must be a string")
+        if item not in supported_model_ids:
+            raise ValidationError(f"unknown valuation model {item}")
+
+    if selected_model_id not in models:
         raise ValidationError(f"missing model assumptions for {selected_model_id}")
 
-    parsed_model_assumptions = get_valuation_model(selected_model_id).validate_assumptions(model_payload)
+    parsed_models: dict[str, object] = {}
+    for item, model_payload in models.items():
+        if not isinstance(item, str):
+            raise ValidationError("model id must be a string")
+        if not isinstance(model_payload, Mapping):
+            raise ValidationError(f"invalid model assumptions for {item}: must be a mapping")
+        try:
+            parsed_models[item] = _get_valuation_model(item).validate_assumptions(model_payload)
+        except ValidationError as exc:
+            raise ValidationError(f"invalid model assumptions for {item}: {exc}") from exc
+
+    parsed_model_assumptions = parsed_models[selected_model_id]
     normalized_payload = {
         "schema_version": schema_version,
         "market": market.value,
@@ -136,6 +168,8 @@ def load_valuation_assumptions(
         "as_of": as_of.isoformat(),
         "currency": currency,
         "amount_unit": amount_unit,
+        "share_basis": share_basis,
+        "valuation_basis_note": valuation_basis_note,
         "facts_overrides": facts_overrides,
         "facts_override_notes": facts_override_notes,
         "assumption_source": assumption_source,
@@ -153,6 +187,8 @@ def load_valuation_assumptions(
         as_of=as_of,
         currency=currency,
         amount_unit=amount_unit,
+        share_basis=share_basis,
+        valuation_basis_note=valuation_basis_note,
         assumption_source=assumption_source,
         prepared_by=prepared_by,
         source_note=source_note,
@@ -205,6 +241,12 @@ def _parse_amount_unit(value: object) -> str:
     if value != "currency_units":
         raise ValidationError("amount_unit must be currency_units")
     return "currency_units"
+
+
+def _parse_share_basis(value: object) -> str:
+    if value != "ordinary_share":
+        raise ValidationError("share_basis must be ordinary_share")
+    return "ordinary_share"
 
 
 def _parse_optional_float_map(value: object, field: str) -> dict[str, float | None]:

@@ -583,7 +583,7 @@ def test_cli_value_help_documents_model_default_source() -> None:
 
 def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypatch) -> None:
     _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
-    captured: dict[str, object] = {}
+    captured: list[dict[str, object]] = []
 
     def fake_run_valuation(
         *,
@@ -593,11 +593,15 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
         assumptions_path: Path | None,
         fundamentals_provider_id: str,
     ):
-        captured["market"] = market
-        captured["ticker"] = ticker
-        captured["model_id"] = model_id
-        captured["assumptions_path"] = assumptions_path
-        captured["fundamentals_provider_id"] = fundamentals_provider_id
+        captured.append(
+            {
+                "market": market,
+                "ticker": ticker,
+                "model_id": model_id,
+                "assumptions_path": assumptions_path,
+                "fundamentals_provider_id": fundamentals_provider_id,
+            }
+        )
         return object()
 
     monkeypatch.setattr(
@@ -614,16 +618,20 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
     monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n", raising=False)
 
-    result = runner.invoke(app, ["value", "us", "--ticker", "aapl", "--model", "fcf_dcf_v1"])
+    for model_id in ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1"):
+        result = runner.invoke(app, ["value", "us", "--ticker", "aapl", "--model", model_id])
+        assert result.exit_code == 0, result.output
 
-    assert result.exit_code == 0, result.output
-    assert captured == {
-        "market": Market.US,
-        "ticker": "AAPL",
-        "model_id": "fcf_dcf_v1",
-        "assumptions_path": None,
-        "fundamentals_provider_id": "fake_fundamentals",
-    }
+    assert captured == [
+        {
+            "market": Market.US,
+            "ticker": "AAPL",
+            "model_id": model_id,
+            "assumptions_path": None,
+            "fundamentals_provider_id": "fake_fundamentals",
+        }
+        for model_id in ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1")
+    ]
 
 
 def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path) -> None:
