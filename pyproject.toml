@@ -73,6 +73,7 @@ exclude = [
 [tool.hatch.build.targets.wheel.force-include]
 "config.example.yaml" = "universe_selector/config.example.yaml"
 "src/universe_selector/persistence/migrations/001_initial.sql" = "universe_selector/persistence/migrations/001_initial.sql"
+"src/universe_selector/persistence/migrations/002_report_json_artifacts.sql" = "universe_selector/persistence/migrations/002_report_json_artifacts.sql"
 
 [tool.pytest.ini_options]
 addopts = "--disable-socket"

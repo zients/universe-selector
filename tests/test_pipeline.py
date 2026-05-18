@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import replace
 from pathlib import Path
@@ -35,13 +36,17 @@ def test_pipeline_runs_sample_profile_and_persists_report(tmp_path: Path, fixtur
     repo = DuckDbRepository(config.duckdb_path)
     resolved = repo.resolve_latest_successful_run(Market.US, ranking_profile="sample_price_trend_v1")
     report = repo.read_report_markdown(result.run_id)
+    json_report = repo.read_report_artifact(result.run_id, "json")
     payload = repo.read_inspect_payload(result.run_id, "AAA", profile=config.selected_ranking_profile)
+    parsed_json_report = json.loads(json_report)
 
     assert resolved.run_id == result.run_id
     assert result.ranking_profile == "sample_price_trend_v1"
     assert resolved.ranking_profile == "sample_price_trend_v1"
     assert "# Universe Selector Report" in report
     assert "ranking_profile: sample_price_trend_v1" in report
+    assert parsed_json_report["artifact_type"] == "universe_selector_report"
+    assert parsed_json_report["ranking_profile"] == "sample_price_trend_v1"
     assert payload.snapshot["ticker"] == "AAA"
     assert "return_60d" in payload.snapshot
     assert {row["horizon"] for row in payload.rankings} == {"midterm", "longterm"}

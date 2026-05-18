@@ -11,8 +11,11 @@ from universe_selector.config import AppConfig, load_config, load_live_fundament
 from universe_selector.domain import Market, canonical_market, canonical_ticker
 from universe_selector.errors import NotFoundError, UniverseSelectorError, ValidationError
 from universe_selector.identifiers import parse_run_id
-from universe_selector.output.inspect import render_inspect
-from universe_selector.output.value import render_value_markdown as render_valuation_markdown
+from universe_selector.output.inspect import render_inspect, render_inspect_json
+from universe_selector.output.value import (
+    render_value_json as render_valuation_json,
+    render_value_markdown as render_valuation_markdown,
+)
 from universe_selector.persistence.repository import DuckDbRepository, ResolvedRun
 from universe_selector.persistence.schema import validate_schema
 from universe_selector.pipeline import BatchResult, MultiProfileBatchError, run_batch, run_batch_profiles
@@ -193,6 +196,7 @@ def report(
     market: Annotated[str | None, typer.Argument()] = None,
     run_id: Annotated[str | None, typer.Option("--run-id")] = None,
     ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     def action() -> None:
         _validate_read_resolution_request(market=market, run_id=run_id, ranking_profile=ranking_profile)
@@ -206,10 +210,14 @@ def report(
             target,
             ranking_profile=resolution_ranking_profile,
         )
-        markdown = repo.read_report_markdown(resolved.run_id)
+        artifact_format = "json" if json_output else "markdown"
+        content = repo.read_report_artifact(resolved.run_id, artifact_format)
+        if json_output:
+            typer.echo(content, nl=False)
+            return
         typer.echo(f"resolution mode: {resolution_mode}")
         typer.echo(f"run_id: {resolved.run_id}")
-        typer.echo(markdown, nl=False)
+        typer.echo(content, nl=False)
 
     _guard(action)
 
@@ -220,6 +228,7 @@ def inspect(
     market: Annotated[str | None, typer.Argument()] = None,
     run_id: Annotated[str | None, typer.Option("--run-id")] = None,
     ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     def action() -> None:
         _validate_read_resolution_request(market=market, run_id=run_id, ranking_profile=ranking_profile)
@@ -245,8 +254,8 @@ def inspect(
             raise NotFoundError(
                 f"Normalized ticker {normalized_ticker} is not in this run's persisted candidate set"
             ) from exc
-        typer.echo(
-            render_inspect(
+        renderer_output = (
+            render_inspect_json(
                 run_id=resolved.run_id,
                 resolution_mode=resolution_mode,
                 ticker=normalized_ticker,
@@ -254,9 +263,21 @@ def inspect(
                 snapshot=payload.snapshot,
                 rankings=payload.rankings,
                 profile=profile,
-            ),
-            nl=False,
+                ranking_profile=resolved.ranking_profile,
+                ranking_config_hash=resolved.ranking_config_hash,
+            )
+            if json_output
+            else render_inspect(
+                run_id=resolved.run_id,
+                resolution_mode=resolution_mode,
+                ticker=normalized_ticker,
+                metadata=payload.metadata,
+                snapshot=payload.snapshot,
+                rankings=payload.rankings,
+                profile=profile,
+            )
         )
+        typer.echo(renderer_output, nl=False)
 
     _guard(action)
 
@@ -273,6 +294,7 @@ def value(
         ),
     ] = None,
     assumptions: Annotated[Path | None, typer.Option("--assumptions")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     def action() -> None:
         resolved_market = canonical_market(market)
@@ -286,6 +308,7 @@ def value(
             assumptions_path=assumptions,
             fundamentals_provider_id=load_live_fundamentals_provider_id(),
         )
-        typer.echo(render_valuation_markdown(result), nl=False)
+        renderer_output = render_valuation_json(result) if json_output else render_valuation_markdown(result)
+        typer.echo(renderer_output, nl=False)
 
     _guard(action)

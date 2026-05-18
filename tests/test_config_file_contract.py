@@ -82,5 +82,11 @@ def test_config_example_is_packaged_in_built_wheel(tmp_path) -> None:
 
     with zipfile.ZipFile(wheel_path) as wheel:
         packaged_example = wheel.read("universe_selector/config.example.yaml")
+        packaged_migration_2 = wheel.read(
+            "universe_selector/persistence/migrations/002_report_json_artifacts.sql"
+        )
 
     assert packaged_example == CONFIG_EXAMPLE_PATH.read_bytes()
+    assert packaged_migration_2 == (
+        REPO_ROOT / "src/universe_selector/persistence/migrations/002_report_json_artifacts.sql"
+    ).read_bytes()

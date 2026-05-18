@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -365,6 +366,89 @@ def test_cli_report_and_inspect_ranking_profile_filter_latest_run(monkeypatch, t
     assert "- normalized ticker: AAA" in inspect.output
 
 
+def test_cli_inspect_json_outputs_structured_payload(monkeypatch, tmp_path: Path) -> None:
+    sample_run_id, other_run_id = _seed_profile_resolution_runs(tmp_path)
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: AppConfig(duckdb_path=str(tmp_path / "runs.duckdb"), ranking_profile="other_profile"),
+    )
+
+    result = runner.invoke(
+        app,
+        ["inspect", "us", "--ticker", "AAA", "--ranking-profile", "sample_price_trend_v1", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "universe_selector_inspect"
+    assert payload["run_id"] == sample_run_id
+    assert payload["ranking_profile"] == "sample_price_trend_v1"
+    assert other_run_id not in result.output
+    assert payload["snapshot"]["ticker"] == "AAA"
+    assert payload["snapshot"]["metrics"]["return_60d"] == 0.1
+    assert "# Universe Selector Inspect" not in result.output
+
+
+def test_cli_report_json_reads_persisted_json_artifact(monkeypatch, tmp_path: Path) -> None:
+    sample_run_id, other_run_id = _seed_profile_resolution_runs(tmp_path)
+    repo = DuckDbRepository(tmp_path / "runs.duckdb")
+    repo.connect().execute(
+        "insert into report_artifacts(run_id, format, content) values (?, 'json', ?)",
+        [sample_run_id, '{"artifact_type":"universe_selector_report","run_id":"%s"}\n' % sample_run_id],
+    )
+    repo.close()
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: AppConfig(duckdb_path=str(tmp_path / "runs.duckdb"), ranking_profile="other_profile"),
+    )
+
+    result = runner.invoke(app, ["report", "us", "--ranking-profile", "sample_price_trend_v1", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "universe_selector_report"
+    assert payload["run_id"] == sample_run_id
+    assert other_run_id not in result.output
+    assert "resolution mode:" not in result.output
+
+
+def test_cli_report_json_after_batch_outputs_valid_json(monkeypatch, tmp_path: Path, fixture_dir: Path) -> None:
+    _write_cli_config(tmp_path, fixture_dir)
+    monkeypatch.chdir(tmp_path)
+
+    batch = runner.invoke(app, ["batch", "us"])
+    assert batch.exit_code == 0, batch.output
+    run_id = _run_id_from(batch.output)
+
+    result = runner.invoke(app, ["report", "us", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "universe_selector_report"
+    assert payload["run_id"] == run_id
+    assert payload["snapshots"]
+    assert payload["rankings"]
+    assert "top_horizons" in payload
+    assert "resolution mode:" not in result.output
+
+
+def test_cli_report_json_errors_when_migrated_run_has_no_json_artifact(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    sample_run_id, _other_run_id = _seed_profile_resolution_runs(tmp_path)
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: AppConfig(duckdb_path=str(tmp_path / "runs.duckdb"), ranking_profile="sample_price_trend_v1"),
+    )
+
+    result = runner.invoke(app, ["report", "us", "--json"])
+
+    assert result.exit_code != 0
+    assert f"expected exactly one json report artifact for run {sample_run_id}" in result.output
+    assert "# sample report" not in result.output
+
+
 def test_cli_rejects_ranking_profile_with_explicit_run_id(monkeypatch, tmp_path: Path, fixture_dir: Path) -> None:
     _write_cli_config(tmp_path, fixture_dir)
     monkeypatch.chdir(tmp_path)
@@ -566,6 +650,61 @@ def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> Non
 
     assert result.exit_code == 0, result.output
     assert result.output == "# rendered valuation\n"
+    assert captured["market"] is Market.US
+    assert captured["ticker"] == "AAPL"
+    assert captured["model_id"] is None
+    assert captured["assumptions_path"] is None
+    assert captured["fundamentals_provider_id"] == "fake_fundamentals"
+
+
+def test_cli_value_json_uses_json_renderer(monkeypatch) -> None:
+    _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
+    captured: dict[str, object] = {}
+    sentinel_result = object()
+
+    def fake_run_valuation(
+        *,
+        market: Market,
+        ticker: str,
+        model_id: str | None,
+        assumptions_path: Path | None,
+        fundamentals_provider_id: str,
+    ):
+        captured["market"] = market
+        captured["ticker"] = ticker
+        captured["model_id"] = model_id
+        captured["assumptions_path"] = assumptions_path
+        captured["fundamentals_provider_id"] = fundamentals_provider_id
+        return sentinel_result
+
+    monkeypatch.setattr(
+        "universe_selector.cli.load_config",
+        lambda: (_ for _ in ()).throw(AssertionError("value command must not load full config")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.load_live_fundamentals_provider_id",
+        lambda: "fake_fundamentals",
+        raising=False,
+    )
+    monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
+    monkeypatch.setattr(
+        "universe_selector.cli.render_valuation_markdown",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("render_valuation_markdown")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.render_valuation_json",
+        lambda result: '{"artifact_type":"universe_selector_valuation","ticker":"AAPL"}\n'
+        if result is sentinel_result
+        else "wrong\n",
+        raising=False,
+    )
+
+    result = runner.invoke(app, ["value", "us", "--ticker", "aapl", "--json"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["artifact_type"] == "universe_selector_valuation"
     assert captured["market"] is Market.US
     assert captured["ticker"] == "AAPL"
     assert captured["model_id"] is None

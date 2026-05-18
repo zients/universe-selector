@@ -10,6 +10,7 @@ from universe_selector.errors import DuckDbBusyError, SchemaError
 
 MIGRATIONS: tuple[tuple[int, str], ...] = (
     (1, "001_initial"),
+    (2, "002_report_json_artifacts"),
 )
 
 REQUIRED_COLUMNS: dict[str, set[str]] = {
