@@ -171,6 +171,16 @@ def test_committed_sample_assumptions_support_all_registered_models(
         )
 
 
+def test_committed_reverse_dcf_sample_bounds_are_diagnostic_ranges() -> None:
+    us = load_valuation_assumptions(Market.US, "AAPL", "reverse_dcf_v1", US_SAMPLE)
+    tw = load_valuation_assumptions(Market.TW, "2330", "reverse_dcf_v1", TW_SAMPLE)
+
+    assert us.model_assumptions.scenarios["conservative"].implied_growth_lower_bound == pytest.approx(-0.50)
+    assert us.model_assumptions.scenarios["conservative"].implied_growth_upper_bound == pytest.approx(0.50)
+    assert tw.model_assumptions.scenarios["conservative"].implied_growth_lower_bound == pytest.approx(-0.50)
+    assert tw.model_assumptions.scenarios["conservative"].implied_growth_upper_bound == pytest.approx(0.80)
+
+
 def test_missing_default_assumptions_file_reports_expected_path(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
 

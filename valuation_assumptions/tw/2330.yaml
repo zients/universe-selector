@@ -67,21 +67,21 @@ models:
       conservative:
         discount_rate: 0.10
         terminal_growth_rate: 0.02
-        implied_growth_lower_bound: -0.20
-        implied_growth_upper_bound: 0.20
-        note: Lower assumption case for TWD ordinary-share reverse DCF reconciliation.
+        implied_growth_lower_bound: -0.50
+        implied_growth_upper_bound: 0.80
+        note: Lower diagnostic TWD ordinary-share reverse DCF reconciliation range; not a forecast range.
       base:
         discount_rate: 0.09
         terminal_growth_rate: 0.025
-        implied_growth_lower_bound: -0.10
-        implied_growth_upper_bound: 0.30
-        note: Middle assumption case for TWD ordinary-share reverse DCF reconciliation.
+        implied_growth_lower_bound: -0.50
+        implied_growth_upper_bound: 0.80
+        note: Middle diagnostic TWD ordinary-share reverse DCF reconciliation range; not a forecast range.
       upside:
         discount_rate: 0.085
         terminal_growth_rate: 0.03
-        implied_growth_lower_bound: -0.05
-        implied_growth_upper_bound: 0.40
-        note: Higher assumption case for TWD ordinary-share reverse DCF reconciliation.
+        implied_growth_lower_bound: -0.50
+        implied_growth_upper_bound: 0.80
+        note: Higher diagnostic TWD ordinary-share reverse DCF reconciliation range; not a forecast range.
   multiple_valuation_v1:
     starting_fcf:
       method: provider_ttm_fcf
