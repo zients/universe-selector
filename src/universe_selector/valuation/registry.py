@@ -7,6 +7,7 @@ from types import MappingProxyType
 from universe_selector.errors import ValidationError
 from universe_selector.valuation.base import ValuationModel, ValuationOutputRenderer
 from universe_selector.valuation.fcf_dcf_v1 import FcfDcfV1Model, FcfDcfV1OutputRenderer
+from universe_selector.valuation.reverse_dcf_v1 import ReverseDcfV1Model, ReverseDcfV1OutputRenderer
 
 
 @dataclass(frozen=True, init=False)
@@ -74,6 +75,11 @@ _REGISTRATIONS: Mapping[str, ValuationModelRegistration] = _build_registrations(
             model_id="fcf_dcf_v1",
             model_factory=FcfDcfV1Model,
             output_renderer_factory=FcfDcfV1OutputRenderer,
+        ),
+        ValuationModelRegistration(
+            model_id="reverse_dcf_v1",
+            model_factory=ReverseDcfV1Model,
+            output_renderer_factory=ReverseDcfV1OutputRenderer,
         ),
     )
 )

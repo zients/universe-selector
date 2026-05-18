@@ -41,6 +41,33 @@ class FcfDcfV1Assumptions:
 
 
 @dataclass(frozen=True)
+class ReverseDcfScenarioAssumptions:
+    scenario_id: str
+    discount_rate: float
+    terminal_growth_rate: float
+    implied_growth_lower_bound: float
+    implied_growth_upper_bound: float
+    note: str
+
+
+@dataclass(frozen=True)
+class ReverseDcfV1Assumptions:
+    forecast_years: int
+    terminal_method: str
+    starting_fcf: StartingFcfAssumption
+    discount_rate_basis: str
+    terminal_growth_basis: str
+    implied_growth_basis: str
+    solver_abs_tolerance: float
+    solver_max_iterations: int
+    scenario_order: tuple[str, ...]
+    scenarios: Mapping[str, ReverseDcfScenarioAssumptions]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scenarios", MappingProxyType(dict(self.scenarios)))
+
+
+@dataclass(frozen=True)
 class ValuationAssumptionSet:
     schema_version: int
     market: Market
