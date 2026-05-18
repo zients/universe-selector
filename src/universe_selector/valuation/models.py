@@ -68,6 +68,24 @@ class ReverseDcfV1Assumptions:
 
 
 @dataclass(frozen=True)
+class MultipleValuationScenarioAssumptions:
+    scenario_id: str
+    ev_to_fcf_multiple: float
+    note: str
+
+
+@dataclass(frozen=True)
+class MultipleValuationV1Assumptions:
+    starting_fcf: StartingFcfAssumption
+    multiple_basis: str
+    scenario_order: tuple[str, ...]
+    scenarios: Mapping[str, MultipleValuationScenarioAssumptions]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scenarios", MappingProxyType(dict(self.scenarios)))
+
+
+@dataclass(frozen=True)
 class ValuationAssumptionSet:
     schema_version: int
     market: Market

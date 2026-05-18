@@ -393,9 +393,14 @@ def test_fcf_dcf_v1_rejects_invalid_rates_and_scenarios() -> None:
 
 
 def test_valuation_model_registry_exposes_fcf_dcf_v1() -> None:
-    assert supported_valuation_model_ids() == ("fcf_dcf_v1", "reverse_dcf_v1")
+    assert supported_valuation_model_ids() == (
+        "fcf_dcf_v1",
+        "multiple_valuation_v1",
+        "reverse_dcf_v1",
+    )
     assert get_valuation_model("fcf_dcf_v1").model_id == "fcf_dcf_v1"
     assert get_valuation_model("reverse_dcf_v1").model_id == "reverse_dcf_v1"
+    assert get_valuation_model("multiple_valuation_v1").model_id == "multiple_valuation_v1"
 
     with pytest.raises(ValidationError, match="unknown valuation model unknown"):
         get_valuation_model("unknown")

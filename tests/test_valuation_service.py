@@ -224,6 +224,56 @@ models:
     return target
 
 
+def _write_multiple_valuation_assumptions(tmp_path: Path) -> Path:
+    target = tmp_path / "valuation_assumptions" / "us" / "AAPL-multiple.yaml"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        """
+schema_version: 1
+market: US
+ticker: AAPL
+default_model: fcf_dcf_v1
+purpose: multiple_valuation_service_test
+as_of: 2026-05-17
+currency: USD
+amount_unit: currency_units
+share_basis: ordinary_share
+valuation_basis_note: Uses USD ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied.
+
+facts_overrides:
+  shares_outstanding: null
+  net_debt: null
+  reference_price: null
+
+facts_override_notes:
+  shares_outstanding: null
+  net_debt: null
+  reference_price: null
+
+assumption_source: service_test
+prepared_by: tests
+source_note: Multiple valuation service test assumptions.
+
+models:
+  multiple_valuation_v1:
+    starting_fcf:
+      method: provider_ttm_fcf
+    multiple_basis: ev_to_fcf
+    scenarios:
+      conservative:
+        ev_to_fcf_multiple: 4.0
+        note: Lower assumption case.
+      base:
+        ev_to_fcf_multiple: 5.0
+        note: Middle assumption case.
+      upside:
+        ev_to_fcf_multiple: 6.0
+        note: Higher assumption case.
+""".lstrip()
+    )
+    return target
+
+
 def _install_no_ranking_no_persistence_guards(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "universe_selector.config.load_config",
@@ -349,6 +399,32 @@ def test_run_valuation_smoke_selected_reverse_dcf_model(monkeypatch, tmp_path: P
     assert result.run_input.effective_inputs.reference_price == pytest.approx(143.3125)
     assert result.scenario_results[1].scenario_id == "base"
     assert result.scenario_results[1].model_metrics["implied_growth_rate"] == pytest.approx(0.05, abs=1e-8)
+
+
+def test_run_valuation_smoke_selected_multiple_valuation_model(monkeypatch, tmp_path: Path) -> None:
+    _install_no_ranking_no_persistence_guards(monkeypatch)
+    assumptions_path = _write_multiple_valuation_assumptions(tmp_path)
+    fake_provider = FakeFundamentalsProvider(_facts())
+    fake_registration = FundamentalsProviderRegistration(
+        provider_id=fake_provider.provider_id,
+        supported_markets=frozenset({Market.US}),
+        source_ids=fake_provider.source_ids,
+        factory=lambda: fake_provider,
+    )
+    monkeypatch.setattr(
+        "universe_selector.valuation.service.get_fundamentals_registration",
+        lambda provider_id, market: fake_registration,
+    )
+
+    result = run_valuation(Market.US, "AAPL", "multiple_valuation_v1", assumptions_path, "fake_fundamentals")
+
+    assert fake_provider.requests == [(Market.US, "AAPL")]
+    assert result.run_input.model_id == "multiple_valuation_v1"
+    assert result.run_input.assumptions.default_model == "fcf_dcf_v1"
+    assert result.scenario_results[1].scenario_id == "base"
+    assert result.scenario_results[1].enterprise_value == pytest.approx(550.0)
+    assert result.scenario_results[1].equity_value == pytest.approx(500.0)
+    assert result.scenario_results[1].model_metrics["ev_to_fcf_multiple"] == pytest.approx(5.0)
 
 
 def test_run_valuation_rejects_assumption_currency_mismatch(monkeypatch, tmp_path: Path) -> None:
