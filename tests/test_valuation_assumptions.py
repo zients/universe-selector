@@ -12,6 +12,9 @@ from universe_selector.valuation.assumptions import default_assumptions_path, lo
 
 US_FIXTURE = Path(__file__).parent / "fixtures" / "valuation_assumptions" / "us" / "AAPL.yaml"
 TW_FIXTURE = Path(__file__).parent / "fixtures" / "valuation_assumptions" / "tw" / "2330.yaml"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+US_SAMPLE = REPO_ROOT / "valuation_assumptions" / "us" / "AAPL.yaml"
+TW_SAMPLE = REPO_ROOT / "valuation_assumptions" / "tw" / "2330.yaml"
 
 
 def _copy_fixture(tmp_path: Path) -> Path:
@@ -67,6 +70,30 @@ def test_loads_default_assumptions_and_hash_is_path_independent(monkeypatch, tmp
     assert default_loaded.model_assumptions.scenario_order == ("conservative", "base", "upside")
 
 
+@pytest.mark.parametrize(
+    "model_id, expected_type_name",
+    [
+        ("fcf_dcf_v1", "FcfDcfV1Assumptions"),
+        ("reverse_dcf_v1", "ReverseDcfV1Assumptions"),
+        ("multiple_valuation_v1", "MultipleValuationV1Assumptions"),
+    ],
+)
+def test_us_fixture_supports_explicit_registered_valuation_models(
+    model_id: str,
+    expected_type_name: str,
+) -> None:
+    loaded = load_valuation_assumptions(
+        market=Market.US,
+        ticker="AAPL",
+        model_id=model_id,
+        assumptions_path=US_FIXTURE,
+    )
+
+    assert loaded.default_model == "fcf_dcf_v1"
+    assert loaded.model_id == model_id
+    assert type(loaded.model_assumptions).__name__ == expected_type_name
+
+
 def test_loads_tw_2330_assumptions_fixture() -> None:
     loaded = load_valuation_assumptions(
         market=Market.TW,
@@ -88,6 +115,60 @@ def test_loads_tw_2330_assumptions_fixture() -> None:
     assert loaded.assumption_path == str(TW_FIXTURE)
     assert loaded.model_id == "fcf_dcf_v1"
     assert loaded.model_assumptions.starting_fcf.method == "provider_ttm_fcf"
+
+
+@pytest.mark.parametrize(
+    "model_id, expected_type_name",
+    [
+        ("fcf_dcf_v1", "FcfDcfV1Assumptions"),
+        ("reverse_dcf_v1", "ReverseDcfV1Assumptions"),
+        ("multiple_valuation_v1", "MultipleValuationV1Assumptions"),
+    ],
+)
+def test_tw_fixture_supports_explicit_registered_valuation_models(
+    model_id: str,
+    expected_type_name: str,
+) -> None:
+    loaded = load_valuation_assumptions(
+        market=Market.TW,
+        ticker="2330",
+        model_id=model_id,
+        assumptions_path=TW_FIXTURE,
+    )
+
+    assert loaded.default_model == "fcf_dcf_v1"
+    assert loaded.model_id == model_id
+    assert type(loaded.model_assumptions).__name__ == expected_type_name
+    assert loaded.share_basis == "ordinary_share"
+    assert "no ADR ratio, board-lot, or currency adjustment" in loaded.valuation_basis_note
+
+
+@pytest.mark.parametrize(
+    "market, ticker, path, currency",
+    [
+        (Market.US, "AAPL", US_SAMPLE, "USD"),
+        (Market.TW, "2330", TW_SAMPLE, "TWD"),
+    ],
+)
+@pytest.mark.parametrize("model_id", ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1"))
+def test_committed_sample_assumptions_support_all_registered_models(
+    market: Market,
+    ticker: str,
+    path: Path,
+    currency: str,
+    model_id: str,
+) -> None:
+    loaded = load_valuation_assumptions(market, ticker, model_id, path)
+
+    assert loaded.default_model == "fcf_dcf_v1"
+    assert loaded.model_id == model_id
+    assert loaded.currency == currency
+    assert loaded.share_basis == "ordinary_share"
+    if market is Market.TW:
+        assert (
+            loaded.valuation_basis_note
+            == "Uses TWD ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied."
+        )
 
 
 def test_missing_default_assumptions_file_reports_expected_path(monkeypatch, tmp_path: Path) -> None:
@@ -459,3 +540,37 @@ def test_loader_rejects_unsupported_default_even_with_cli_override(monkeypatch, 
 
     with pytest.raises(ValidationError, match="unknown valuation model unknown_default"):
         load_valuation_assumptions(Market.US, "AAPL", "fake_selected", path)
+
+
+def test_loader_allows_real_yaml_to_omit_unselected_supported_models(tmp_path: Path) -> None:
+    path = _copy_fixture(tmp_path)
+    text = path.read_text()
+    if "  reverse_dcf_v1:" in text:
+        text = text.split("  reverse_dcf_v1:", maxsplit=1)[0]
+    path.write_text(text)
+
+    loaded = load_valuation_assumptions(Market.US, "AAPL", None, path)
+
+    assert loaded.model_id == "fcf_dcf_v1"
+
+
+def test_loader_rejects_real_selected_supported_model_omitted(tmp_path: Path) -> None:
+    path = _copy_fixture(tmp_path)
+    text = path.read_text()
+    if "  reverse_dcf_v1:" in text:
+        text = text.split("  reverse_dcf_v1:", maxsplit=1)[0]
+    path.write_text(text)
+
+    with pytest.raises(ValidationError, match="missing model assumptions for reverse_dcf_v1"):
+        load_valuation_assumptions(Market.US, "AAPL", "reverse_dcf_v1", path)
+
+
+def test_loader_rejects_invalid_present_but_unselected_real_supported_model(tmp_path: Path) -> None:
+    path = _copy_fixture(tmp_path)
+    text = path.read_text()
+    if "ev_to_fcf_multiple: 16.0" not in text:
+        pytest.skip("fixture multiple valuation block has not been added yet")
+    path.write_text(text.replace("ev_to_fcf_multiple: 16.0", "ev_to_fcf_multiple: 0.0", 1))
+
+    with pytest.raises(ValidationError, match="invalid model assumptions for multiple_valuation_v1"):
+        load_valuation_assumptions(Market.US, "AAPL", None, path)

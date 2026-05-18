@@ -53,3 +53,46 @@ models:
         discount_rate: 0.085
         terminal_growth_rate: 0.03
         note: Higher illustrative growth and lower illustrative discount rate.
+  reverse_dcf_v1:
+    forecast_years: 5
+    terminal_method: perpetual_growth
+    starting_fcf:
+      method: provider_ttm_fcf
+    discount_rate_basis: nominal_wacc
+    terminal_growth_basis: nominal_perpetual_growth
+    implied_growth_basis: constant_explicit_fcf_growth
+    solver_abs_tolerance: 1000000000.0
+    solver_max_iterations: 100
+    scenarios:
+      conservative:
+        discount_rate: 0.10
+        terminal_growth_rate: 0.02
+        implied_growth_lower_bound: -0.20
+        implied_growth_upper_bound: 0.20
+        note: Lower assumption case for TWD ordinary-share reverse DCF reconciliation.
+      base:
+        discount_rate: 0.09
+        terminal_growth_rate: 0.025
+        implied_growth_lower_bound: -0.10
+        implied_growth_upper_bound: 0.30
+        note: Middle assumption case for TWD ordinary-share reverse DCF reconciliation.
+      upside:
+        discount_rate: 0.085
+        terminal_growth_rate: 0.03
+        implied_growth_lower_bound: -0.05
+        implied_growth_upper_bound: 0.40
+        note: Higher assumption case for TWD ordinary-share reverse DCF reconciliation.
+  multiple_valuation_v1:
+    starting_fcf:
+      method: provider_ttm_fcf
+    multiple_basis: ev_to_fcf
+    scenarios:
+      conservative:
+        ev_to_fcf_multiple: 8.0
+        note: Lower analyst-supplied TWD ordinary-share EV to FCF multiple case.
+      base:
+        ev_to_fcf_multiple: 12.0
+        note: Middle analyst-supplied TWD ordinary-share EV to FCF multiple case.
+      upside:
+        ev_to_fcf_multiple: 16.0
+        note: Higher analyst-supplied TWD ordinary-share EV to FCF multiple case.
