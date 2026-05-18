@@ -8,7 +8,7 @@ from universe_selector.domain import Market
 from universe_selector.errors import ProviderDataError, UniverseSelectorError, ValidationError
 from universe_selector.identifiers import make_run_id
 from universe_selector.locking import batch_lock
-from universe_selector.output.report import render_markdown_report
+from universe_selector.output.report import render_json_report, render_markdown_report
 from universe_selector.persistence.repository import DuckDbRepository
 from universe_selector.persistence.schema import apply_migrations
 from universe_selector.providers.base import MarketDataProvider
@@ -115,11 +115,22 @@ def _run_profile_from_provider_data(
         )
         rankings = profile.assign_rankings(snapshot)
         metadata = provider_data.metadata
+        provider_summary = _provider_summary(metadata, config)
         markdown = render_markdown_report(
             run_id=run_id,
             market=market,
             mode_label=config.data_mode,
-            provider_summary=_provider_summary(metadata, config),
+            provider_summary=provider_summary,
+            snapshot=snapshot,
+            rankings=rankings,
+            config=config,
+            profile=profile,
+        )
+        json_report = render_json_report(
+            run_id=run_id,
+            market=market,
+            mode_label=config.data_mode,
+            provider_summary=provider_summary,
             snapshot=snapshot,
             rankings=rankings,
             config=config,
@@ -131,6 +142,7 @@ def _run_profile_from_provider_data(
             snapshot=snapshot,
             rankings=rankings,
             markdown=markdown,
+            json_report=json_report,
         )
         return BatchResult(run_id=run_id, market=market, ranking_profile=config.ranking_profile)
     except Exception as exc:

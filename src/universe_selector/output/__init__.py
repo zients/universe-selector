@@ -4,8 +4,10 @@ __all__ = [
     "render_inspect",
     "render_markdown_report",
     "render_value",
+    "render_value_json",
     "render_value_markdown",
     "render_valuation",
+    "render_valuation_json",
     "render_valuation_markdown",
 ]
 
@@ -23,6 +25,10 @@ def __getattr__(name: str):
         from universe_selector.output.value import render_value
 
         return render_value
+    if name in {"render_value_json", "render_valuation_json"}:
+        from universe_selector.output.value import render_value_json
+
+        return render_value_json
     if name in {"render_value_markdown", "render_valuation_markdown"}:
         from universe_selector.output.value import render_value_markdown
 

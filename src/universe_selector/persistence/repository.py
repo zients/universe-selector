@@ -316,6 +316,7 @@ class DuckDbRepository:
         snapshot: pl.DataFrame,
         rankings: pl.DataFrame,
         markdown: str,
+        json_report: str | None = None,
     ) -> None:
         connection = self.connect()
         _execute(connection, "begin")
@@ -387,6 +388,12 @@ class DuckDbRepository:
                 "insert into report_artifacts(run_id, format, content) values (?, 'markdown', ?)",
                 [run_id, markdown],
             )
+            if json_report is not None:
+                _execute(
+                    connection,
+                    "insert into report_artifacts(run_id, format, content) values (?, 'json', ?)",
+                    [run_id, json_report],
+                )
             _execute(connection, "commit")
         except Exception:
             with suppress(Exception):
@@ -458,15 +465,18 @@ class DuckDbRepository:
             ranking_config_hash=str(row[3]),
         )
 
-    def read_report_markdown(self, run_id: str) -> str:
+    def read_report_artifact(self, run_id: str, artifact_format: str) -> str:
         rows = _execute(
             self._read_connection(),
-            "select content from report_artifacts where run_id = ? and format = 'markdown'",
-            [run_id],
+            "select content from report_artifacts where run_id = ? and format = ?",
+            [run_id, artifact_format],
         ).fetchall()
         if len(rows) != 1:
-            raise DataIntegrityError(f"expected exactly one markdown report artifact for run {run_id}")
+            raise DataIntegrityError(f"expected exactly one {artifact_format} report artifact for run {run_id}")
         return rows[0][0]
+
+    def read_report_markdown(self, run_id: str) -> str:
+        return self.read_report_artifact(run_id, "markdown")
 
     def read_provider_metadata(self, run_id: str) -> ProviderMetadata:
         rows = _execute(

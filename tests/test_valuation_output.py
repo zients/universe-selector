@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -11,7 +12,11 @@ import pytest
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
-from universe_selector.valuation.output import VALUATION_RESEARCH_DISCLAIMER, render_valuation_markdown
+from universe_selector.valuation.output import (
+    VALUATION_RESEARCH_DISCLAIMER,
+    render_valuation_json,
+    render_valuation_markdown,
+)
 from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
@@ -225,6 +230,36 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "Provider quote timestamp unavailable; using fetch date." in markdown
 
 
+def test_render_valuation_json_contains_common_and_model_specific_fields() -> None:
+    payload = json.loads(render_valuation_json(_result()))
+
+    assert payload["schema_version"] == 1
+    assert payload["artifact_type"] == "universe_selector_valuation"
+    assert payload["ephemeral"] is True
+    assert payload["market"] == "US"
+    assert payload["ticker"] == "AAPL"
+    assert payload["model_id"] == "fcf_dcf_v1"
+    assert payload["currency"] == "USD"
+    assert payload["provider_context"]["fundamentals_provider_id"] == "yfinance_fundamentals"
+    assert payload["provider_context"]["fundamentals_source_ids"] == [
+        "yfinance",
+        "quote",
+        "quarterly_cash_flow",
+        "balance_sheet",
+    ]
+    assert payload["assumption_context"]["default_model"] == "fcf_dcf_v1"
+    assert payload["assumption_context"]["share_basis"] == "ordinary_share"
+    assert payload["assumption_context"]["as_of"] == "2026-05-16"
+    assert payload["raw_facts"]["free_cash_flow"] == 110_000_000_000.0
+    assert payload["effective_inputs"]["reference_price"] == 185.0
+    assert payload["input_provenance"]["reference_price_source"] == "assumption_override"
+    assert payload["model_assumptions"]["forecast_years"] == 5
+    assert payload["model_assumptions"]["scenarios"]["base"]["growth_rate"] == 0.05
+    assert payload["scenario_results"][0]["scenario_id"] == "base"
+    assert payload["scenario_results"][0]["projected_fcf"] == [105_000_000_000.0, 110_250_000_000.0]
+    assert payload["scenario_results"][0]["model_metrics"] == {}
+
+
 def test_render_valuation_rejects_unknown_model_without_fcf_fallback() -> None:
     result = _result()
     result = replace(
@@ -263,9 +298,15 @@ def test_every_supported_valuation_model_has_output_renderer() -> None:
 
 
 def test_value_output_adapter_delegates_to_valuation_output() -> None:
-    from universe_selector.output.value import render_value, render_value_markdown, render_valuation
+    from universe_selector.output.value import (
+        render_value,
+        render_value_json,
+        render_value_markdown,
+        render_valuation,
+    )
 
     assert render_value_markdown is render_valuation_markdown
+    assert render_value_json is render_valuation_json
     assert render_value is render_valuation_markdown
     assert render_valuation is render_valuation_markdown
 
@@ -273,14 +314,18 @@ def test_value_output_adapter_delegates_to_valuation_output() -> None:
 def test_output_package_value_and_valuation_exports_delegate_to_valuation_output() -> None:
     from universe_selector.output import (
         render_value,
+        render_value_json,
         render_value_markdown,
         render_valuation,
+        render_valuation_json as public_render_valuation_json,
         render_valuation_markdown as public_render_valuation_markdown,
     )
 
     assert render_value is render_valuation_markdown
     assert render_value_markdown is render_valuation_markdown
+    assert render_value_json is render_valuation_json
     assert render_valuation is render_valuation_markdown
+    assert public_render_valuation_json is render_valuation_json
     assert public_render_valuation_markdown is render_valuation_markdown
 
 

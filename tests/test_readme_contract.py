@@ -20,12 +20,16 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "batch remains the only command that computes persisted rankings." in normalized
     assert "`report` and `inspect` still only read persisted ranking runs" in normalized
     assert "`value` is a live ephemeral single-ticker valuation analysis and is not persisted in v1" in normalized
-    assert "`output/` renders markdown reports and per-ticker inspect output from persisted data, plus thin command output adapters." in normalized
-    assert "`valuation/` owns valuation assumptions, model logic, orchestration, and valuation markdown output." in normalized
+    assert "`output/` renders markdown and JSON reports plus per-ticker inspect output from persisted data, plus thin command output adapters." in normalized
+    assert "`valuation/` owns valuation assumptions, model logic, orchestration, and valuation output." in normalized
     assert "`batch` is the only command that fetches data or computes rankings." not in normalized
     assert "`batch` is the only command that computes and persists ranking runs." in normalized
     assert "`value` fetches fundamentals for valuation separately from ranking runs." in normalized
     assert "uv run universe-selector value us --ticker AAPL" in text
+    assert "uv run universe-selector report us --json" in text
+    assert "uv run universe-selector inspect us --ticker AXTI --json" in text
+    assert "uv run universe-selector value us --ticker AAPL --json" in text
+    assert "Report JSON includes the full persisted ticker snapshots and rankings plus a `top_horizons` report view." in normalized
     assert "uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1" in text
@@ -44,7 +48,7 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "--assumptions valuation_assumptions/us/AAPL.yaml" in text
     assert "uv run universe-selector value tw --ticker 2330" in text
     assert "--assumptions valuation_assumptions/tw/2330.yaml" in text
-    assert "`value` v1 prints markdown only." in normalized
+    assert "`value` v1 prints markdown by default and JSON with `--json`." in normalized
     assert "requires `config.yaml` only for selecting `live.fundamentals_provider`" in normalized
     assert "does not read DuckDB" in normalized
     assert "does not persist the result" in normalized

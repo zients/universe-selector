@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from types import MappingProxyType
 
 import polars as pl
 
 from universe_selector.config import AppConfig
 from universe_selector.domain import Market
-from universe_selector.output.inspect import render_inspect
-from universe_selector.output.report import REPORT_RESEARCH_DISCLAIMER, render_markdown_report
+from universe_selector.output.inspect import render_inspect, render_inspect_json
+from universe_selector.output.json import json_dumps, to_jsonable
+from universe_selector.output.report import REPORT_RESEARCH_DISCLAIMER, render_json_report, render_markdown_report
 from universe_selector.providers.models import ProviderMetadata
 from universe_selector.ranking_profiles.liquidity_quality_v1 import LiquidityQualityV1Profile
 from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
@@ -27,6 +31,34 @@ def _provider_metadata() -> ProviderMetadata:
         market_timezone="UTC",
         run_latest_bar_date=date(2026, 4, 24),
     )
+
+
+@dataclass(frozen=True)
+class _JsonFixture:
+    when: date
+    values: tuple[int, ...]
+
+
+def test_json_helpers_convert_domain_values_and_emit_compact_sorted_json() -> None:
+    payload = {
+        "z": MappingProxyType({"b": 2, "a": 1}),
+        "a": _JsonFixture(date(2026, 5, 18), (3, 4)),
+        "dt": datetime(2026, 5, 18, 1, 2, 3, tzinfo=timezone.utc),
+    }
+
+    converted = to_jsonable(payload)
+    encoded = json_dumps(payload)
+
+    assert converted == {
+        "z": {"b": 2, "a": 1},
+        "a": {"when": "2026-05-18", "values": [3, 4]},
+        "dt": "2026-05-18T01:02:03+00:00",
+    }
+    assert encoded == (
+        '{"a":{"values":[3,4],"when":"2026-05-18"},'
+        '"dt":"2026-05-18T01:02:03+00:00","z":{"a":1,"b":2}}'
+    )
+    assert json.loads(encoded)["a"]["when"] == "2026-05-18"
 
 
 def test_markdown_report_renders_sample_profile_sections_and_notes() -> None:
@@ -80,6 +112,64 @@ def test_empty_report_is_structured_and_not_advice() -> None:
     assert REPORT_RESEARCH_DISCLAIMER in content
 
 
+def test_json_report_renders_top_n_horizon_rows_with_nested_metrics() -> None:
+    profile = SamplePriceTrendV1Profile()
+    content = render_json_report(
+        run_id="us-sample",
+        market=Market.US,
+        mode_label="fixture",
+        provider_summary={
+            "data_mode": "fixture",
+            "ranking_profile": "sample_price_trend_v1",
+            "ranking_config_hash": "sample-hash",
+        },
+        snapshot=pl.DataFrame(
+            {
+                "run_id": ["us-sample", "us-sample"],
+                "market": ["US", "US"],
+                "ticker": ["AAA", "BBB"],
+                "close": [10.0, 20.0],
+                "adjusted_close": [10.0, 20.0],
+                "avg_traded_value_20d_local": [10_000_000.0, 20_000_000.0],
+                "return_60d": [0.20, 0.10],
+                "return_120d": [0.40, 0.30],
+            }
+        ),
+        rankings=pl.DataFrame(
+            {
+                "run_id": ["us-sample", "us-sample", "us-sample", "us-sample"],
+                "market": ["US", "US", "US", "US"],
+                "horizon": ["midterm", "midterm", "longterm", "longterm"],
+                "rank": [1, 2, 1, 2],
+                "ticker": ["AAA", "BBB", "BBB", "AAA"],
+                "score": [90.0, 70.0, 85.0, 75.0],
+                "score_return_60d": [90.0, 70.0, 70.0, 90.0],
+                "score_return_120d": [70.0, 60.0, 85.0, 70.0],
+            }
+        ),
+        config=AppConfig(data_mode="fixture", report_top_n=1),
+        profile=profile,
+    )
+
+    payload = json.loads(content)
+
+    assert payload["artifact_type"] == "universe_selector_report"
+    assert payload["schema_version"] == 1
+    assert payload["run_id"] == "us-sample"
+    assert payload["market"] == "US"
+    assert payload["ranking_profile"] == "sample_price_trend_v1"
+    assert payload["ranking_config_hash"] == "sample-hash"
+    assert payload["candidate_summary"] == {"snapshot_rows": 2, "ranking_rows": 4, "top_n": 1}
+    assert [row["ticker"] for row in payload["snapshots"]] == ["AAA", "BBB"]
+    assert [row["ticker"] for row in payload["rankings"]] == ["AAA", "BBB", "BBB", "AAA"]
+    assert payload["rankings"][0]["metrics"]["score_return_60d"] == 90.0
+    assert [row["ticker"] for row in payload["top_horizons"]["midterm"]] == ["AAA"]
+    assert payload["top_horizons"]["midterm"][0]["ranking"]["metrics"]["score_return_60d"] == 90.0
+    assert payload["top_horizons"]["midterm"][0]["snapshot"]["metrics"]["return_60d"] == 0.20
+    assert [row["ticker"] for row in payload["top_horizons"]["longterm"]] == ["BBB"]
+    assert payload["notes"][-1] == "This report is rendered during batch; report and inspect read persisted results only."
+
+
 def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:
     profile = SamplePriceTrendV1Profile()
     output = render_inspect(
@@ -118,6 +208,63 @@ def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:
     assert "score_return_120d 70.0" in output
     assert profile.rank_interpretation_note in output
     assert "Absent tickers do not expose exclusion reasons." in output
+
+
+def test_inspect_json_separates_core_fields_from_profile_metrics() -> None:
+    profile = SamplePriceTrendV1Profile()
+    output = render_inspect_json(
+        run_id="us-run",
+        resolution_mode="explicit run_id",
+        ticker="AAA",
+        metadata=_provider_metadata(),
+        snapshot={
+            "run_id": "us-run",
+            "market": "US",
+            "ticker": "AAA",
+            "close": 10.0,
+            "adjusted_close": 10.0,
+            "avg_traded_value_20d_local": 10_000_000.0,
+            "return_60d": 0.20,
+            "return_120d": 0.40,
+        },
+        rankings=[
+            {
+                "run_id": "us-run",
+                "market": "US",
+                "horizon": "midterm",
+                "ticker": "AAA",
+                "rank": 1,
+                "score_return_60d": 90.0,
+                "score_return_120d": 70.0,
+                "score": 90.0,
+            },
+            {
+                "run_id": "us-run",
+                "market": "US",
+                "horizon": "longterm",
+                "ticker": "AAA",
+                "rank": 2,
+                "score_return_60d": 90.0,
+                "score_return_120d": 70.0,
+                "score": 70.0,
+            },
+        ],
+        profile=profile,
+        ranking_profile="sample_price_trend_v1",
+        ranking_config_hash="sample-hash",
+    )
+
+    payload = json.loads(output)
+
+    assert payload["artifact_type"] == "universe_selector_inspect"
+    assert payload["schema_version"] == 1
+    assert payload["ranking_profile"] == "sample_price_trend_v1"
+    assert payload["ranking_config_hash"] == "sample-hash"
+    assert payload["snapshot"]["close"] == 10.0
+    assert payload["snapshot"]["metrics"]["return_60d"] == 0.20
+    assert "return_60d" not in payload["snapshot"].keys() - {"metrics"}
+    assert payload["rankings"][0]["metrics"]["score_return_60d"] == 90.0
+    assert payload["provider_metadata"]["run_latest_bar_date"] == "2026-04-24"
 
 
 def test_inspect_renders_momentum_profile_metrics_and_rankings() -> None:

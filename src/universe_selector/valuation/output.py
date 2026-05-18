@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from universe_selector.output.json import json_dumps
 from universe_selector.valuation.formatting import (
     _format_money,
     _format_note,
@@ -150,6 +151,56 @@ def render_valuation_markdown(result: ValuationResult) -> str:
     lines.extend(renderer.render_input_provenance(result))
     lines.extend(renderer.render_scenario_results(result))
     return "\n".join(lines) + "\n"
+
+
+def render_valuation_json(result: ValuationResult) -> str:
+    run_input = result.run_input
+    metadata = run_input.fundamentals_metadata
+    raw_facts = run_input.raw_facts
+    effective = run_input.effective_inputs
+    assumptions = run_input.assumptions
+    payload = {
+        "schema_version": 1,
+        "artifact_type": "universe_selector_valuation",
+        "ephemeral": True,
+        "market": run_input.market,
+        "ticker": run_input.ticker,
+        "model_id": run_input.model_id,
+        "currency": effective.currency,
+        "provider_context": {
+            "data_mode": metadata.data_mode,
+            "fundamentals_provider_id": metadata.fundamentals_provider_id,
+            "fundamentals_source_ids": metadata.fundamentals_source_ids,
+            "data_fetch_started_at": metadata.data_fetch_started_at,
+            "latest_source_date": metadata.latest_source_date,
+            "source_risk_note": metadata.source_risk_note,
+            "field_mapping_note": metadata.field_mapping_note,
+        },
+        "assumption_context": {
+            "schema_version": assumptions.schema_version,
+            "default_model": assumptions.default_model,
+            "assumption_path": assumptions.assumption_path,
+            "assumption_hash": assumptions.assumption_hash,
+            "as_of": assumptions.as_of,
+            "currency": assumptions.currency,
+            "amount_unit": assumptions.amount_unit,
+            "share_basis": assumptions.share_basis,
+            "valuation_basis_note": assumptions.valuation_basis_note,
+            "assumption_source": assumptions.assumption_source,
+            "prepared_by": assumptions.prepared_by,
+            "source_note": assumptions.source_note,
+        },
+        "raw_facts": raw_facts,
+        "effective_inputs": effective,
+        "input_provenance": run_input.input_provenance,
+        "model_assumptions": assumptions.model_assumptions,
+        "scenario_results": result.scenario_results,
+        "notes": [
+            VALUATION_RESEARCH_DISCLAIMER,
+            "This valuation output is ephemeral and is not persisted.",
+        ],
+    }
+    return json_dumps(payload) + "\n"
 
 
 render_valuation = render_valuation_markdown

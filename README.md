@@ -40,10 +40,14 @@ The CLI has four command families:
 - `inspect --run-id RUN_ID --ticker TICKER`: inspect one ticker from one explicit
   persisted successful run.
 - `value MARKET --ticker TICKER`: run a live ephemeral single-ticker valuation
-  analysis and print markdown to stdout.
+  analysis and print markdown or JSON to stdout.
 
 `report` and `inspect` read persisted results. They do not recompute a batch run.
 `value` does not read or write persisted ranking runs.
+Add `--json` to `report`, `inspect`, or `value` to print machine-readable JSON.
+`batch` persists both markdown and JSON report artifacts; `report --json` reads
+the persisted JSON artifact for the selected run. Report JSON includes the full
+persisted ticker snapshots and rankings plus a `top_horizons` report view.
 
 ## Architecture
 
@@ -70,10 +74,10 @@ valuation_assumptions/{market}/{ticker}.yaml + fundamentals provider -> valuatio
   profile or profiles, persist each result, and render report artifacts.
 - `persistence/` owns DuckDB migrations and read/write access for run logs,
   provider metadata, ticker snapshots, rankings, and report artifacts.
-- `output/` renders markdown reports and per-ticker inspect output from persisted
-  data, plus thin command output adapters.
+- `output/` renders markdown and JSON reports plus per-ticker inspect output from
+  persisted data, plus thin command output adapters.
 - `valuation/` owns valuation assumptions, model logic, orchestration, and
-  valuation markdown output.
+  valuation output.
 - `cli.py` is the Typer command layer for `batch`, `report`, `inspect`, and
   `value`.
 
@@ -197,12 +201,14 @@ Print the latest successful US report for the current config profile:
 
 ```bash
 uv run universe-selector report us
+uv run universe-selector report us --json
 ```
 
 Inspect a ticker from the latest successful US run:
 
 ```bash
 uv run universe-selector inspect us --ticker AXTI
+uv run universe-selector inspect us --ticker AXTI --json
 ```
 
 Use a specific ranking profile for a new run or latest-run lookup:
@@ -244,6 +250,7 @@ Run an ephemeral valuation analysis:
 
 ```bash
 uv run universe-selector value us --ticker AAPL
+uv run universe-selector value us --ticker AAPL --json
 uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1
 uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1
 uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1
@@ -253,8 +260,9 @@ uv run universe-selector value tw --ticker 2330 \
   --assumptions valuation_assumptions/tw/2330.yaml
 ```
 
-`value` v1 prints markdown only. It requires `config.yaml` only for selecting
-`live.fundamentals_provider`, does not read DuckDB, and does not persist the result.
+`value` v1 prints markdown by default and JSON with `--json`. It requires
+`config.yaml` only for selecting `live.fundamentals_provider`, does not read
+DuckDB, and does not persist the result.
 The default assumptions path is
 `valuation_assumptions/{market}/{ticker}.yaml`; the committed
 `valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml`
