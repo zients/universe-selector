@@ -14,6 +14,7 @@ and interpretation notes.
 | `volatility_quality_v1` | Market-relative quality profile favoring lower realized volatility, downside volatility control, range tightness, and drawdown control. | `composite`, `shortterm`, `stable` | 126 bars |
 | `liquidity_quality_v1` | Market-relative liquidity profile using traded value depth, friction proxies, traded value stability, concentration, continuity, and range tightness. | `composite`, `shortterm`, `stable` | 63 bars |
 | `base_breakout_quality_v1` | Market-relative base breakout profile favoring constructive bases near resistance or early breakout readiness with liquidity and failed-breakout risk tags. | `composite`, `near_breakout`, `breakout_readiness` | 252 bars |
+| `relative_strength_leader_v1` | Market-relative leadership profile favoring persistent 20/60/120-day relative strength, risk-adjusted momentum, trend durability, and overheat audit tags. | `composite`, `shortterm_leader`, `midterm_leader` | 274 bars |
 | `defensive_compounder_quality_v1` | OHLCV-only defensive compounder proxy favoring steady positive price behavior, downside volatility control, drawdown control, and intact long-trend structure. | `composite`, `steady_compounder`, `downside_control` | 252 bars |
 
 All profile scores are ranking values, not return forecasts. Higher score ranks
@@ -148,6 +149,29 @@ It persists setup and risk tags such as `tag_setup_valid_base`,
 not a buy signal; use it as a candidate-ranking lens that still requires
 independent review.
 
+### `relative_strength_leader_v1`
+
+`relative_strength_leader_v1` is a market-relative leadership profile for
+identifying the strongest names in the current market tape. It emphasizes
+persistent 20-day, 60-day, and 120-day leadership, risk-adjusted 6-1 and 12-1
+momentum, trend durability, proximity to recent highs, drawdown control, and
+liquidity continuity.
+
+It ranks three horizons:
+
+- `composite`: balanced leadership persistence, trend durability, risk control,
+  and proximity to highs.
+- `shortterm_leader`: emphasizes recent 20-day and 60-day leadership.
+- `midterm_leader`: emphasizes 60-day and 120-day leadership plus 6-1 and 12-1
+  risk-adjusted momentum.
+
+It persists positive and risk tags such as `tag_positive_rs_leader`,
+`tag_positive_persistent_leader`, `tag_positive_new_high_leader`,
+`tag_risk_chasing_extension`, `tag_risk_recent_rs_fade`,
+`tag_risk_high_volatility`, and `tag_risk_liquidity_fade`. Relative strength
+leader quality is not a buy signal; use it as a leadership-ranking lens that
+still requires independent review.
+
 ### `defensive_compounder_quality_v1`
 
 `defensive_compounder_quality_v1` is an OHLCV-only defensive compounder proxy.
@@ -181,8 +205,10 @@ with audit tags. Use `trend_quality_v1` when you want a more structured trend
 lens with audit tags. Use `trend_pullback_quality_v1` when you want strong
 stocks that have corrected toward support without losing longer-term trend
 structure. Use `base_breakout_quality_v1` when you want constructive bases near
-or just through breakout. Use `defensive_compounder_quality_v1` when you want an
-OHLCV-only defensive compounder proxy rather than a fundamental quality screen.
-Use `volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
+or just through breakout. Use `relative_strength_leader_v1` when you want the
+market's persistent leadership list with overheat and fade tags. Use
+`defensive_compounder_quality_v1` when you want an OHLCV-only defensive
+compounder proxy rather than a fundamental quality screen. Use
+`volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
 companions, either on their own or in a multi-profile batch with momentum or
 trend profiles.

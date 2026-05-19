@@ -451,6 +451,69 @@ def test_pipeline_runs_base_breakout_quality_profile_and_persists_metrics(
             assert math.isfinite(float(row[key]))
 
 
+def test_pipeline_runs_relative_strength_leader_profile_and_persists_metrics(
+    tmp_path: Path, fixture_dir: Path
+) -> None:
+    config = AppConfig(
+        data_mode="fixture",
+        duckdb_path=str(tmp_path / "runs.duckdb"),
+        lock_path=str(tmp_path / "batch.lock"),
+        fixture_dir=str(fixture_dir),
+        ranking_profile="relative_strength_leader_v1",
+        report_top_n=2,
+    )
+
+    result = run_batch(Market.US, config)
+
+    repo = DuckDbRepository(config.duckdb_path)
+    profile = config.selected_ranking_profile
+    resolved = repo.resolve_latest_successful_run(Market.US, ranking_profile="relative_strength_leader_v1")
+    report = repo.read_report_markdown(result.run_id)
+    payload = repo.read_inspect_payload(result.run_id, "AAA", profile=profile)
+
+    assert resolved.run_id == result.run_id
+    assert resolved.ranking_profile == "relative_strength_leader_v1"
+    assert "ranking_profile: relative_strength_leader_v1" in report
+    ranking_content = report.split("## Methodology Notes", 1)[0]
+    assert profile.rank_interpretation_note in report
+    assert "tag_positive_rs_leader" not in ranking_content
+
+    expected_snapshot_keys = {
+        "run_id",
+        "market",
+        "ticker",
+        "close",
+        "adjusted_close",
+        *profile.snapshot_metric_keys,
+    }
+    expected_ranking_keys = {
+        "run_id",
+        "market",
+        "horizon",
+        "ticker",
+        "score",
+        "rank",
+        *profile.ranking_metric_keys,
+    }
+    assert payload.snapshot["ticker"] == "AAA"
+    assert set(payload.snapshot) == expected_snapshot_keys
+    assert "volume" not in payload.snapshot
+    assert payload.snapshot["return_60d"] > 0.0 or payload.snapshot["return_120d"] > 0.0
+    assert payload.snapshot["price_vs_sma_200d"] > 0.0
+    assert {row["horizon"] for row in payload.rankings} == set(profile.horizon_order)
+    for key in profile.snapshot_metric_keys:
+        assert isinstance(payload.snapshot[key], int | float)
+        assert math.isfinite(float(payload.snapshot[key]))
+    for row in payload.rankings:
+        assert set(row) == expected_ranking_keys
+        assert "volume" not in row
+        assert isinstance(row["rank"], int)
+        assert math.isfinite(float(row["score"]))
+        for key in profile.ranking_metric_keys:
+            assert isinstance(row[key], int | float)
+            assert math.isfinite(float(row[key]))
+
+
 def test_pipeline_marks_failed_run_when_provider_has_no_usable_rows(tmp_path: Path, fixture_dir: Path) -> None:
     config = _fixture_config(tmp_path, fixture_dir)
     empty_fixture_dir = tmp_path / "empty_fixture"

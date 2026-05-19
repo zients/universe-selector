@@ -11,6 +11,7 @@ from universe_selector.ranking_profiles.defensive_compounder_quality_v1 import (
 from universe_selector.ranking_profiles.liquidity_quality_v1 import LIQUIDITY_QUALITY_V1_REGISTRATION
 from universe_selector.ranking_profiles.momentum_v1 import MOMENTUM_V1_REGISTRATION
 from universe_selector.ranking_profiles.momentum_quality_v1 import MOMENTUM_QUALITY_V1_REGISTRATION
+from universe_selector.ranking_profiles.relative_strength_leader_v1 import RELATIVE_STRENGTH_LEADER_V1_REGISTRATION
 from universe_selector.ranking_profiles.registration import (
     RankingProfileRegistration,
     build_ranking_profile_registration_map,
@@ -30,6 +31,7 @@ _REGISTRATIONS: tuple[RankingProfileRegistration, ...] = (
     MOMENTUM_QUALITY_V1_REGISTRATION,
     LIQUIDITY_QUALITY_V1_REGISTRATION,
     BASE_BREAKOUT_QUALITY_V1_REGISTRATION,
+    RELATIVE_STRENGTH_LEADER_V1_REGISTRATION,
     DEFENSIVE_COMPOUNDER_QUALITY_V1_REGISTRATION,
 )
 
