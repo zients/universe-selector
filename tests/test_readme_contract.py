@@ -66,3 +66,18 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "model-implied scenario results" in normalized
     assert "not forecasts, expected outcomes, target cases, or recommendations" in normalized
     assert "TW valuation templates use TWD ordinary-share basis with no ADR-ratio, board-lot, or currency adjustment" in normalized
+
+
+def test_readme_documents_registered_public_quality_ranking_profiles() -> None:
+    text = README.read_text()
+    normalized = " ".join(text.split())
+
+    assert "`momentum_quality_v1`" in text
+    assert "`defensive_compounder_quality_v1`" in text
+    assert "| `momentum_quality_v1` |" in text
+    assert "| `defensive_compounder_quality_v1` |" in text
+    assert "### `momentum_quality_v1`" in text
+    assert "### `defensive_compounder_quality_v1`" in text
+    assert "`momentum_quality_v1` for market-relative momentum quality with audit tags" in normalized
+    assert "`defensive_compounder_quality_v1` when you want an OHLCV-only defensive compounder proxy" in normalized
+    assert "Defensive compounder quality is not a buy signal" in normalized
