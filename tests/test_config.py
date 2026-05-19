@@ -55,6 +55,10 @@ from universe_selector.ranking_profiles.trend_quality_v1 import (
     TREND_QUALITY_SNAPSHOT_METRIC_KEYS,
     TrendQualityV1Profile,
 )
+from universe_selector.ranking_profiles.trend_pullback_quality_v1 import (
+    TREND_PULLBACK_QUALITY_PROFILE_ID,
+    TrendPullbackQualityV1Profile,
+)
 from universe_selector.ranking_profiles.volatility_quality_v1 import (
     VOLATILITY_QUALITY_PROFILE_ID,
     VOLATILITY_QUALITY_RANK_INTERPRETATION_NOTE,
@@ -422,6 +426,7 @@ def test_ranking_profiles_package_root_exposes_registry_contract_only() -> None:
     assert "SamplePriceTrendV1Profile" not in ranking_profiles.__all__
     assert "DefensiveCompounderQualityV1Profile" not in ranking_profiles.__all__
     assert "TrendQualityV1Profile" not in ranking_profiles.__all__
+    assert "TrendPullbackQualityV1Profile" not in ranking_profiles.__all__
 
 
 def test_supported_profile_registry_includes_registered_profiles() -> None:
@@ -429,6 +434,7 @@ def test_supported_profile_registry_includes_registered_profiles() -> None:
         "sample_price_trend_v1",
         "momentum_v1",
         "trend_quality_v1",
+        TREND_PULLBACK_QUALITY_PROFILE_ID,
         "volatility_quality_v1",
         MOMENTUM_QUALITY_PROFILE_ID,
         "liquidity_quality_v1",
@@ -454,6 +460,11 @@ def test_supported_profile_registry_includes_registered_profiles() -> None:
     assert isinstance(trend_registration, RankingProfileRegistration)
     assert isinstance(trend_registration.create_profile(), TrendQualityV1Profile)
     assert isinstance(get_ranking_profile("trend_quality_v1"), TrendQualityV1Profile)
+
+    trend_pullback_registration = get_ranking_profile_registration(TREND_PULLBACK_QUALITY_PROFILE_ID)
+    assert isinstance(trend_pullback_registration, RankingProfileRegistration)
+    assert isinstance(trend_pullback_registration.create_profile(), TrendPullbackQualityV1Profile)
+    assert isinstance(get_ranking_profile(TREND_PULLBACK_QUALITY_PROFILE_ID), TrendPullbackQualityV1Profile)
 
     momentum_quality_registration = get_ranking_profile_registration(MOMENTUM_QUALITY_PROFILE_ID)
     assert isinstance(momentum_quality_registration, RankingProfileRegistration)

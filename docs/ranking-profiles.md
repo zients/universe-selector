@@ -10,6 +10,7 @@ and interpretation notes.
 | `momentum_v1` | Raw weighted momentum profile using risk-adjusted medium-term momentum and short-term strength. | `swing`, `midterm` | 274 bars |
 | `momentum_quality_v1` | Market-relative momentum quality profile using risk-adjusted momentum, moving-average structure, trend consistency, drawdown control, caps, and audit tags. | `composite`, `swing`, `midterm` | 274 bars |
 | `trend_quality_v1` | Market-relative trend profile using returns, trend slope, trend fit, moving-average structure, drawdown control, caps, and structure tags. | `composite`, `shortterm`, `midterm` | 252 bars |
+| `trend_pullback_quality_v1` | Market-relative pullback profile favoring strong prior trends that have corrected into orderly pullbacks while preserving trend, support, and liquidity. | `composite`, `near_support`, `trend_resume` | 252 bars |
 | `volatility_quality_v1` | Market-relative quality profile favoring lower realized volatility, downside volatility control, range tightness, and drawdown control. | `composite`, `shortterm`, `stable` | 126 bars |
 | `liquidity_quality_v1` | Market-relative liquidity profile using traded value depth, friction proxies, traded value stability, concentration, continuity, and range tightness. | `composite`, `shortterm`, `stable` | 63 bars |
 | `defensive_compounder_quality_v1` | OHLCV-only defensive compounder proxy favoring steady positive price behavior, downside volatility control, drawdown control, and intact long-trend structure. | `composite`, `steady_compounder`, `downside_control` | 252 bars |
@@ -81,6 +82,27 @@ Top ranks are relative to the eligible candidates in the same run. In a weak
 eligible universe, a top-ranked row can still be the least-bad candidate rather
 than a clean upward trend. Scores may be negative or capped.
 
+### `trend_pullback_quality_v1`
+
+`trend_pullback_quality_v1` is a market-relative pullback profile for strong
+stocks that have corrected into orderly pullbacks. It favors candidates with
+positive prior strength, intact longer-term trend structure, controlled pullback
+depth, support proximity around shorter moving averages, and recent liquidity
+continuity.
+
+It ranks three horizons:
+
+- `composite`: balanced prior strength, intact trend, pullback setup, support,
+  and risk control.
+- `near_support`: emphasizes pullback setup and support proximity.
+- `trend_resume`: emphasizes intact trend structure and signs of stabilization.
+
+It persists setup and risk tags such as `tag_setup_healthy_pullback`,
+`tag_setup_near_sma50`, `tag_setup_trend_resume`, `tag_risk_breakdown`,
+`tag_risk_deep_drawdown`, `tag_risk_liquidity_fade`, and
+`tag_risk_still_overheated`. Trend pullback quality is not a buy signal; use it
+as a candidate-ranking lens that still requires independent review.
+
 ### `volatility_quality_v1`
 
 `volatility_quality_v1` is a market-relative volatility quality profile. It
@@ -132,8 +154,10 @@ Use `sample_price_trend_v1` for fixture smoke tests and as a reference
 implementation for new profiles. Use `momentum_v1` when you want a raw momentum
 candidate list. Use `momentum_quality_v1` for market-relative momentum quality
 with audit tags. Use `trend_quality_v1` when you want a more structured trend
-lens with audit tags. Use `defensive_compounder_quality_v1` when you want an
-OHLCV-only defensive compounder proxy rather than a fundamental quality screen.
-Use `volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
+lens with audit tags. Use `trend_pullback_quality_v1` when you want strong
+stocks that have corrected toward support without losing longer-term trend
+structure. Use `defensive_compounder_quality_v1` when you want an OHLCV-only
+defensive compounder proxy rather than a fundamental quality screen. Use
+`volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
 companions, either on their own or in a multi-profile batch with momentum or
 trend profiles.

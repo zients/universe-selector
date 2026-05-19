@@ -19,6 +19,7 @@ from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
 from universe_selector.ranking_profiles.momentum_quality_v1 import MomentumQualityV1Profile
 from universe_selector.ranking_profiles.sample_price_trend_v1 import SamplePriceTrendV1Profile
 from universe_selector.ranking_profiles.trend_quality_v1 import TrendQualityV1Profile
+from universe_selector.ranking_profiles.trend_pullback_quality_v1 import TrendPullbackQualityV1Profile
 from universe_selector.ranking_profiles.volatility_quality_v1 import VolatilityQualityV1Profile
 
 
@@ -177,6 +178,7 @@ def test_markdown_reports_use_plain_ranking_tables_for_any_profile() -> None:
         MomentumQualityV1Profile(),
         LiquidityQualityV1Profile(),
         TrendQualityV1Profile(),
+        TrendPullbackQualityV1Profile(),
         VolatilityQualityV1Profile(),
         DefensiveCompounderQualityV1Profile(),
     ]
