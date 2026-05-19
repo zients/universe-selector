@@ -13,6 +13,7 @@ from universe_selector.output.inspect import render_inspect, render_inspect_json
 from universe_selector.output.json import json_dumps, to_jsonable
 from universe_selector.output.report import REPORT_RESEARCH_DISCLAIMER, render_json_report, render_markdown_report
 from universe_selector.providers.models import ProviderMetadata
+from universe_selector.ranking_profiles.base_breakout_quality_v1 import BaseBreakoutQualityV1Profile
 from universe_selector.ranking_profiles.defensive_compounder_quality_v1 import DefensiveCompounderQualityV1Profile
 from universe_selector.ranking_profiles.liquidity_quality_v1 import LiquidityQualityV1Profile
 from universe_selector.ranking_profiles.momentum_v1 import MomentumV1Profile
@@ -180,6 +181,7 @@ def test_markdown_reports_use_plain_ranking_tables_for_any_profile() -> None:
         TrendQualityV1Profile(),
         TrendPullbackQualityV1Profile(),
         VolatilityQualityV1Profile(),
+        BaseBreakoutQualityV1Profile(),
         DefensiveCompounderQualityV1Profile(),
     ]
     for profile in profiles:

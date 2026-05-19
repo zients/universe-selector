@@ -136,15 +136,20 @@ def test_readme_documents_registered_public_quality_ranking_profiles() -> None:
 
     assert "`momentum_quality_v1`" in text
     assert "`trend_pullback_quality_v1`" in text
+    assert "`base_breakout_quality_v1`" in text
     assert "`defensive_compounder_quality_v1`" in text
     assert "| `momentum_quality_v1` |" in text
     assert "| `trend_pullback_quality_v1` |" in text
+    assert "| `base_breakout_quality_v1` |" in text
     assert "| `defensive_compounder_quality_v1` |" in text
     assert "### `momentum_quality_v1`" in text
     assert "### `trend_pullback_quality_v1`" in text
+    assert "### `base_breakout_quality_v1`" in text
     assert "### `defensive_compounder_quality_v1`" in text
     assert "`momentum_quality_v1` for market-relative momentum quality with audit tags" in normalized
     assert "`trend_pullback_quality_v1` when you want strong stocks that have corrected toward support" in normalized
+    assert "`base_breakout_quality_v1` when you want constructive bases near or just through breakout" in normalized
     assert "`defensive_compounder_quality_v1` when you want an OHLCV-only defensive compounder proxy" in normalized
     assert "Trend pullback quality is not a buy signal" in normalized
+    assert "Base breakout quality is not a buy signal" in normalized
     assert "Defensive compounder quality is not a buy signal" in normalized

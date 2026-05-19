@@ -24,6 +24,10 @@ from universe_selector.ranking_profiles import (
     get_ranking_profile_registration,
     supported_ranking_profile_ids,
 )
+from universe_selector.ranking_profiles.base_breakout_quality_v1 import (
+    BASE_BREAKOUT_QUALITY_PROFILE_ID,
+    BaseBreakoutQualityV1Profile,
+)
 from universe_selector.ranking_profiles.defensive_compounder_quality_v1 import (
     DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID,
     DefensiveCompounderQualityV1Profile,
@@ -424,6 +428,7 @@ def test_ranking_profiles_package_root_exposes_registry_contract_only() -> None:
     assert "LiquidityQualityV1Profile" not in ranking_profiles.__all__
     assert "MomentumV1Profile" not in ranking_profiles.__all__
     assert "SamplePriceTrendV1Profile" not in ranking_profiles.__all__
+    assert "BaseBreakoutQualityV1Profile" not in ranking_profiles.__all__
     assert "DefensiveCompounderQualityV1Profile" not in ranking_profiles.__all__
     assert "TrendQualityV1Profile" not in ranking_profiles.__all__
     assert "TrendPullbackQualityV1Profile" not in ranking_profiles.__all__
@@ -438,6 +443,7 @@ def test_supported_profile_registry_includes_registered_profiles() -> None:
         "volatility_quality_v1",
         MOMENTUM_QUALITY_PROFILE_ID,
         "liquidity_quality_v1",
+        BASE_BREAKOUT_QUALITY_PROFILE_ID,
         DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID,
     )
 
@@ -475,6 +481,11 @@ def test_supported_profile_registry_includes_registered_profiles() -> None:
     assert isinstance(liquidity_registration, RankingProfileRegistration)
     assert isinstance(liquidity_registration.create_profile(), LiquidityQualityV1Profile)
     assert isinstance(get_ranking_profile("liquidity_quality_v1"), LiquidityQualityV1Profile)
+
+    base_breakout_registration = get_ranking_profile_registration(BASE_BREAKOUT_QUALITY_PROFILE_ID)
+    assert isinstance(base_breakout_registration, RankingProfileRegistration)
+    assert isinstance(base_breakout_registration.create_profile(), BaseBreakoutQualityV1Profile)
+    assert isinstance(get_ranking_profile(BASE_BREAKOUT_QUALITY_PROFILE_ID), BaseBreakoutQualityV1Profile)
 
     defensive_registration = get_ranking_profile_registration(DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID)
     assert isinstance(defensive_registration, RankingProfileRegistration)

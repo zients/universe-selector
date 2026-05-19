@@ -13,6 +13,7 @@ and interpretation notes.
 | `trend_pullback_quality_v1` | Market-relative pullback profile favoring strong prior trends that have corrected into orderly pullbacks while preserving trend, support, and liquidity. | `composite`, `near_support`, `trend_resume` | 252 bars |
 | `volatility_quality_v1` | Market-relative quality profile favoring lower realized volatility, downside volatility control, range tightness, and drawdown control. | `composite`, `shortterm`, `stable` | 126 bars |
 | `liquidity_quality_v1` | Market-relative liquidity profile using traded value depth, friction proxies, traded value stability, concentration, continuity, and range tightness. | `composite`, `shortterm`, `stable` | 63 bars |
+| `base_breakout_quality_v1` | Market-relative base breakout profile favoring constructive bases near resistance or early breakout readiness with liquidity and failed-breakout risk tags. | `composite`, `near_breakout`, `breakout_readiness` | 252 bars |
 | `defensive_compounder_quality_v1` | OHLCV-only defensive compounder proxy favoring steady positive price behavior, downside volatility control, drawdown control, and intact long-trend structure. | `composite`, `steady_compounder`, `downside_control` | 252 bars |
 
 All profile scores are ranking values, not return forecasts. Higher score ranks
@@ -124,6 +125,29 @@ The profile is useful for screening tradability and liquidity quality. Traded
 value metrics are local currency amounts, so compare scores and ranks within the
 same market, run, profile, and horizon.
 
+### `base_breakout_quality_v1`
+
+`base_breakout_quality_v1` is a market-relative breakout setup profile for
+constructive bases near or just through breakout. It favors intact trend
+structure, controlled base depth, tighter recent ranges, proximity to recent
+highs, and confirming traded value without requiring manual chart labels.
+
+It ranks three horizons:
+
+- `composite`: balanced base quality, trend structure, breakout setup, volume,
+  and risk control.
+- `near_breakout`: emphasizes clean bases close to a recent high without
+  overextension.
+- `breakout_readiness`: emphasizes candidates closest to early breakout
+  confirmation with recent volume support and false-breakout caps.
+
+It persists setup and risk tags such as `tag_setup_valid_base`,
+`tag_setup_near_breakout`, `tag_setup_confirmed_breakout`,
+`tag_risk_false_breakout`, `tag_risk_overextended_breakout`,
+`tag_risk_weak_base`, and `tag_risk_liquidity_fade`. Base breakout quality is
+not a buy signal; use it as a candidate-ranking lens that still requires
+independent review.
+
 ### `defensive_compounder_quality_v1`
 
 `defensive_compounder_quality_v1` is an OHLCV-only defensive compounder proxy.
@@ -156,8 +180,9 @@ candidate list. Use `momentum_quality_v1` for market-relative momentum quality
 with audit tags. Use `trend_quality_v1` when you want a more structured trend
 lens with audit tags. Use `trend_pullback_quality_v1` when you want strong
 stocks that have corrected toward support without losing longer-term trend
-structure. Use `defensive_compounder_quality_v1` when you want an OHLCV-only
-defensive compounder proxy rather than a fundamental quality screen. Use
-`volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
+structure. Use `base_breakout_quality_v1` when you want constructive bases near
+or just through breakout. Use `defensive_compounder_quality_v1` when you want an
+OHLCV-only defensive compounder proxy rather than a fundamental quality screen.
+Use `volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
 companions, either on their own or in a multi-profile batch with momentum or
 trend profiles.

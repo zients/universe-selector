@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from universe_selector.errors import ValidationError
 from universe_selector.ranking_profiles.base import RankingProfile
+from universe_selector.ranking_profiles.base_breakout_quality_v1 import BASE_BREAKOUT_QUALITY_V1_REGISTRATION
 from universe_selector.ranking_profiles.defensive_compounder_quality_v1 import (
     DEFENSIVE_COMPOUNDER_QUALITY_V1_REGISTRATION,
 )
@@ -28,6 +29,7 @@ _REGISTRATIONS: tuple[RankingProfileRegistration, ...] = (
     VOLATILITY_QUALITY_V1_REGISTRATION,
     MOMENTUM_QUALITY_V1_REGISTRATION,
     LIQUIDITY_QUALITY_V1_REGISTRATION,
+    BASE_BREAKOUT_QUALITY_V1_REGISTRATION,
     DEFENSIVE_COMPOUNDER_QUALITY_V1_REGISTRATION,
 )
 

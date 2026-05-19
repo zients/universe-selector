@@ -22,8 +22,8 @@ This project is an alpha-stage research tool. It is not investment advice.
 - Default example ranking profile: `sample_price_trend_v1`.
 - Supported ranking profiles: `sample_price_trend_v1`, `momentum_v1`,
   `momentum_quality_v1`, `trend_quality_v1`, `trend_pullback_quality_v1`,
-  `volatility_quality_v1`, `liquidity_quality_v1`, and
-  `defensive_compounder_quality_v1`.
+  `volatility_quality_v1`, `liquidity_quality_v1`,
+  `base_breakout_quality_v1`, and `defensive_compounder_quality_v1`.
 - Single-profile and multi-profile batch runs are supported.
 - Persistence: local DuckDB database under `.universe-selector/` by default.
 
@@ -183,6 +183,7 @@ report:
 - `trend_pullback_quality_v1`
 - `volatility_quality_v1`
 - `liquidity_quality_v1`
+- `base_breakout_quality_v1`
 - `defensive_compounder_quality_v1`
 
 For quick smoke runs against a smaller live universe, set:
