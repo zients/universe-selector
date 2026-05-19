@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 import json
 import math
+import shutil
 from dataclasses import replace
 from pathlib import Path
 
@@ -26,6 +28,39 @@ def _fixture_config(tmp_path: Path, fixture_dir: Path) -> AppConfig:
         ranking_profile="sample_price_trend_v1",
         report_top_n=2,
     )
+
+
+def _copy_fixture_with_mean_reversion_pullback(tmp_path: Path, fixture_dir: Path) -> Path:
+    target_dir = tmp_path / "mean_reversion_fixture"
+    shutil.copytree(fixture_dir, target_dir)
+    ohlcv_path = target_dir / "ohlcv.csv"
+
+    with ohlcv_path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+        fieldnames = reader.fieldnames
+    assert fieldnames is not None
+
+    bbb_rows = [row for row in rows if row["market"] == "US" and row["ticker"] == "BBB"]
+    assert len(bbb_rows) >= 2
+    last_row = bbb_rows[-1]
+    pullback_close = round(float(bbb_rows[-2]["close"]) * 0.95, 6)
+    last_row.update(
+        {
+            "open": str(round(pullback_close * 0.995, 6)),
+            "high": str(round(pullback_close * 1.01, 6)),
+            "low": str(round(pullback_close * 0.99, 6)),
+            "close": str(pullback_close),
+            "adjusted_close": str(pullback_close),
+        }
+    )
+
+    with ohlcv_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return target_dir
 
 
 def test_pipeline_runs_sample_profile_and_persists_report(tmp_path: Path, fixture_dir: Path) -> None:
@@ -500,6 +535,73 @@ def test_pipeline_runs_relative_strength_leader_profile_and_persists_metrics(
     assert "volume" not in payload.snapshot
     assert payload.snapshot["return_60d"] > 0.0 or payload.snapshot["return_120d"] > 0.0
     assert payload.snapshot["price_vs_sma_200d"] > 0.0
+    assert {row["horizon"] for row in payload.rankings} == set(profile.horizon_order)
+    for key in profile.snapshot_metric_keys:
+        assert isinstance(payload.snapshot[key], int | float)
+        assert math.isfinite(float(payload.snapshot[key]))
+    for row in payload.rankings:
+        assert set(row) == expected_ranking_keys
+        assert "volume" not in row
+        assert isinstance(row["rank"], int)
+        assert math.isfinite(float(row["score"]))
+        for key in profile.ranking_metric_keys:
+            assert isinstance(row[key], int | float)
+            assert math.isfinite(float(row[key]))
+
+
+def test_pipeline_runs_mean_reversion_quality_profile_and_persists_metrics(
+    tmp_path: Path, fixture_dir: Path
+) -> None:
+    mean_reversion_fixture_dir = _copy_fixture_with_mean_reversion_pullback(tmp_path, fixture_dir)
+    config = AppConfig(
+        data_mode="fixture",
+        duckdb_path=str(tmp_path / "runs.duckdb"),
+        lock_path=str(tmp_path / "batch.lock"),
+        fixture_dir=str(mean_reversion_fixture_dir),
+        ranking_profile="mean_reversion_quality_v1",
+        report_top_n=2,
+    )
+
+    result = run_batch(Market.US, config)
+
+    repo = DuckDbRepository(config.duckdb_path)
+    profile = config.selected_ranking_profile
+    resolved = repo.resolve_latest_successful_run(Market.US, ranking_profile="mean_reversion_quality_v1")
+    report = repo.read_report_markdown(result.run_id)
+    snapshot_rows = repo.connect(read_only=True).execute(
+        "select ticker from run_ticker_snapshot where run_id = ? order by ticker",
+        [result.run_id],
+    ).fetchall()
+    payload = repo.read_inspect_payload(result.run_id, snapshot_rows[0][0], profile=profile)
+
+    assert resolved.run_id == result.run_id
+    assert resolved.ranking_profile == "mean_reversion_quality_v1"
+    assert "ranking_profile: mean_reversion_quality_v1" in report
+    ranking_content = report.split("## Methodology Notes", 1)[0]
+    assert profile.rank_interpretation_note in report
+    assert "tag_setup_oversold_quality" not in ranking_content
+
+    expected_snapshot_keys = {
+        "run_id",
+        "market",
+        "ticker",
+        "close",
+        "adjusted_close",
+        *profile.snapshot_metric_keys,
+    }
+    expected_ranking_keys = {
+        "run_id",
+        "market",
+        "horizon",
+        "ticker",
+        "score",
+        "rank",
+        *profile.ranking_metric_keys,
+    }
+    assert payload.snapshot["return_20d"] < 0.0 or payload.snapshot["distance_from_sma_20d"] < 0.0
+    assert payload.snapshot["max_drawdown_120d"] > -0.40
+    assert set(payload.snapshot) == expected_snapshot_keys
+    assert "volume" not in payload.snapshot
     assert {row["horizon"] for row in payload.rankings} == set(profile.horizon_order)
     for key in profile.snapshot_metric_keys:
         assert isinstance(payload.snapshot[key], int | float)

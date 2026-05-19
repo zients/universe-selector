@@ -15,6 +15,7 @@ and interpretation notes.
 | `liquidity_quality_v1` | Market-relative liquidity profile using traded value depth, friction proxies, traded value stability, concentration, continuity, and range tightness. | `composite`, `shortterm`, `stable` | 63 bars |
 | `base_breakout_quality_v1` | Market-relative base breakout profile favoring constructive bases near resistance or early breakout readiness with liquidity and failed-breakout risk tags. | `composite`, `near_breakout`, `breakout_readiness` | 252 bars |
 | `relative_strength_leader_v1` | Market-relative leadership profile favoring persistent 20/60/120-day relative strength, risk-adjusted momentum, trend durability, and overheat audit tags. | `composite`, `shortterm_leader`, `midterm_leader` | 274 bars |
+| `mean_reversion_quality_v1` | Market-relative mean reversion profile favoring short-term oversold candidates near support with rebound confirmation and falling-knife risk controls. | `composite`, `oversold_bounce`, `support_reversion` | 252 bars |
 | `defensive_compounder_quality_v1` | OHLCV-only defensive compounder proxy favoring steady positive price behavior, downside volatility control, drawdown control, and intact long-trend structure. | `composite`, `steady_compounder`, `downside_control` | 252 bars |
 
 All profile scores are ranking values, not return forecasts. Higher score ranks
@@ -172,6 +173,29 @@ It persists positive and risk tags such as `tag_positive_rs_leader`,
 leader quality is not a buy signal; use it as a leadership-ranking lens that
 still requires independent review.
 
+### `mean_reversion_quality_v1`
+
+`mean_reversion_quality_v1` is a market-relative mean reversion profile for
+short-term oversold repair candidates. It favors controlled pullbacks below
+shorter moving averages, support proximity, early rebound confirmation,
+liquidity continuity, and preserved longer-term structure while penalizing
+falling-knife and breakdown risk.
+
+It ranks three horizons:
+
+- `composite`: balanced oversold setup, support, rebound confirmation, and risk
+  control.
+- `oversold_bounce`: emphasizes short-term oversold depth and rebound
+  confirmation.
+- `support_reversion`: emphasizes support proximity and preserved structure.
+
+It persists setup and risk tags such as `tag_setup_oversold_quality`,
+`tag_setup_near_support`, `tag_setup_rebound_confirmation`,
+`tag_risk_falling_knife`, `tag_risk_breakdown`,
+`tag_risk_deep_drawdown`, `tag_risk_volatility_spike`, and
+`tag_risk_liquidity_fade`. Mean reversion quality is not a buy signal; use it
+as a repair-candidate ranking lens that still requires independent review.
+
 ### `defensive_compounder_quality_v1`
 
 `defensive_compounder_quality_v1` is an OHLCV-only defensive compounder proxy.
@@ -207,6 +231,8 @@ stocks that have corrected toward support without losing longer-term trend
 structure. Use `base_breakout_quality_v1` when you want constructive bases near
 or just through breakout. Use `relative_strength_leader_v1` when you want the
 market's persistent leadership list with overheat and fade tags. Use
+`mean_reversion_quality_v1` when you want short-term oversold repair candidates
+that still preserve enough structure to avoid obvious falling-knife setups. Use
 `defensive_compounder_quality_v1` when you want an OHLCV-only defensive
 compounder proxy rather than a fundamental quality screen. Use
 `volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability

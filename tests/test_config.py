@@ -37,6 +37,10 @@ from universe_selector.ranking_profiles.liquidity_quality_v1 import (
     LIQUIDITY_QUALITY_SCORE_METHOD,
     LiquidityQualityV1Profile,
 )
+from universe_selector.ranking_profiles.mean_reversion_quality_v1 import (
+    MEAN_REVERSION_QUALITY_PROFILE_ID,
+    MeanReversionQualityV1Profile,
+)
 from universe_selector.ranking_profiles.momentum_v1 import (
     MOMENTUM_PROFILE_ID,
     MOMENTUM_SCORE_METHOD,
@@ -434,6 +438,7 @@ def test_ranking_profiles_package_root_exposes_registry_contract_only() -> None:
     assert "SamplePriceTrendV1Profile" not in ranking_profiles.__all__
     assert "BaseBreakoutQualityV1Profile" not in ranking_profiles.__all__
     assert "DefensiveCompounderQualityV1Profile" not in ranking_profiles.__all__
+    assert "MeanReversionQualityV1Profile" not in ranking_profiles.__all__
     assert "RelativeStrengthLeaderV1Profile" not in ranking_profiles.__all__
     assert "TrendQualityV1Profile" not in ranking_profiles.__all__
     assert "TrendPullbackQualityV1Profile" not in ranking_profiles.__all__
@@ -450,6 +455,7 @@ def test_supported_profile_registry_includes_registered_profiles() -> None:
         "liquidity_quality_v1",
         BASE_BREAKOUT_QUALITY_PROFILE_ID,
         RELATIVE_STRENGTH_LEADER_PROFILE_ID,
+        MEAN_REVERSION_QUALITY_PROFILE_ID,
         DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID,
     )
 
@@ -497,6 +503,11 @@ def test_supported_profile_registry_includes_registered_profiles() -> None:
     assert isinstance(rs_leader_registration, RankingProfileRegistration)
     assert isinstance(rs_leader_registration.create_profile(), RelativeStrengthLeaderV1Profile)
     assert isinstance(get_ranking_profile(RELATIVE_STRENGTH_LEADER_PROFILE_ID), RelativeStrengthLeaderV1Profile)
+
+    mean_reversion_registration = get_ranking_profile_registration(MEAN_REVERSION_QUALITY_PROFILE_ID)
+    assert isinstance(mean_reversion_registration, RankingProfileRegistration)
+    assert isinstance(mean_reversion_registration.create_profile(), MeanReversionQualityV1Profile)
+    assert isinstance(get_ranking_profile(MEAN_REVERSION_QUALITY_PROFILE_ID), MeanReversionQualityV1Profile)
 
     defensive_registration = get_ranking_profile_registration(DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID)
     assert isinstance(defensive_registration, RankingProfileRegistration)
