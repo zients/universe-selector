@@ -21,7 +21,8 @@ This project is an alpha-stage research tool. It is not investment advice.
 - Runtime config source: `config.yaml` in the current working directory.
 - Default example ranking profile: `sample_price_trend_v1`.
 - Supported ranking profiles: `sample_price_trend_v1`, `momentum_v1`,
-  `trend_quality_v1`, `volatility_quality_v1`, and `liquidity_quality_v1`.
+  `momentum_quality_v1`, `trend_quality_v1`, `volatility_quality_v1`,
+  `liquidity_quality_v1`, and `defensive_compounder_quality_v1`.
 - Single-profile and multi-profile batch runs are supported.
 - Persistence: local DuckDB database under `.universe-selector/` by default.
 
@@ -176,9 +177,11 @@ report:
 
 - `sample_price_trend_v1`
 - `momentum_v1`
+- `momentum_quality_v1`
 - `trend_quality_v1`
 - `volatility_quality_v1`
 - `liquidity_quality_v1`
+- `defensive_compounder_quality_v1`
 
 For quick smoke runs against a smaller live universe, set:
 
@@ -327,9 +330,11 @@ and interpretation notes.
 |---|---|---|---:|
 | `sample_price_trend_v1` | Minimal example profile for smoke runs and extension patterns. | `midterm`, `longterm` | 121 bars |
 | `momentum_v1` | Raw weighted momentum profile using risk-adjusted medium-term momentum and short-term strength. | `swing`, `midterm` | 274 bars |
+| `momentum_quality_v1` | Market-relative momentum quality profile using risk-adjusted momentum, moving-average structure, trend consistency, drawdown control, caps, and audit tags. | `composite`, `swing`, `midterm` | 274 bars |
 | `trend_quality_v1` | Market-relative trend profile using returns, trend slope, trend fit, moving-average structure, drawdown control, caps, and structure tags. | `composite`, `shortterm`, `midterm` | 252 bars |
 | `volatility_quality_v1` | Market-relative quality profile favoring lower realized volatility, downside volatility control, range tightness, and drawdown control. | `composite`, `shortterm`, `stable` | 126 bars |
 | `liquidity_quality_v1` | Market-relative liquidity profile using traded value depth, friction proxies, traded value stability, concentration, continuity, and range tightness. | `composite`, `shortterm`, `stable` | 63 bars |
+| `defensive_compounder_quality_v1` | OHLCV-only defensive compounder proxy favoring steady positive price behavior, downside volatility control, drawdown control, and intact long-trend structure. | `composite`, `steady_compounder`, `downside_control` | 252 bars |
 
 All profile scores are ranking values, not return forecasts. Higher score ranks
 better within the same run, market, profile, and horizon unless the profile
@@ -363,6 +368,24 @@ It ranks two horizons:
   momentum.
 
 Scores are raw weighted composites and are not bounded to 0-100.
+
+### `momentum_quality_v1`
+
+`momentum_quality_v1` is a market-relative momentum quality profile. It combines
+12-1 and 6-1 risk-adjusted momentum, short-term strength, moving-average
+structure, trend consistency, drawdown control, and overheat penalties.
+
+It ranks three horizons:
+
+- `composite`: balanced momentum, trend quality, drawdown, and overheat control.
+- `swing`: shorter momentum lens emphasizing 6-1 momentum and recent strength.
+- `midterm`: medium-term lens emphasizing 12-1 and 6-1 risk-adjusted momentum.
+
+It persists non-exclusive audit tags such as `tag_risk_overheated`,
+`tag_risk_extended_from_ma20`, `tag_risk_high_volatility`,
+`tag_risk_large_drawdown`, `tag_positive_strong_momentum`, and
+`tag_positive_stable_uptrend`. High scores remain ranking values within the same
+run and are not return forecasts or recommendations.
 
 ### `trend_quality_v1`
 
@@ -401,14 +424,41 @@ The profile is useful for screening tradability and liquidity quality. Traded
 value metrics are local currency amounts, so compare scores and ranks within the
 same market, run, profile, and horizon.
 
+### `defensive_compounder_quality_v1`
+
+`defensive_compounder_quality_v1` is an OHLCV-only defensive compounder proxy.
+It does not use fundamentals or imply business quality. It favors steady
+positive price behavior, persistent rolling returns, lower realized and downside
+volatility, drawdown control, range tightness, liquidity stability, and intact
+long-term moving-average structure.
+
+It ranks three horizons:
+
+- `composite`: balanced steady return, downside control, trend quality, and
+  risk control.
+- `steady_compounder`: emphasizes steady positive return persistence and
+  long-trend durability.
+- `downside_control`: emphasizes downside volatility, drawdown control, low
+  realized volatility, and range tightness.
+
+It persists positive and risk tags such as `tag_positive_steady_compounder`,
+`tag_positive_low_downside_volatility`, `tag_positive_drawdown_control`,
+`tag_risk_flat_no_growth`, `tag_risk_broken_long_trend`,
+`tag_risk_large_drawdown`, `tag_risk_volatility_spike`, and
+`tag_risk_stale_or_illiquid`. Defensive compounder quality is not a buy signal;
+use it as a price-behavior ranking proxy that still requires independent review.
+
 ### Choosing Profiles
 
 Use `sample_price_trend_v1` for fixture smoke tests and as a reference
 implementation for new profiles. Use `momentum_v1` when you want a raw momentum
-candidate list. Use `trend_quality_v1` when you want a more structured trend
-lens with audit tags. Use `volatility_quality_v1` and `liquidity_quality_v1` as
-risk and tradability companions, either on their own or in a multi-profile batch
-with momentum or trend profiles.
+candidate list. Use `momentum_quality_v1` for market-relative momentum quality
+with audit tags. Use `trend_quality_v1` when you want a more structured trend
+lens with audit tags. Use `defensive_compounder_quality_v1` when you want an
+OHLCV-only defensive compounder proxy rather than a fundamental quality screen.
+Use `volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
+companions, either on their own or in a multi-profile batch with momentum or
+trend profiles.
 
 ## Extending
 
