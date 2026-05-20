@@ -183,8 +183,7 @@ class ReverseDcfV1Model:
                 terminal_growth_rate=scenario.terminal_growth_rate,
             )
             solver_abs_residual = (
-                abs(result.enterprise_value - reference_implied_enterprise_value)
-                / inputs.shares_outstanding
+                abs(result.enterprise_value - reference_implied_enterprise_value) / inputs.shares_outstanding
             )
             results.append(
                 ValuationScenarioResult(
@@ -237,13 +236,9 @@ class ReverseDcfV1Model:
         if not 0.0 < discount_rate <= 0.50:
             raise ValidationError(f"scenarios.{scenario_id}.discount_rate must be greater than 0.0 and at most 0.50")
         if not -0.05 <= terminal_growth_rate <= 0.05:
-            raise ValidationError(
-                f"scenarios.{scenario_id}.terminal_growth_rate must be between -0.05 and 0.05"
-            )
+            raise ValidationError(f"scenarios.{scenario_id}.terminal_growth_rate must be between -0.05 and 0.05")
         if discount_rate - terminal_growth_rate < 0.03:
-            raise ValidationError(
-                f"scenarios.{scenario_id}.discount_rate - terminal_growth_rate must be at least 0.03"
-            )
+            raise ValidationError(f"scenarios.{scenario_id}.discount_rate - terminal_growth_rate must be at least 0.03")
         if not -1.0 < lower_bound <= 1.0:
             raise ValidationError(
                 f"scenarios.{scenario_id}.implied_growth_lower_bound must be greater than -1.0 and at most 1.0"
@@ -253,9 +248,7 @@ class ReverseDcfV1Model:
                 f"scenarios.{scenario_id}.implied_growth_upper_bound must be greater than -1.0 and at most 1.0"
             )
         if lower_bound >= upper_bound:
-            raise ValidationError(
-                f"scenarios.{scenario_id}.implied growth lower bound must be below upper bound"
-            )
+            raise ValidationError(f"scenarios.{scenario_id}.implied growth lower bound must be below upper bound")
 
         return ReverseDcfScenarioAssumptions(
             scenario_id=scenario_id,
@@ -520,19 +513,11 @@ def _value_at_growth(
     discount_rate: float,
     terminal_growth_rate: float,
 ) -> ValuationScenarioResult:
-    projected_fcf = tuple(
-        inputs.starting_fcf * (1.0 + growth_rate) ** year
-        for year in range(1, forecast_years + 1)
-    )
+    projected_fcf = tuple(inputs.starting_fcf * (1.0 + growth_rate) ** year for year in range(1, forecast_years + 1))
     present_value_projected_fcf = tuple(
-        fcf / (1.0 + discount_rate) ** year
-        for year, fcf in enumerate(projected_fcf, start=1)
+        fcf / (1.0 + discount_rate) ** year for year, fcf in enumerate(projected_fcf, start=1)
     )
-    terminal_value = (
-        projected_fcf[-1]
-        * (1.0 + terminal_growth_rate)
-        / (discount_rate - terminal_growth_rate)
-    )
+    terminal_value = projected_fcf[-1] * (1.0 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
     present_value_terminal_value = terminal_value / ((1.0 + discount_rate) ** forecast_years)
     enterprise_value = sum(present_value_projected_fcf) + present_value_terminal_value
     equity_value = enterprise_value - inputs.net_debt
@@ -559,18 +544,10 @@ def _enterprise_value_at_growth(
     discount_rate: float,
     terminal_growth_rate: float,
 ) -> float:
-    projected_fcf = tuple(
-        starting_fcf * (1.0 + growth_rate) ** year
-        for year in range(1, forecast_years + 1)
-    )
+    projected_fcf = tuple(starting_fcf * (1.0 + growth_rate) ** year for year in range(1, forecast_years + 1))
     present_value_projected_fcf = sum(
-        fcf / (1.0 + discount_rate) ** year
-        for year, fcf in enumerate(projected_fcf, start=1)
+        fcf / (1.0 + discount_rate) ** year for year, fcf in enumerate(projected_fcf, start=1)
     )
-    terminal_value = (
-        projected_fcf[-1]
-        * (1.0 + terminal_growth_rate)
-        / (discount_rate - terminal_growth_rate)
-    )
+    terminal_value = projected_fcf[-1] * (1.0 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
     present_value_terminal_value = terminal_value / ((1.0 + discount_rate) ** forecast_years)
     return present_value_projected_fcf + present_value_terminal_value

@@ -15,9 +15,7 @@ from universe_selector.ranking_profiles.registration import RankingProfileRegist
 
 
 SAMPLE_PRICE_TREND_PROFILE_ID = "sample_price_trend_v1"
-SAMPLE_PRICE_TREND_RANK_INTERPRETATION_NOTE = (
-    "Sample profile scores are raw adjusted-close return factors."
-)
+SAMPLE_PRICE_TREND_RANK_INTERPRETATION_NOTE = "Sample profile scores are raw adjusted-close return factors."
 
 SAMPLE_PRICE_TREND_SNAPSHOT_METRIC_KEYS = (
     "avg_traded_value_20d_local",
@@ -115,12 +113,8 @@ def _non_negative_real_values(values: list[object]) -> list[float] | None:
 class SamplePriceTrendV1Profile:
     profile_id: Literal["sample_price_trend_v1"] = SAMPLE_PRICE_TREND_PROFILE_ID
     min_history_bars: int = 121
-    return_windows: Mapping[str, object] = field(
-        default_factory=lambda: dict(SAMPLE_PRICE_TREND_RETURN_WINDOWS)
-    )
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    return_windows: Mapping[str, object] = field(default_factory=lambda: dict(SAMPLE_PRICE_TREND_RETURN_WINDOWS))
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 20_000_000.0, Market.US: 5_000_000.0}
     )
@@ -245,9 +239,10 @@ class SamplePriceTrendV1Profile:
             if latest_close < self.price_floor[market]:
                 continue
 
-            avg_traded_value_20d_local = sum(
-                close * volume for close, volume in zip(last_20_close_values, last_20_volume_values, strict=True)
-            ) / 20.0
+            avg_traded_value_20d_local = (
+                sum(close * volume for close, volume in zip(last_20_close_values, last_20_volume_values, strict=True))
+                / 20.0
+            )
             if avg_traded_value_20d_local < self.liquidity_floor[market]:
                 continue
 
@@ -330,11 +325,7 @@ class SamplePriceTrendV1Profile:
         ranking_frames = []
         for partition in eligible.partition_by(["run_id", "market"], maintain_order=True):
             ranking_frames.append(self._assign_single_run_market_rankings(partition))
-        return (
-            pl.concat(ranking_frames)
-            .sort(["run_id", "market", "horizon", "rank"])
-            .select(self._ranking_columns())
-        )
+        return pl.concat(ranking_frames).sort(["run_id", "market", "horizon", "rank"]).select(self._ranking_columns())
 
 
 SAMPLE_PRICE_TREND_V1_REGISTRATION = RankingProfileRegistration(

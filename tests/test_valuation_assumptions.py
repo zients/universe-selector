@@ -285,10 +285,12 @@ def test_rejects_invalid_basis_metadata(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match="share_basis"):
         load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
 
-    path.write_text(text.replace(
-        "valuation_basis_note: Uses USD ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied.",
-        "valuation_basis_note: '   '",
-    ))
+    path.write_text(
+        text.replace(
+            "valuation_basis_note: Uses USD ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied.",
+            "valuation_basis_note: '   '",
+        )
+    )
     with pytest.raises(ValidationError, match="valuation_basis_note"):
         load_valuation_assumptions(Market.US, "AAPL", "fcf_dcf_v1", path)
 
@@ -368,27 +370,33 @@ def test_rejects_invalid_starting_fcf_shapes(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match="starting_fcf.method"):
         load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
 
-    path.write_text(text.replace(
-        "      method: provider_ttm_fcf\n",
-        "      method: provider_ttm_fcf\n      value: 100.0\n",
-        1,
-    ))
+    path.write_text(
+        text.replace(
+            "      method: provider_ttm_fcf\n",
+            "      method: provider_ttm_fcf\n      value: 100.0\n",
+            1,
+        )
+    )
     with pytest.raises(ValidationError, match="starting_fcf.value"):
         load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
 
-    path.write_text(text.replace(
-        "      method: provider_ttm_fcf\n",
-        "      method: override\n      value: 100.0\n",
-        1,
-    ))
+    path.write_text(
+        text.replace(
+            "      method: provider_ttm_fcf\n",
+            "      method: override\n      value: 100.0\n",
+            1,
+        )
+    )
     with pytest.raises(ValidationError, match="starting_fcf.note"):
         load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
 
-    path.write_text(text.replace(
-        "      method: provider_ttm_fcf\n",
-        "      method: override\n      value: .nan\n      note: Adjusted FCF.\n",
-        1,
-    ))
+    path.write_text(
+        text.replace(
+            "      method: provider_ttm_fcf\n",
+            "      method: override\n      value: .nan\n      note: Adjusted FCF.\n",
+            1,
+        )
+    )
     with pytest.raises(ValidationError, match="starting_fcf.value"):
         load_valuation_assumptions(market=Market.US, ticker="AAPL", model_id="fcf_dcf_v1", assumptions_path=path)
 
@@ -466,7 +474,9 @@ def _install_fake_model_registry(monkeypatch: pytest.MonkeyPatch, failing_model_
     )
 
 
-def test_loader_allows_supported_default_block_omitted_when_cli_selects_other_model(monkeypatch, tmp_path: Path) -> None:
+def test_loader_allows_supported_default_block_omitted_when_cli_selects_other_model(
+    monkeypatch, tmp_path: Path
+) -> None:
     _install_fake_model_registry(monkeypatch)
     path = _write_fake_assumptions(
         tmp_path / "AAPL.yaml",

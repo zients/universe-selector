@@ -32,8 +32,7 @@ _REQUIRED_KEYS = (
     "fiscal_period_type",
 )
 _FETCH_DATE_FALLBACK_NOTE = (
-    "yfinance did not provide a usable quote timestamp; using fetch date, "
-    "not a provider-reported quote timestamp."
+    "yfinance did not provide a usable quote timestamp; using fetch date, not a provider-reported quote timestamp."
 )
 _SOURCE_RISK_NOTE = (
     "yfinance third-party convenience data may be stale, incomplete, restated, "
@@ -224,7 +223,9 @@ def _cash_flow_from_frame(frame: object, *, periods: int) -> dict[str, object] |
     if operating_row is None or capex_row is None:
         return None
 
-    columns = sorted((_date_from_value(column), column) for column in frame.columns if _date_from_value(column) is not None)
+    columns = sorted(
+        (_date_from_value(column), column) for column in frame.columns if _date_from_value(column) is not None
+    )
     if len(columns) < periods:
         return None
     selected = columns[-periods:]
@@ -252,7 +253,9 @@ def _balance_sheet_from_frame(frame: object) -> dict[str, object] | None:
     if cash_row is None or debt_row is None:
         return None
 
-    columns = sorted((_date_from_value(column), column) for column in frame.columns if _date_from_value(column) is not None)
+    columns = sorted(
+        (_date_from_value(column), column) for column in frame.columns if _date_from_value(column) is not None
+    )
     if not columns:
         return None
     balance_sheet_as_of, column = columns[-1]

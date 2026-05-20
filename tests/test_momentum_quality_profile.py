@@ -281,12 +281,8 @@ def test_momentum_quality_profile_ranks_within_run_market_without_rewriting_scor
 
     rankings = profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite")
 
-    us_scores = rankings.filter(pl.col("market") == "US").sort("ticker")[
-        "score_risk_adjusted_momentum_12_1"
-    ].to_list()
-    tw_scores = rankings.filter(pl.col("market") == "TW").sort("ticker")[
-        "score_risk_adjusted_momentum_12_1"
-    ].to_list()
+    us_scores = rankings.filter(pl.col("market") == "US").sort("ticker")["score_risk_adjusted_momentum_12_1"].to_list()
+    tw_scores = rankings.filter(pl.col("market") == "TW").sort("ticker")["score_risk_adjusted_momentum_12_1"].to_list()
     assert us_scores == [1.0, 2.0]
     assert tw_scores == [200.0, 100.0]
     assert rankings.filter(pl.col("market") == "US").sort("rank")["ticker"].to_list() == ["BBB", "AAA"]

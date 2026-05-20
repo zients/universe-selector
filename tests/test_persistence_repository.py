@@ -71,10 +71,14 @@ def test_repository_persists_profile_scores_outside_0_to_100_range(tmp_path: Pat
         markdown="# Report\n",
     )
 
-    stored_scores = repo.connect().execute(
-        "select score from run_rankings where run_id = ? order by horizon",
-        [run_id],
-    ).fetchall()
+    stored_scores = (
+        repo.connect()
+        .execute(
+            "select score from run_rankings where run_id = ? order by horizon",
+            [run_id],
+        )
+        .fetchall()
+    )
     payload = repo.read_inspect_payload(run_id, "AAA", profile=AppConfig().selected_ranking_profile)
     stored_metadata = repo.read_provider_metadata(run_id)
 

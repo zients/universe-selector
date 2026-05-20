@@ -59,15 +59,11 @@ def _build_registrations(
 
         model = registration.model_factory()
         if model.model_id != registration.model_id:
-            raise ValidationError(
-                f"model factory for {registration.model_id} returned model_id {model.model_id}"
-            )
+            raise ValidationError(f"model factory for {registration.model_id} returned model_id {model.model_id}")
 
         renderer = registration.output_renderer_factory()
         if renderer.model_id != registration.model_id:
-            raise ValidationError(
-                f"renderer factory for {registration.model_id} returned model_id {renderer.model_id}"
-            )
+            raise ValidationError(f"renderer factory for {registration.model_id} returned model_id {renderer.model_id}")
 
         result[registration.model_id] = registration
     return MappingProxyType(result)

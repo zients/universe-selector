@@ -276,10 +276,7 @@ def test_defensive_compounder_quality_assigns_rankings_tags_and_caps() -> None:
         assert rows["rank"].to_list() == [1, 2, 3, 4, 5]
         assert rows["score"].is_sorted(descending=True)
 
-    composite = {
-        row["ticker"]: row
-        for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()
-    }
+    composite = {row["ticker"]: row for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()}
     assert composite["STEADY"]["tag_positive_steady_compounder"] == 1.0
     assert composite["LOWDOWNSIDE"]["tag_positive_low_downside_volatility"] == 1.0
     assert composite["LOWDOWNSIDE"]["tag_positive_drawdown_control"] == 1.0
@@ -319,9 +316,7 @@ def test_defensive_compounder_quality_caps_low_volatility_no_growth_traps() -> N
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "downside_control")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "downside_control").to_dicts()
     }
 
     assert rows["FLATLOWVOL"]["tag_risk_flat_no_growth"] == 1.0
@@ -360,9 +355,7 @@ def test_defensive_compounder_quality_caps_momentum_without_defensive_traits() -
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "composite")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()
     }
 
     assert rows["MOMENTUM"]["score_steady_return"] > rows["STEADY"]["score_steady_return"]
@@ -437,9 +430,7 @@ def test_defensive_compounder_quality_composite_requires_steady_compounder_quali
     by_horizon = {
         horizon: {
             row["ticker"]: row
-            for row in profile.assign_rankings(snapshot)
-            .filter(pl.col("horizon") == horizon)
-            .to_dicts()
+            for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == horizon).to_dicts()
         }
         for horizon in profile.horizon_order
     }
@@ -503,9 +494,7 @@ def test_defensive_compounder_quality_preserves_order_inside_composite_caps() ->
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "composite")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()
     }
 
     assert rows["MOMA"]["tag_positive_steady_compounder"] == 0.0
@@ -540,9 +529,7 @@ def test_defensive_compounder_quality_caps_stale_names_in_composite() -> None:
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "composite")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()
     }
 
     assert rows["STALE"]["tag_risk_stale_or_illiquid"] == 1.0

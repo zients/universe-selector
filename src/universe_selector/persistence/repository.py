@@ -68,6 +68,7 @@ PROVIDER_METADATA_COLUMNS = [
     "run_latest_bar_date",
 ]
 
+
 @dataclass(frozen=True)
 class ResolvedRun:
     run_id: str

@@ -47,17 +47,12 @@ def ols_slope_r2(values: list[float]) -> tuple[float, float]:
     x_mean = mean([float(value) for value in x_values])
     y_mean = mean(y_values)
     ss_xx = sum((float(value) - x_mean) ** 2 for value in x_values)
-    slope = sum(
-        (float(x) - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=True)
-    ) / ss_xx
+    slope = sum((float(x) - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=True)) / ss_xx
     intercept = y_mean - slope * x_mean
     total = sum((value - y_mean) ** 2 for value in y_values)
     if total == 0.0:
         return slope, 0.0
-    residual = sum(
-        (y - (intercept + slope * float(x))) ** 2
-        for x, y in zip(x_values, y_values, strict=True)
-    )
+    residual = sum((y - (intercept + slope * float(x))) ** 2 for x, y in zip(x_values, y_values, strict=True))
     return slope, 1.0 - residual / total
 
 

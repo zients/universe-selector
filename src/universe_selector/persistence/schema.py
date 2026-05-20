@@ -71,7 +71,9 @@ create table if not exists schema_migrations (
 def map_duckdb_error(exc: Exception) -> Exception:
     message = str(exc).lower()
     busy_tokens = ("lock", "locked", "busy", "concurrent", "same database file with a different configuration")
-    if isinstance(exc, (duckdb.IOException, duckdb.ConnectionException)) and any(token in message for token in busy_tokens):
+    if isinstance(exc, (duckdb.IOException, duckdb.ConnectionException)) and any(
+        token in message for token in busy_tokens
+    ):
         return DuckDbBusyError("database is busy; another process may be using it")
     return exc
 
@@ -154,10 +156,7 @@ def validate_schema(connection: duckdb.DuckDBPyConnection) -> None:
         ).fetchall()
     except duckdb.CatalogException as exc:
         raise SchemaError("schema has not been initialized") from exc
-    expected_rows = [
-        (version, name, _migration_checksum(name))
-        for version, name in MIGRATIONS
-    ]
+    expected_rows = [(version, name, _migration_checksum(name)) for version, name in MIGRATIONS]
     if rows != expected_rows:
         raise SchemaError("schema version is missing or invalid")
     _validate_required_tables_and_columns(connection)

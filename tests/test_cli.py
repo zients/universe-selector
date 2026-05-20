@@ -13,10 +13,54 @@ from universe_selector.errors import ValidationError
 from universe_selector.persistence.repository import DuckDbRepository
 from universe_selector.persistence.schema import apply_migrations
 from universe_selector.pipeline import BatchResult, FailedBatchResult, MultiProfileBatchError
+from universe_selector.ranking_profiles import supported_ranking_profile_ids
 
 
 RUN_ID_RE = re.compile(r"run_id: (?P<run_id>(?:tw|us)-[0-9a-f-]+)")
 runner = CliRunner()
+
+
+def test_cli_help_describes_commands_and_supported_markets() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "Run-centric quantitative universe selector" in result.output
+    assert "batch" in result.output
+    assert "Fetch provider data, run ranking profiles, and persist reports." in result.output
+    assert "report" in result.output
+    assert "Print a persisted report by market or run id." in result.output
+    assert "inspect" in result.output
+    assert "Inspect persisted rankings and metrics for one ticker." in result.output
+    assert "value" in result.output
+    assert "Run a live single-ticker valuation analysis." in result.output
+
+
+def test_cli_batch_help_documents_market_and_profile_options() -> None:
+    result = runner.invoke(app, ["batch", "--help"])
+    normalized = " ".join(result.output.split())
+
+    assert result.exit_code == 0, result.output
+    assert "Supported markets: us, tw." in result.output
+    assert "Run more" in normalized
+    assert "persist separate runs" in normalized
+    assert "provider snapshot" in normalized
+    for profile_id in supported_ranking_profile_ids():
+        assert profile_id in result.output
+
+
+def test_cli_report_and_inspect_help_document_resolution_modes() -> None:
+    report = runner.invoke(app, ["report", "--help"])
+    inspect = runner.invoke(app, ["inspect", "--help"])
+    normalized_report = " ".join(report.output.split())
+    normalized_inspect = " ".join(inspect.output.split())
+
+    assert report.exit_code == 0, report.output
+    assert "Read the latest successful run for MARKET or one explicit --run-id." in normalized_report
+    assert "Do not combine --run-id with --ranking-profile." in normalized_report
+
+    assert inspect.exit_code == 0, inspect.output
+    assert "Read persisted metrics for --ticker from MARKET or one explicit --run-id." in normalized_inspect
+    assert "Ticker is normalized before lookup." in normalized_inspect
 
 
 def _write_cli_config(tmp_path: Path, fixture_dir: Path) -> None:
@@ -284,9 +328,7 @@ def test_cli_batch_prints_partial_results_on_multi_profile_failure(monkeypatch) 
 
     def fake_run_batch_profiles(market: Market, config: AppConfig, profile_ids: tuple[str, ...]):
         raise MultiProfileBatchError(
-            completed_results=(
-                BatchResult("us-00000000-0000-4000-8000-000000000001", market, "trend_quality_v1"),
-            ),
+            completed_results=(BatchResult("us-00000000-0000-4000-8000-000000000001", market, "trend_quality_v1"),),
             failed_result=FailedBatchResult(
                 run_id="us-00000000-0000-4000-8000-000000000002",
                 market=market,
@@ -495,7 +537,9 @@ def test_cli_run_id_ranking_profile_conflict_does_not_load_config(monkeypatch) -
     assert "unknown ranking profile" not in report.output
     assert "load_config must not run" not in report.output
 
-    inspect = runner.invoke(app, ["inspect", "--run-id", run_id, "--ticker", "AAA", "--ranking-profile", "unknown_profile"])
+    inspect = runner.invoke(
+        app, ["inspect", "--run-id", run_id, "--ticker", "AAA", "--ranking-profile", "unknown_profile"]
+    )
     assert inspect.exit_code != 0
     assert "do not provide --ranking-profile with --run-id" in inspect.output
     assert "unknown ranking profile" not in inspect.output
@@ -518,7 +562,14 @@ def test_cli_run_id_ranking_profile_conflict_precedes_run_id_parsing() -> None:
 def test_cli_market_run_id_conflict_precedes_ranking_profile_conflict() -> None:
     report = runner.invoke(
         app,
-        ["report", "us", "--run-id", "us-00000000-0000-4000-8000-000000000001", "--ranking-profile", "sample_price_trend_v1"],
+        [
+            "report",
+            "us",
+            "--run-id",
+            "us-00000000-0000-4000-8000-000000000001",
+            "--ranking-profile",
+            "sample_price_trend_v1",
+        ],
     )
     assert report.exit_code != 0
     assert "provide either MARKET or --run-id, not both" in report.output
@@ -695,9 +746,11 @@ def test_cli_value_json_uses_json_renderer(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "universe_selector.cli.render_valuation_json",
-        lambda result: '{"artifact_type":"universe_selector_valuation","ticker":"AAPL"}\n'
-        if result is sentinel_result
-        else "wrong\n",
+        lambda result: (
+            '{"artifact_type":"universe_selector_valuation","ticker":"AAPL"}\n'
+            if result is sentinel_result
+            else "wrong\n"
+        ),
         raising=False,
     )
 

@@ -32,6 +32,8 @@ EXPECTED_CONFIG_EXAMPLE: dict[str, object] = {
     "ranking": {"profile": "sample_price_trend_v1"},
     "report": {"top_n": 100},
 }
+
+
 def test_config_example_loads_and_matches_app_config_defaults(monkeypatch, tmp_path) -> None:
     assert CONFIG_EXAMPLE_PATH.is_file()
     assert yaml.safe_load(CONFIG_EXAMPLE_PATH.read_text()) == EXPECTED_CONFIG_EXAMPLE
@@ -82,11 +84,10 @@ def test_config_example_is_packaged_in_built_wheel(tmp_path) -> None:
 
     with zipfile.ZipFile(wheel_path) as wheel:
         packaged_example = wheel.read("universe_selector/config.example.yaml")
-        packaged_migration_2 = wheel.read(
-            "universe_selector/persistence/migrations/002_report_json_artifacts.sql"
-        )
+        packaged_migration_2 = wheel.read("universe_selector/persistence/migrations/002_report_json_artifacts.sql")
 
     assert packaged_example == CONFIG_EXAMPLE_PATH.read_bytes()
-    assert packaged_migration_2 == (
-        REPO_ROOT / "src/universe_selector/persistence/migrations/002_report_json_artifacts.sql"
-    ).read_bytes()
+    assert (
+        packaged_migration_2
+        == (REPO_ROOT / "src/universe_selector/persistence/migrations/002_report_json_artifacts.sql").read_bytes()
+    )

@@ -16,9 +16,7 @@ from universe_selector.ranking_profiles.registration import RankingProfileRegist
 
 MOMENTUM_PROFILE_ID = "momentum_v1"
 MOMENTUM_SCORE_METHOD = "raw_weighted_momentum_v1"
-MOMENTUM_RANK_INTERPRETATION_NOTE = (
-    "Momentum scores are raw weighted momentum composites; high scores do not guarantee positive absolute momentum or an uptrend."
-)
+MOMENTUM_RANK_INTERPRETATION_NOTE = "Momentum scores are raw weighted momentum composites; high scores do not guarantee positive absolute momentum or an uptrend."
 
 MOMENTUM_SCORE_INPUT_COLUMNS = (
     "risk_adjusted_momentum_12_1",
@@ -121,16 +119,12 @@ class MomentumV1Profile:
     volatility_floor: float = 0.001
     active_trading_min_days_274: int = 230
     zero_volume_max_days_20: int = 2
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 20_000_000.0, Market.US: 5_000_000.0}
     )
     horizon_weights: Mapping[str, Mapping[str, float]] = field(
-        default_factory=lambda: {
-            horizon: dict(weights) for horizon, weights in MOMENTUM_HORIZON_WEIGHTS.items()
-        }
+        default_factory=lambda: {horizon: dict(weights) for horizon, weights in MOMENTUM_HORIZON_WEIGHTS.items()}
     )
     score_input_columns: tuple[str, ...] = MOMENTUM_SCORE_INPUT_COLUMNS
     snapshot_metric_keys: tuple[str, ...] = MOMENTUM_PERSISTED_SNAPSHOT_METRIC_KEYS
@@ -195,18 +189,14 @@ class MomentumV1Profile:
         unknown_inspect_keys = set(self.inspect_metric_keys) - set(MOMENTUM_SNAPSHOT_METRIC_KEYS)
         if unknown_inspect_keys:
             raise ValidationError(
-                f"inspect metric keys are not in the momentum snapshot shape: "
-                f"{', '.join(sorted(unknown_inspect_keys))}"
+                f"inspect metric keys are not in the momentum snapshot shape: {', '.join(sorted(unknown_inspect_keys))}"
             )
         if self.snapshot_metric_keys != MOMENTUM_PERSISTED_SNAPSHOT_METRIC_KEYS:
-            raise ValidationError(
-                "snapshot metric keys must match momentum_v1 persisted metrics"
-            )
+            raise ValidationError("snapshot metric keys must match momentum_v1 persisted metrics")
         if not set(self.inspect_metric_keys).issubset(set(self.snapshot_metric_keys)):
             missing_inspect_keys = set(self.inspect_metric_keys) - set(self.snapshot_metric_keys)
             raise ValidationError(
-                f"inspect metric keys must be persisted snapshot metrics: "
-                f"{', '.join(sorted(missing_inspect_keys))}"
+                f"inspect metric keys must be persisted snapshot metrics: {', '.join(sorted(missing_inspect_keys))}"
             )
         if tuple(self.ranking_metric_keys) != MOMENTUM_RANKING_METRIC_KEYS:
             raise ValidationError("ranking metric keys must match momentum_v1")
@@ -224,9 +214,7 @@ class MomentumV1Profile:
     def ranking_config_payload(self) -> dict[str, object]:
         return {
             "active_trading_min_days_274": self.active_trading_min_days_274,
-            "horizon_weights": {
-                horizon: dict(weights) for horizon, weights in self.horizon_weights.items()
-            },
+            "horizon_weights": {horizon: dict(weights) for horizon, weights in self.horizon_weights.items()},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
@@ -312,10 +300,10 @@ class MomentumV1Profile:
             if volatility_12_1 <= self.volatility_floor or volatility_6_1 <= self.volatility_floor:
                 continue
 
-            avg_traded_value_20d_local = sum(
-                close * volume
-                for close, volume in zip(closes_float[-20:], volumes_float[-20:], strict=True)
-            ) / 20.0
+            avg_traded_value_20d_local = (
+                sum(close * volume for close, volume in zip(closes_float[-20:], volumes_float[-20:], strict=True))
+                / 20.0
+            )
             latest_close = closes_float[-1]
             if avg_traded_value_20d_local < self.liquidity_floor[market]:
                 continue
@@ -373,9 +361,7 @@ class MomentumV1Profile:
         with_scores = frame.with_columns(
             pl.col("risk_adjusted_momentum_12_1").alias("score_risk_adjusted_momentum_12_1"),
             pl.col("risk_adjusted_momentum_6_1").alias("score_risk_adjusted_momentum_6_1"),
-            (pl.col("short_term_strength_20d") / pl.col("volatility_6_1")).alias(
-                "score_short_term_strength_20d"
-            ),
+            (pl.col("short_term_strength_20d") / pl.col("volatility_6_1")).alias("score_short_term_strength_20d"),
         )
         result = with_scores
         for column in self.ranking_metric_keys:
@@ -434,11 +420,7 @@ class MomentumV1Profile:
         ranking_frames = []
         for partition in eligible.partition_by(["run_id", "market"], maintain_order=True):
             ranking_frames.append(self._assign_single_run_market_rankings(partition))
-        return (
-            pl.concat(ranking_frames)
-            .sort(["run_id", "market", "horizon", "rank"])
-            .select(self._ranking_columns())
-        )
+        return pl.concat(ranking_frames).sort(["run_id", "market", "horizon", "rank"]).select(self._ranking_columns())
 
 
 MOMENTUM_V1_REGISTRATION = RankingProfileRegistration(

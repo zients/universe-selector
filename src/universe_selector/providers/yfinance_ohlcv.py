@@ -75,7 +75,9 @@ class YFinanceOhlcvProvider:
                 threads=True,
                 multi_level_index=True,
             )
-            batch_request_to_canonical = {request_symbol: request_to_canonical[request_symbol] for request_symbol in batch}
+            batch_request_to_canonical = {
+                request_symbol: request_to_canonical[request_symbol] for request_symbol in batch
+            }
             try:
                 frames.append(self._normalize_download(frame, market, batch_request_to_canonical))
             except ProviderDataError as exc:

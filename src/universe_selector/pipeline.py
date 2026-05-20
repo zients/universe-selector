@@ -207,7 +207,9 @@ def run_batch_profiles(
                         provider_data=provider_data,
                     )
                 except Exception as exc:
-                    exit_code = exc.exit_code if isinstance(exc, UniverseSelectorError) else UniverseSelectorError.exit_code
+                    exit_code = (
+                        exc.exit_code if isinstance(exc, UniverseSelectorError) else UniverseSelectorError.exit_code
+                    )
                     raise MultiProfileBatchError(
                         completed_results=tuple(completed),
                         failed_result=FailedBatchResult(

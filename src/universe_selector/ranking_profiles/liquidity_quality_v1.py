@@ -160,18 +160,12 @@ def _clamp(value: float, low: float, high: float) -> float:
 class LiquidityQualityV1Profile:
     profile_id: Literal["liquidity_quality_v1"] = LIQUIDITY_QUALITY_PROFILE_ID
     min_history_bars: int = 63
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 50_000_000.0, Market.US: 10_000_000.0}
     )
-    active_trading_min_days_60: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 50, Market.US: 55}
-    )
-    zero_volume_max_days_20: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 3, Market.US: 1}
-    )
+    active_trading_min_days_60: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 50, Market.US: 55})
+    zero_volume_max_days_20: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 3, Market.US: 1})
     snapshot_metric_keys: tuple[str, ...] = LIQUIDITY_QUALITY_SNAPSHOT_METRIC_KEYS
     ranking_metric_keys: tuple[str, ...] = LIQUIDITY_QUALITY_RANKING_METRIC_KEYS
     inspect_metric_keys: tuple[str, ...] = LIQUIDITY_QUALITY_SNAPSHOT_METRIC_KEYS
@@ -229,12 +223,8 @@ class LiquidityQualityV1Profile:
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
-            "active_trading_min_days_60": {
-                market.value: self.active_trading_min_days_60[market] for market in Market
-            },
-            "zero_volume_max_days_20": {
-                market.value: self.zero_volume_max_days_20[market] for market in Market
-            },
+            "active_trading_min_days_60": {market.value: self.active_trading_min_days_60[market] for market in Market},
+            "zero_volume_max_days_20": {market.value: self.zero_volume_max_days_20[market] for market in Market},
             "horizon_order": list(self.horizon_order),
             "snapshot_metric_keys": list(self.snapshot_metric_keys),
             "ranking_metric_keys": list(self.ranking_metric_keys),
@@ -285,14 +275,14 @@ class LiquidityQualityV1Profile:
             closes_float = [float(value) for value in closes]
             adjusted_closes_float = [float(value) for value in adjusted_closes]
             volumes_float = [float(value) for value in volumes]
-            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+            if any(
+                value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float
+            ):
                 continue
             if any(value < 0.0 for value in volumes_float):
                 continue
 
-            traded_values = [
-                close * volume for close, volume in zip(closes_float, volumes_float, strict=True)
-            ]
+            traded_values = [close * volume for close, volume in zip(closes_float, volumes_float, strict=True)]
             latest_close = closes_float[-1]
             latest_adjusted_close = adjusted_closes_float[-1]
             traded_values_5d = traded_values[-5:]
@@ -334,10 +324,7 @@ class LiquidityQualityV1Profile:
                 adjusted_closes_float[index] / adjusted_closes_float[index - 1] - 1.0
                 for index in range(len(adjusted_closes_float) - 20, len(adjusted_closes_float))
             ]
-            returns_60d = [
-                adjusted_60d[index] / adjusted_60d[index - 1] - 1.0
-                for index in range(1, len(adjusted_60d))
-            ]
+            returns_60d = [adjusted_60d[index] / adjusted_60d[index - 1] - 1.0 for index in range(1, len(adjusted_60d))]
             traded_values_for_returns_20d = traded_values[-20:]
             traded_values_for_returns_60d = traded_values_60d[1:]
             amihud_observations_20d = [
@@ -353,24 +340,17 @@ class LiquidityQualityV1Profile:
             if not amihud_observations_20d or not amihud_observations_60d:
                 continue
 
-            amihud_illiquidity_20d = _mean(
-                [abs(ret) / traded_value for ret, traded_value in amihud_observations_20d]
-            )
-            amihud_illiquidity_60d = _mean(
-                [abs(ret) / traded_value for ret, traded_value in amihud_observations_60d]
-            )
+            amihud_illiquidity_20d = _mean([abs(ret) / traded_value for ret, traded_value in amihud_observations_20d])
+            amihud_illiquidity_60d = _mean([abs(ret) / traded_value for ret, traded_value in amihud_observations_60d])
             traded_value_cv_60d = _cv(traded_values_60d)
             traded_value_concentration_60d = max(traded_values_60d) / sum(traded_values_60d)
             range_pct = [
-                (high - low) / close
-                for high, low, close in zip(highs_float, lows_float, closes_float, strict=True)
+                (high - low) / close for high, low, close in zip(highs_float, lows_float, closes_float, strict=True)
             ]
             median_range_pct_20d = float(median(range_pct[-20:]))
             median_range_pct_60d = float(median(range_pct[-60:]))
             traded_value_5d_to_20d_ratio = avg_traded_value_5d_local / avg_traded_value_20d_local
-            data_quality_extreme_return_flag = (
-                1.0 if any(abs(value) > 0.80 for value in returns_60d) else 0.0
-            )
+            data_quality_extreme_return_flag = 1.0 if any(abs(value) > 0.80 for value in returns_60d) else 0.0
 
             computed = [
                 avg_traded_value_5d_local,
@@ -436,17 +416,11 @@ class LiquidityQualityV1Profile:
         for column in LIQUIDITY_QUALITY_SNAPSHOT_METRIC_KEYS:
             invalid_count = snapshot.filter(pl.col(column).is_null() | (~pl.col(column).is_finite())).height
             if invalid_count > 0:
-                raise ValidationError(
-                    f"liquidity_quality_v1 snapshot contains non-finite ranking input: {column}"
-                )
+                raise ValidationError(f"liquidity_quality_v1 snapshot contains non-finite ranking input: {column}")
         ranking_frames = []
         for partition in snapshot.partition_by(["run_id", "market"], maintain_order=True):
             ranking_frames.append(self._assign_single_run_market_rankings(partition))
-        return (
-            pl.concat(ranking_frames)
-            .sort(["run_id", "market", "horizon", "rank"])
-            .select(self._ranking_columns())
-        )
+        return pl.concat(ranking_frames).sort(["run_id", "market", "horizon", "rank"]).select(self._ranking_columns())
 
     def _has_required_ranking_inputs(self, snapshot: pl.DataFrame) -> bool:
         required = {"run_id", "market", "ticker", *LIQUIDITY_QUALITY_SNAPSHOT_METRIC_KEYS}
@@ -544,9 +518,7 @@ class LiquidityQualityV1Profile:
                     "stability_score": stability_score,
                     "penalty_score": penalty_score,
                     "tag_risk_thin_liquidity": (
-                        1.0
-                        if float(row["avg_traded_value_20d_local"]) <= self.liquidity_floor[market] * 1.25
-                        else 0.0
+                        1.0 if float(row["avg_traded_value_20d_local"]) <= self.liquidity_floor[market] * 1.25 else 0.0
                     ),
                     "tag_risk_recent_liquidity_fade": 1.0 if ratio < 0.75 else 0.0,
                     "tag_risk_traded_value_spike": (
@@ -609,9 +581,7 @@ class LiquidityQualityV1Profile:
             for rank, row in enumerate(horizon_rows, start=1):
                 row["rank"] = rank
                 ranking_rows.append(row)
-        return pl.DataFrame(ranking_rows, schema=LIQUIDITY_QUALITY_RANKING_SCHEMA).select(
-            self._ranking_columns()
-        )
+        return pl.DataFrame(ranking_rows, schema=LIQUIDITY_QUALITY_RANKING_SCHEMA).select(self._ranking_columns())
 
 
 LIQUIDITY_QUALITY_V1_REGISTRATION = RankingProfileRegistration(

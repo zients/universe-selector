@@ -195,10 +195,7 @@ def _parse_yfinance_mapping(value: object) -> dict[str, Any]:
 
 def _missing_config_message() -> str:
     action = f"copy {CONFIG_EXAMPLE_PATH} to {DEFAULT_CONFIG_PATH}"
-    return (
-        f"config file not found: {DEFAULT_CONFIG_PATH}; {action}; "
-        f"installed template: {PACKAGED_CONFIG_EXAMPLE_PATH}"
-    )
+    return f"config file not found: {DEFAULT_CONFIG_PATH}; {action}; installed template: {PACKAGED_CONFIG_EXAMPLE_PATH}"
 
 
 def _validate_required_config_keys(data: dict[str, Any]) -> None:

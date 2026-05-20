@@ -92,10 +92,7 @@ def _ols_slope_r2_for_test(values: list[float]) -> tuple[float, float]:
     total = sum((value - y_mean) ** 2 for value in y_values)
     if total == 0.0:
         return slope, 0.0
-    residual = sum(
-        (y - (intercept + slope * x)) ** 2
-        for x, y in zip(x_values, y_values, strict=True)
-    )
+    residual = sum((y - (intercept + slope * x)) ** 2 for x, y in zip(x_values, y_values, strict=True))
     return slope, 1.0 - residual / total
 
 
@@ -175,10 +172,12 @@ def test_trend_quality_retains_exact_latest_252_rows_after_asof_exclusion() -> N
 def test_trend_quality_omits_ticker_missing_common_asof_date() -> None:
     latest = date(2026, 5, 8)
     profile = TrendQualityV1Profile()
-    bars = pl.concat([
-        _bars("AAA", latest),
-        _bars("STALE", latest - timedelta(days=2), length=253),
-    ])
+    bars = pl.concat(
+        [
+            _bars("AAA", latest),
+            _bars("STALE", latest - timedelta(days=2), length=253),
+        ]
+    )
 
     snapshot = profile.build_snapshot(
         run_id="us-test",
@@ -195,12 +194,14 @@ def test_trend_quality_omits_ticker_missing_common_asof_date() -> None:
 def test_trend_quality_candidate_bars_filter_market_listing_and_run_latest_date() -> None:
     latest = date(2026, 5, 8)
     profile = TrendQualityV1Profile()
-    bars = pl.concat([
-        _bars("AAA", latest),
-        _bars("UNLISTED", latest + timedelta(days=5), length=1),
-        _bars("AAA", latest + timedelta(days=5), length=1),
-        _bars("AAA", latest, market=Market.TW),
-    ])
+    bars = pl.concat(
+        [
+            _bars("AAA", latest),
+            _bars("UNLISTED", latest + timedelta(days=5), length=1),
+            _bars("AAA", latest + timedelta(days=5), length=1),
+            _bars("AAA", latest, market=Market.TW),
+        ]
+    )
 
     snapshot = profile.build_snapshot(
         run_id="us-test",
@@ -265,24 +266,23 @@ def test_trend_quality_filters_ohlcv_and_market_threshold_failures() -> None:
     inactive = _bars("INACTIVE", latest)
     inactive_zero_dates = inactive.sort("bar_date")["bar_date"].to_list()[-60:-54]
     inactive = inactive.with_columns(
-        pl.when(pl.col("bar_date").is_in(inactive_zero_dates))
-        .then(0.0)
-        .otherwise(pl.col("volume"))
-        .alias("volume")
+        pl.when(pl.col("bar_date").is_in(inactive_zero_dates)).then(0.0).otherwise(pl.col("volume")).alias("volume")
     )
-    bars = pl.concat([
-        _bars("GOOD", latest),
-        _bars("LOWPRICE", latest, close_multiplier=0.10),
-        _bars("LOWLIQ", latest, volume=100_000.0),
-        _bars("ZEROS", latest, zero_volume_tail=3),
-        inactive,
-        _bars("BADHIGH", latest).with_columns(
-            pl.when(pl.col("bar_date") == latest - timedelta(days=1))
-            .then(pl.col("low") - 1.0)
-            .otherwise(pl.col("high"))
-            .alias("high")
-        ),
-    ])
+    bars = pl.concat(
+        [
+            _bars("GOOD", latest),
+            _bars("LOWPRICE", latest, close_multiplier=0.10),
+            _bars("LOWLIQ", latest, volume=100_000.0),
+            _bars("ZEROS", latest, zero_volume_tail=3),
+            inactive,
+            _bars("BADHIGH", latest).with_columns(
+                pl.when(pl.col("bar_date") == latest - timedelta(days=1))
+                .then(pl.col("low") - 1.0)
+                .otherwise(pl.col("high"))
+                .alias("high")
+            ),
+        ]
+    )
 
     snapshot = profile.build_snapshot(
         run_id="us-test",
@@ -391,37 +391,39 @@ def _snapshot_rows(rows: list[dict[str, object]]) -> pl.DataFrame:
 
 def test_trend_quality_assigns_three_horizons_and_ranks_upward_structure_first() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {
-            "ticker": "CLEAN",
-            "return_20d": 0.08,
-            "return_60d": 0.18,
-            "return_120d": 0.28,
-            "trend_slope_60d": 0.003,
-            "trend_r2_60d": 0.80,
-            "uptrend_r2_60d": 0.80,
-            "trend_consistency_60d": 0.70,
-            "price_vs_sma_50d": 0.08,
-            "price_vs_sma_200d": 0.18,
-            "sma_50d_vs_sma_200d": 0.10,
-            "pct_below_120d_high": -0.01,
-            "max_drawdown_120d": -0.05,
-        },
-        {
-            "ticker": "WEAK",
-            "return_20d": 0.01,
-            "return_60d": -0.03,
-            "return_120d": 0.01,
-            "trend_slope_60d": -0.001,
-            "trend_r2_60d": 0.30,
-            "uptrend_r2_60d": 0.0,
-            "price_vs_sma_50d": -0.02,
-            "price_vs_sma_200d": -0.04,
-            "sma_50d_vs_sma_200d": -0.01,
-            "pct_below_120d_high": -0.20,
-            "max_drawdown_120d": -0.30,
-        },
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {
+                "ticker": "CLEAN",
+                "return_20d": 0.08,
+                "return_60d": 0.18,
+                "return_120d": 0.28,
+                "trend_slope_60d": 0.003,
+                "trend_r2_60d": 0.80,
+                "uptrend_r2_60d": 0.80,
+                "trend_consistency_60d": 0.70,
+                "price_vs_sma_50d": 0.08,
+                "price_vs_sma_200d": 0.18,
+                "sma_50d_vs_sma_200d": 0.10,
+                "pct_below_120d_high": -0.01,
+                "max_drawdown_120d": -0.05,
+            },
+            {
+                "ticker": "WEAK",
+                "return_20d": 0.01,
+                "return_60d": -0.03,
+                "return_120d": 0.01,
+                "trend_slope_60d": -0.001,
+                "trend_r2_60d": 0.30,
+                "uptrend_r2_60d": 0.0,
+                "price_vs_sma_50d": -0.02,
+                "price_vs_sma_200d": -0.04,
+                "sma_50d_vs_sma_200d": -0.01,
+                "pct_below_120d_high": -0.20,
+                "max_drawdown_120d": -0.30,
+            },
+        ]
+    )
 
     rankings = profile.assign_rankings(snapshot)
 
@@ -435,12 +437,14 @@ def test_trend_quality_assigns_three_horizons_and_ranks_upward_structure_first()
 
 def test_trend_quality_positive_only_slope_score_zeroes_nonpositive_slopes() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {"ticker": "NEG", "trend_slope_60d": -0.001, "uptrend_r2_60d": 0.0},
-        {"ticker": "FLAT", "trend_slope_60d": 0.0, "uptrend_r2_60d": 0.0},
-        {"ticker": "LOWPOS", "trend_slope_60d": 0.001, "uptrend_r2_60d": 0.60},
-        {"ticker": "HIGHPOS", "trend_slope_60d": 0.002, "uptrend_r2_60d": 0.70},
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {"ticker": "NEG", "trend_slope_60d": -0.001, "uptrend_r2_60d": 0.0},
+            {"ticker": "FLAT", "trend_slope_60d": 0.0, "uptrend_r2_60d": 0.0},
+            {"ticker": "LOWPOS", "trend_slope_60d": 0.001, "uptrend_r2_60d": 0.60},
+            {"ticker": "HIGHPOS", "trend_slope_60d": 0.002, "uptrend_r2_60d": 0.70},
+        ]
+    )
 
     rows = profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite")
     by_ticker = {row["ticker"]: row for row in rows.to_dicts()}
@@ -452,9 +456,11 @@ def test_trend_quality_positive_only_slope_score_zeroes_nonpositive_slopes() -> 
 
 def test_trend_quality_uptrend_r2_score_zeroes_nonpositive_slope_snapshot_values() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {"ticker": "BADSNAP", "trend_slope_60d": -0.001, "uptrend_r2_60d": 0.80},
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {"ticker": "BADSNAP", "trend_slope_60d": -0.001, "uptrend_r2_60d": 0.80},
+        ]
+    )
 
     row = profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()[0]
 
@@ -464,11 +470,13 @@ def test_trend_quality_uptrend_r2_score_zeroes_nonpositive_slope_snapshot_values
 
 def test_trend_quality_percentile_ties_use_average_position_and_ticker_tiebreak() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {"ticker": "AAA", "return_20d": 0.10, "return_60d": 0.10},
-        {"ticker": "BBB", "return_20d": 0.10, "return_60d": 0.10},
-        {"ticker": "CCC", "return_20d": 0.01, "return_60d": 0.01},
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {"ticker": "AAA", "return_20d": 0.10, "return_60d": 0.10},
+            {"ticker": "BBB", "return_20d": 0.10, "return_60d": 0.10},
+            {"ticker": "CCC", "return_20d": 0.01, "return_60d": 0.01},
+        ]
+    )
 
     composite = profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").sort("rank")
     aaa = composite.filter(pl.col("ticker") == "AAA").to_dicts()[0]
@@ -481,53 +489,55 @@ def test_trend_quality_percentile_ties_use_average_position_and_ticker_tiebreak(
 
 def test_trend_quality_uses_exact_component_cap_tag_and_horizon_formulas() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {
-            "ticker": "AAA",
-            "return_20d": 0.20,
-            "return_60d": 0.10,
-            "return_120d": 0.30,
-            "trend_slope_60d": 0.002,
-            "trend_r2_60d": 0.60,
-            "uptrend_r2_60d": 0.60,
-            "trend_consistency_60d": 0.70,
-            "price_vs_sma_50d": 0.15,
-            "price_vs_sma_200d": 0.12,
-            "sma_50d_vs_sma_200d": 0.06,
-            "pct_below_120d_high": -0.01,
-            "max_drawdown_120d": -0.05,
-        },
-        {
-            "ticker": "BBB",
-            "return_20d": 0.10,
-            "return_60d": 0.15,
-            "return_120d": 0.10,
-            "trend_slope_60d": 0.001,
-            "trend_r2_60d": 0.55,
-            "uptrend_r2_60d": 0.55,
-            "trend_consistency_60d": 0.60,
-            "price_vs_sma_50d": 0.05,
-            "price_vs_sma_200d": 0.05,
-            "sma_50d_vs_sma_200d": 0.02,
-            "pct_below_120d_high": -0.05,
-            "max_drawdown_120d": -0.10,
-        },
-        {
-            "ticker": "CCC",
-            "return_20d": -0.02,
-            "return_60d": -0.02,
-            "return_120d": -0.05,
-            "trend_slope_60d": -0.001,
-            "trend_r2_60d": 0.30,
-            "uptrend_r2_60d": 0.0,
-            "trend_consistency_60d": 0.40,
-            "price_vs_sma_50d": -0.03,
-            "price_vs_sma_200d": -0.04,
-            "sma_50d_vs_sma_200d": -0.02,
-            "pct_below_120d_high": -0.20,
-            "max_drawdown_120d": -0.30,
-        },
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {
+                "ticker": "AAA",
+                "return_20d": 0.20,
+                "return_60d": 0.10,
+                "return_120d": 0.30,
+                "trend_slope_60d": 0.002,
+                "trend_r2_60d": 0.60,
+                "uptrend_r2_60d": 0.60,
+                "trend_consistency_60d": 0.70,
+                "price_vs_sma_50d": 0.15,
+                "price_vs_sma_200d": 0.12,
+                "sma_50d_vs_sma_200d": 0.06,
+                "pct_below_120d_high": -0.01,
+                "max_drawdown_120d": -0.05,
+            },
+            {
+                "ticker": "BBB",
+                "return_20d": 0.10,
+                "return_60d": 0.15,
+                "return_120d": 0.10,
+                "trend_slope_60d": 0.001,
+                "trend_r2_60d": 0.55,
+                "uptrend_r2_60d": 0.55,
+                "trend_consistency_60d": 0.60,
+                "price_vs_sma_50d": 0.05,
+                "price_vs_sma_200d": 0.05,
+                "sma_50d_vs_sma_200d": 0.02,
+                "pct_below_120d_high": -0.05,
+                "max_drawdown_120d": -0.10,
+            },
+            {
+                "ticker": "CCC",
+                "return_20d": -0.02,
+                "return_60d": -0.02,
+                "return_120d": -0.05,
+                "trend_slope_60d": -0.001,
+                "trend_r2_60d": 0.30,
+                "uptrend_r2_60d": 0.0,
+                "trend_consistency_60d": 0.40,
+                "price_vs_sma_50d": -0.03,
+                "price_vs_sma_200d": -0.04,
+                "sma_50d_vs_sma_200d": -0.02,
+                "pct_below_120d_high": -0.20,
+                "max_drawdown_120d": -0.30,
+            },
+        ]
+    )
 
     rankings = profile.assign_rankings(snapshot)
     aaa = rankings.filter((pl.col("horizon") == "composite") & (pl.col("ticker") == "AAA")).to_dicts()[0]
@@ -563,13 +573,7 @@ def test_trend_quality_uses_exact_component_cap_tag_and_horizon_formulas() -> No
         + 0.05 * 1.0
     )
     expected_midterm = (
-        0.25 * 1.0
-        + 0.20 * 1.0
-        + 0.15 * 1.0
-        + 0.15 * 1.0
-        + 0.10 * 1.0
-        + 0.10 * expected_cleanliness
-        + 0.05 * 0.60
+        0.25 * 1.0 + 0.20 * 1.0 + 0.15 * 1.0 + 0.15 * 1.0 + 0.10 * 1.0 + 0.10 * expected_cleanliness + 0.05 * 0.60
     )
 
     assert aaa["trend_strength_score"] == pytest.approx(expected_strength)
@@ -599,33 +603,43 @@ def test_trend_quality_uses_exact_component_cap_tag_and_horizon_formulas() -> No
 
 def test_trend_quality_ranks_within_run_market_horizon_partitions() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {"run_id": "run-1", "market": "US", "ticker": "AAA", "return_120d": 0.20},
-        {"run_id": "run-1", "market": "US", "ticker": "BBB", "return_120d": 0.05},
-        {"run_id": "run-1", "market": "TW", "ticker": "2330", "return_120d": 0.04},
-        {"run_id": "run-1", "market": "TW", "ticker": "2454", "return_120d": 0.18},
-        {"run_id": "run-2", "market": "US", "ticker": "DDD", "return_120d": 0.01},
-        {"run_id": "run-2", "market": "US", "ticker": "EEE", "return_120d": 0.30},
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {"run_id": "run-1", "market": "US", "ticker": "AAA", "return_120d": 0.20},
+            {"run_id": "run-1", "market": "US", "ticker": "BBB", "return_120d": 0.05},
+            {"run_id": "run-1", "market": "TW", "ticker": "2330", "return_120d": 0.04},
+            {"run_id": "run-1", "market": "TW", "ticker": "2454", "return_120d": 0.18},
+            {"run_id": "run-2", "market": "US", "ticker": "DDD", "return_120d": 0.01},
+            {"run_id": "run-2", "market": "US", "ticker": "EEE", "return_120d": 0.30},
+        ]
+    )
 
     composite = profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite")
 
-    assert composite.filter((pl.col("run_id") == "run-1") & (pl.col("market") == "US")).sort("rank")["rank"].to_list() == [1, 2]
-    assert composite.filter((pl.col("run_id") == "run-1") & (pl.col("market") == "TW")).sort("rank")["rank"].to_list() == [1, 2]
-    assert composite.filter((pl.col("run_id") == "run-2") & (pl.col("market") == "US")).sort("rank")["rank"].to_list() == [1, 2]
+    assert composite.filter((pl.col("run_id") == "run-1") & (pl.col("market") == "US")).sort("rank")[
+        "rank"
+    ].to_list() == [1, 2]
+    assert composite.filter((pl.col("run_id") == "run-1") & (pl.col("market") == "TW")).sort("rank")[
+        "rank"
+    ].to_list() == [1, 2]
+    assert composite.filter((pl.col("run_id") == "run-2") & (pl.col("market") == "US")).sort("rank")[
+        "rank"
+    ].to_list() == [1, 2]
 
 
 def test_trend_quality_caps_weak_noisy_flat_and_overextended_structures() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {"ticker": "LOWR2", "trend_r2_60d": 0.40, "uptrend_r2_60d": 0.40},
-        {"ticker": "MODOVER", "return_20d": 0.35},
-        {"ticker": "SEVOVER", "return_20d": 0.55},
-        {"ticker": "WEAK1", "price_vs_sma_200d": 0.01},
-        {"ticker": "WEAK2", "return_60d": 0.01, "price_vs_sma_200d": 0.01},
-        {"ticker": "WEAK3", "trend_slope_60d": 0.0001, "return_60d": 0.01, "price_vs_sma_200d": 0.01},
-        {"ticker": "BELOW50", "price_vs_sma_50d": -0.01},
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {"ticker": "LOWR2", "trend_r2_60d": 0.40, "uptrend_r2_60d": 0.40},
+            {"ticker": "MODOVER", "return_20d": 0.35},
+            {"ticker": "SEVOVER", "return_20d": 0.55},
+            {"ticker": "WEAK1", "price_vs_sma_200d": 0.01},
+            {"ticker": "WEAK2", "return_60d": 0.01, "price_vs_sma_200d": 0.01},
+            {"ticker": "WEAK3", "trend_slope_60d": 0.0001, "return_60d": 0.01, "price_vs_sma_200d": 0.01},
+            {"ticker": "BELOW50", "price_vs_sma_50d": -0.01},
+        ]
+    )
 
     rows = {
         row["ticker"]: row
@@ -646,9 +660,11 @@ def test_trend_quality_caps_weak_noisy_flat_and_overextended_structures() -> Non
 
 def test_trend_quality_applies_penalties_before_final_structure_cap() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {"ticker": "CAPPED", "price_vs_sma_50d": -0.01},
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {"ticker": "CAPPED", "price_vs_sma_50d": -0.01},
+        ]
+    )
 
     row = profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()[0]
 
@@ -659,10 +675,12 @@ def test_trend_quality_applies_penalties_before_final_structure_cap() -> None:
 
 def test_trend_quality_penalty_reduces_uncapped_score() -> None:
     profile = TrendQualityV1Profile()
-    snapshot = _snapshot_rows([
-        {"ticker": "BASE"},
-        {"ticker": "STALE", "stale_close_days_20d": 3.0},
-    ])
+    snapshot = _snapshot_rows(
+        [
+            {"ticker": "BASE"},
+            {"ticker": "STALE", "stale_close_days_20d": 3.0},
+        ]
+    )
 
     rows = {
         row["ticker"]: row
@@ -708,20 +726,26 @@ def test_trend_quality_rejects_malformed_non_numeric_non_finite_and_mixed_asof_s
     with pytest.raises(ValidationError, match="non-numeric ranking input"):
         profile.assign_rankings(non_numeric)
 
-    mixed_asof = _snapshot_rows([
-        {"ticker": "AAA", "asof_bar_date_yyyymmdd": 20260507.0},
-        {"ticker": "BBB", "asof_bar_date_yyyymmdd": 20260506.0},
-    ])
+    mixed_asof = _snapshot_rows(
+        [
+            {"ticker": "AAA", "asof_bar_date_yyyymmdd": 20260507.0},
+            {"ticker": "BBB", "asof_bar_date_yyyymmdd": 20260506.0},
+        ]
+    )
     with pytest.raises(ValidationError, match="mixed as-of"):
         profile.assign_rankings(mixed_asof)
 
 
 def test_trend_quality_declared_ranking_metrics_are_finite_and_ordered() -> None:
     profile = TrendQualityV1Profile()
-    rankings = profile.assign_rankings(_snapshot_rows([
-        {"ticker": "AAA", "return_120d": 0.20},
-        {"ticker": "BBB", "return_120d": 0.05},
-    ]))
+    rankings = profile.assign_rankings(
+        _snapshot_rows(
+            [
+                {"ticker": "AAA", "return_120d": 0.20},
+                {"ticker": "BBB", "return_120d": 0.05},
+            ]
+        )
+    )
 
     assert rankings.columns == [
         "run_id",

@@ -76,17 +76,15 @@ class FixtureProvider(MarketDataProvider):
         }
         missing_columns = required_columns - set(bars.columns)
         if missing_columns:
-            raise ProviderDataError(f"OHLCV fixture data missing required columns: {', '.join(sorted(missing_columns))}")
+            raise ProviderDataError(
+                f"OHLCV fixture data missing required columns: {', '.join(sorted(missing_columns))}"
+            )
         removed_columns = {"tradable_close", "price_basis"} & set(bars.columns)
         if removed_columns:
             raise ProviderDataError(f"OHLCV fixture data uses removed columns: {', '.join(sorted(removed_columns))}")
         filtered = bars.filter((pl.col("market") == market.value) & (pl.col("ticker").is_in(requested_tickers)))
 
-        duplicates = (
-            filtered.group_by(["market", "ticker", "bar_date"])
-            .len()
-            .filter(pl.col("len") > 1)
-        )
+        duplicates = filtered.group_by(["market", "ticker", "bar_date"]).len().filter(pl.col("len") > 1)
         if duplicates.height > 0:
             raise ProviderDataError("duplicate OHLCV bars in fixture data")
 

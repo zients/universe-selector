@@ -132,18 +132,12 @@ def _empty_rankings() -> pl.DataFrame:
 class DefensiveCompounderQualityV1Profile:
     profile_id: Literal["defensive_compounder_quality_v1"] = DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID
     min_history_bars: int = 252
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 50_000_000.0, Market.US: 10_000_000.0}
     )
-    active_trading_min_days_60: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 50, Market.US: 55}
-    )
-    zero_volume_max_days_20: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 3, Market.US: 1}
-    )
+    active_trading_min_days_60: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 50, Market.US: 55})
+    zero_volume_max_days_20: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 3, Market.US: 1})
     stale_close_max_days_20: int = 5
     extreme_return_abs_cutoff: float = 0.80
     volatility_floor: float = 0.0001
@@ -230,12 +224,8 @@ class DefensiveCompounderQualityV1Profile:
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
-            "active_trading_min_days_60": {
-                market.value: self.active_trading_min_days_60[market] for market in Market
-            },
-            "zero_volume_max_days_20": {
-                market.value: self.zero_volume_max_days_20[market] for market in Market
-            },
+            "active_trading_min_days_60": {market.value: self.active_trading_min_days_60[market] for market in Market},
+            "zero_volume_max_days_20": {market.value: self.zero_volume_max_days_20[market] for market in Market},
             "stale_close_max_days_20": self.stale_close_max_days_20,
             "extreme_return_abs_cutoff": self.extreme_return_abs_cutoff,
             "volatility_floor": self.volatility_floor,
@@ -273,10 +263,9 @@ class DefensiveCompounderQualityV1Profile:
         profile_asof_bar_date = candidate_bars["bar_date"].max()
         rows: list[dict[str, object]] = []
         for ticker in sorted(listed_tickers):
-            ticker_bars = (
-                candidate_bars.filter((pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date))
-                .sort("bar_date")
-            )
+            ticker_bars = candidate_bars.filter(
+                (pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date)
+            ).sort("bar_date")
             if ticker_bars.is_empty() or ticker_bars.height < self.min_history_bars:
                 continue
             if ticker_bars["bar_date"].n_unique() != ticker_bars.height:
@@ -300,23 +289,21 @@ class DefensiveCompounderQualityV1Profile:
             closes_float = [float(value) for value in closes]
             adjusted_closes_float = [float(value) for value in adjusted_closes]
             volumes_float = [float(value) for value in volumes]
-            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+            if any(
+                value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float
+            ):
                 continue
             if any(value < 0.0 for value in volumes_float):
                 continue
             if any(
                 high < low or high < open_ or high < close or low > open_ or low > close
-                for high, low, open_, close in zip(
-                    highs_float, lows_float, opens_float, closes_float, strict=True
-                )
+                for high, low, open_, close in zip(highs_float, lows_float, opens_float, closes_float, strict=True)
             ):
                 continue
 
             latest_close = closes_float[-1]
             latest_adjusted_close = adjusted_closes_float[-1]
-            traded_values = [
-                close * volume for close, volume in zip(closes_float, volumes_float, strict=True)
-            ]
+            traded_values = [close * volume for close, volume in zip(closes_float, volumes_float, strict=True)]
             traded_values_5d = traded_values[-5:]
             traded_values_20d = traded_values[-20:]
             avg_traded_value_5d_local = mean(traded_values_5d)
@@ -369,7 +356,11 @@ class DefensiveCompounderQualityV1Profile:
                 or downside_volatility_120d is None
             ):
                 continue
-            if volatility_20d <= 0.0 or volatility_60d <= self.volatility_floor or volatility_120d <= self.volatility_floor:
+            if (
+                volatility_20d <= 0.0
+                or volatility_60d <= self.volatility_floor
+                or volatility_120d <= self.volatility_floor
+            ):
                 continue
 
             return_60d = latest_adjusted_close / adjusted_closes_float[-61] - 1.0
@@ -393,8 +384,12 @@ class DefensiveCompounderQualityV1Profile:
             price_vs_sma_50d = latest_adjusted_close / sma_50d - 1.0
             price_vs_sma_200d = latest_adjusted_close / sma_200d - 1.0
             sma_50d_vs_sma_200d = sma_50d / sma_200d - 1.0
-            range_tightness_20d = 1.0 - clamp((max(adjusted_closes_float[-20:]) / min(adjusted_closes_float[-20:]) - 1.0) / 0.18, 0.0, 1.0)
-            range_tightness_60d = 1.0 - clamp((max(adjusted_closes_float[-60:]) / min(adjusted_closes_float[-60:]) - 1.0) / 0.28, 0.0, 1.0)
+            range_tightness_20d = 1.0 - clamp(
+                (max(adjusted_closes_float[-20:]) / min(adjusted_closes_float[-20:]) - 1.0) / 0.18, 0.0, 1.0
+            )
+            range_tightness_60d = 1.0 - clamp(
+                (max(adjusted_closes_float[-60:]) / min(adjusted_closes_float[-60:]) - 1.0) / 0.28, 0.0, 1.0
+            )
             volatility_20d_to_60d_ratio = volatility_20d / volatility_60d
             liquidity_stability_score_raw = band_score(
                 traded_value_5d_to_20d_ratio,
@@ -585,7 +580,6 @@ class DefensiveCompounderQualityV1Profile:
             max_drawdown_252d = float(row["max_drawdown_252d"])
             range_tightness_20d = float(row["range_tightness_20d"])
             range_tightness_60d = float(row["range_tightness_60d"])
-            price_vs_sma_50d = float(row["price_vs_sma_50d"])
             price_vs_sma_200d = float(row["price_vs_sma_200d"])
             sma_50d_vs_sma_200d = float(row["sma_50d_vs_sma_200d"])
             traded_value_5d_to_20d_ratio = float(row["traded_value_5d_to_20d_ratio"])
@@ -595,9 +589,7 @@ class DefensiveCompounderQualityV1Profile:
             data_quality_extreme_return_flag = float(row["data_quality_extreme_return_flag"])
 
             score_steady_return = (
-                0.20 * score_return_60d[index]
-                + 0.35 * score_return_120d[index]
-                + 0.45 * score_return_252d[index]
+                0.20 * score_return_60d[index] + 0.35 * score_return_120d[index] + 0.45 * score_return_252d[index]
             )
             score_positive_return_persistence = positive_21d_return_ratio_252d
             score_trend_durability = (
@@ -608,8 +600,7 @@ class DefensiveCompounderQualityV1Profile:
             )
             score_low_volatility = 0.45 * score_low_volatility_60d[index] + 0.55 * score_low_volatility_120d[index]
             score_downside_control = (
-                0.45 * score_downside_volatility_60d[index]
-                + 0.55 * score_downside_volatility_120d[index]
+                0.45 * score_downside_volatility_60d[index] + 0.55 * score_downside_volatility_120d[index]
             )
             score_drawdown_control = 0.45 * score_drawdown_120d[index] + 0.55 * score_drawdown_252d[index]
             score_range_tightness = 0.45 * range_tightness_20d + 0.55 * range_tightness_60d
@@ -663,9 +654,7 @@ class DefensiveCompounderQualityV1Profile:
             tag_risk_volatility_spike = 1.0 if volatility_20d_to_60d_ratio > 1.60 or volatility_20d > 0.04 else 0.0
             tag_risk_stale_or_illiquid = (
                 1.0
-                if stale_close_days_20d > 0.0
-                or zero_volume_days_20d > 0.0
-                or traded_value_5d_to_20d_ratio < 0.75
+                if stale_close_days_20d > 0.0 or zero_volume_days_20d > 0.0 or traded_value_5d_to_20d_ratio < 0.75
                 else 0.0
             )
             tag_risk_data_quality_warning = 1.0 if data_quality_extreme_return_flag == 1.0 else 0.0
@@ -875,11 +864,7 @@ class DefensiveCompounderQualityV1Profile:
     ) -> float:
         if tag_positive_steady_compounder == 1.0:
             return 1.0
-        if (
-            score_low_volatility < 0.50
-            or score_downside_control < 0.55
-            or score_drawdown_control < 0.60
-        ):
+        if score_low_volatility < 0.50 or score_downside_control < 0.55 or score_drawdown_control < 0.60:
             return 0.45
         if (
             steady_compounder_score < 0.45
