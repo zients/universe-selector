@@ -16,43 +16,49 @@ from universe_selector.pipeline import BatchResult, FailedBatchResult, MultiProf
 from universe_selector.ranking_profiles import supported_ranking_profile_ids
 
 
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 RUN_ID_RE = re.compile(r"run_id: (?P<run_id>(?:tw|us)-[0-9a-f-]+)")
 runner = CliRunner()
 
 
+def _normalized_help(output: str) -> str:
+    return " ".join(ANSI_RE.sub("", output).split())
+
+
 def test_cli_help_describes_commands_and_supported_markets() -> None:
     result = runner.invoke(app, ["--help"])
+    normalized = _normalized_help(result.output)
 
     assert result.exit_code == 0, result.output
-    assert "Run-centric quantitative universe selector" in result.output
-    assert "batch" in result.output
-    assert "Fetch provider data, run ranking profiles, and persist reports." in result.output
-    assert "report" in result.output
-    assert "Print a persisted report by market or run id." in result.output
-    assert "inspect" in result.output
-    assert "Inspect persisted rankings and metrics for one ticker." in result.output
-    assert "value" in result.output
-    assert "Run a live single-ticker valuation analysis." in result.output
+    assert "Run-centric quantitative universe selector" in normalized
+    assert "batch" in normalized
+    assert "Fetch provider data, run ranking profiles, and persist reports." in normalized
+    assert "report" in normalized
+    assert "Print a persisted report by market or run id." in normalized
+    assert "inspect" in normalized
+    assert "Inspect persisted rankings and metrics for one ticker." in normalized
+    assert "value" in normalized
+    assert "Run a live single-ticker valuation analysis." in normalized
 
 
 def test_cli_batch_help_documents_market_and_profile_options() -> None:
     result = runner.invoke(app, ["batch", "--help"])
-    normalized = " ".join(result.output.split())
+    normalized = _normalized_help(result.output)
 
     assert result.exit_code == 0, result.output
-    assert "Supported markets: us, tw." in result.output
+    assert "Supported markets: us, tw." in normalized
     assert "Run more" in normalized
     assert "persist separate runs" in normalized
     assert "provider snapshot" in normalized
     for profile_id in supported_ranking_profile_ids():
-        assert profile_id in result.output
+        assert profile_id in normalized
 
 
 def test_cli_report_and_inspect_help_document_resolution_modes() -> None:
     report = runner.invoke(app, ["report", "--help"])
     inspect = runner.invoke(app, ["inspect", "--help"])
-    normalized_report = " ".join(report.output.split())
-    normalized_inspect = " ".join(inspect.output.split())
+    normalized_report = _normalized_help(report.output)
+    normalized_inspect = _normalized_help(inspect.output)
 
     assert report.exit_code == 0, report.output
     assert "Read the latest successful run for MARKET or one explicit --run-id." in normalized_report
