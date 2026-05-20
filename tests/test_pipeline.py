@@ -361,9 +361,7 @@ def test_pipeline_runs_defensive_compounder_quality_profile_and_persists_metrics
             assert math.isfinite(float(row[key]))
 
 
-def test_pipeline_runs_trend_pullback_quality_profile_and_persists_metrics(
-    tmp_path: Path, fixture_dir: Path
-) -> None:
+def test_pipeline_runs_trend_pullback_quality_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
     config = AppConfig(
         data_mode="fixture",
         duckdb_path=str(tmp_path / "runs.duckdb"),
@@ -423,9 +421,7 @@ def test_pipeline_runs_trend_pullback_quality_profile_and_persists_metrics(
             assert math.isfinite(float(row[key]))
 
 
-def test_pipeline_runs_base_breakout_quality_profile_and_persists_metrics(
-    tmp_path: Path, fixture_dir: Path
-) -> None:
+def test_pipeline_runs_base_breakout_quality_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
     config = AppConfig(
         data_mode="fixture",
         duckdb_path=str(tmp_path / "runs.duckdb"),
@@ -486,9 +482,7 @@ def test_pipeline_runs_base_breakout_quality_profile_and_persists_metrics(
             assert math.isfinite(float(row[key]))
 
 
-def test_pipeline_runs_relative_strength_leader_profile_and_persists_metrics(
-    tmp_path: Path, fixture_dir: Path
-) -> None:
+def test_pipeline_runs_relative_strength_leader_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
     config = AppConfig(
         data_mode="fixture",
         duckdb_path=str(tmp_path / "runs.duckdb"),
@@ -549,9 +543,7 @@ def test_pipeline_runs_relative_strength_leader_profile_and_persists_metrics(
             assert math.isfinite(float(row[key]))
 
 
-def test_pipeline_runs_mean_reversion_quality_profile_and_persists_metrics(
-    tmp_path: Path, fixture_dir: Path
-) -> None:
+def test_pipeline_runs_mean_reversion_quality_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
     mean_reversion_fixture_dir = _copy_fixture_with_mean_reversion_pullback(tmp_path, fixture_dir)
     config = AppConfig(
         data_mode="fixture",
@@ -568,10 +560,14 @@ def test_pipeline_runs_mean_reversion_quality_profile_and_persists_metrics(
     profile = config.selected_ranking_profile
     resolved = repo.resolve_latest_successful_run(Market.US, ranking_profile="mean_reversion_quality_v1")
     report = repo.read_report_markdown(result.run_id)
-    snapshot_rows = repo.connect(read_only=True).execute(
-        "select ticker from run_ticker_snapshot where run_id = ? order by ticker",
-        [result.run_id],
-    ).fetchall()
+    snapshot_rows = (
+        repo.connect(read_only=True)
+        .execute(
+            "select ticker from run_ticker_snapshot where run_id = ? order by ticker",
+            [result.run_id],
+        )
+        .fetchall()
+    )
     payload = repo.read_inspect_payload(result.run_id, snapshot_rows[0][0], profile=profile)
 
     assert resolved.run_id == result.run_id

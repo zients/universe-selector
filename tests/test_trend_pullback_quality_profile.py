@@ -292,10 +292,7 @@ def test_trend_pullback_quality_assigns_rankings_tags_and_caps() -> None:
         assert rows["rank"].to_list() == [1, 2, 3]
         assert rows["score"].is_sorted(descending=True)
 
-    composite = {
-        row["ticker"]: row
-        for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()
-    }
+    composite = {row["ticker"]: row for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()}
     assert composite["AAA"]["rank"] == 1
     assert composite["AAA"]["tag_setup_healthy_pullback"] == 1.0
     assert composite["AAA"]["tag_setup_near_sma50"] == 1.0

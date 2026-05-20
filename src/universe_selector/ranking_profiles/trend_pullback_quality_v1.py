@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from statistics import median
@@ -12,10 +13,11 @@ import polars as pl
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.providers.models import ListingCandidate
+from universe_selector.ranking_profiles._alpha_common import metric_float
 from universe_selector.ranking_profiles.registration import RankingProfileRegistration
 
 
-TREND_PULLBACK_QUALITY_PROFILE_ID = "trend_pullback_quality_v1"
+TREND_PULLBACK_QUALITY_PROFILE_ID: Literal["trend_pullback_quality_v1"] = "trend_pullback_quality_v1"
 TREND_PULLBACK_QUALITY_SCORE_METHOD = "market_relative_trend_pullback_quality_v1"
 TREND_PULLBACK_QUALITY_RANK_INTERPRETATION_NOTE = (
     "Trend pullback quality scores are market-local relative scores for strong stocks in orderly "
@@ -122,7 +124,7 @@ def _empty_rankings() -> pl.DataFrame:
     return pl.DataFrame(schema=TREND_PULLBACK_QUALITY_RANKING_SCHEMA)
 
 
-def _all_finite(values: list[object]) -> bool:
+def _all_finite(values: Sequence[object]) -> bool:
     return all(
         isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(float(value))
         for value in values
@@ -156,21 +158,18 @@ def _ols_slope_r2(values: list[float]) -> tuple[float, float]:
     x_mean = _mean([float(value) for value in x_values])
     y_mean = _mean(y_values)
     ss_xx = sum((float(value) - x_mean) ** 2 for value in x_values)
-    slope = sum(
-        (float(x) - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=True)
-    ) / ss_xx
+    slope = sum((float(x) - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=True)) / ss_xx
     intercept = y_mean - slope * x_mean
     total = sum((value - y_mean) ** 2 for value in y_values)
     if total == 0.0:
         return slope, 0.0
-    residual = sum(
-        (y - (intercept + slope * float(x))) ** 2
-        for x, y in zip(x_values, y_values, strict=True)
-    )
+    residual = sum((y - (intercept + slope * float(x))) ** 2 for x, y in zip(x_values, y_values, strict=True))
     return slope, 1.0 - residual / total
 
 
-def _yyyymmdd(value: date) -> float:
+def _yyyymmdd(value: object) -> float:
+    if not isinstance(value, date):
+        raise TypeError("expected date")
     return float(value.year * 10_000 + value.month * 100 + value.day)
 
 
@@ -242,18 +241,12 @@ def _immutable_market_int_mapping(value: Mapping[Market, int]) -> Mapping[Market
 class TrendPullbackQualityV1Profile:
     profile_id: Literal["trend_pullback_quality_v1"] = TREND_PULLBACK_QUALITY_PROFILE_ID
     min_history_bars: int = 252
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 50_000_000.0, Market.US: 10_000_000.0}
     )
-    active_trading_min_days_60: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 50, Market.US: 55}
-    )
-    zero_volume_max_days_20: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 3, Market.US: 1}
-    )
+    active_trading_min_days_60: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 50, Market.US: 55})
+    zero_volume_max_days_20: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 3, Market.US: 1})
     stale_close_max_days_20: int = 5
     extreme_return_abs_cutoff: float = 0.80
     volatility_floor: float = 0.0001
@@ -340,12 +333,8 @@ class TrendPullbackQualityV1Profile:
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
-            "active_trading_min_days_60": {
-                market.value: self.active_trading_min_days_60[market] for market in Market
-            },
-            "zero_volume_max_days_20": {
-                market.value: self.zero_volume_max_days_20[market] for market in Market
-            },
+            "active_trading_min_days_60": {market.value: self.active_trading_min_days_60[market] for market in Market},
+            "zero_volume_max_days_20": {market.value: self.zero_volume_max_days_20[market] for market in Market},
             "stale_close_max_days_20": self.stale_close_max_days_20,
             "extreme_return_abs_cutoff": self.extreme_return_abs_cutoff,
             "volatility_floor": self.volatility_floor,
@@ -388,10 +377,9 @@ class TrendPullbackQualityV1Profile:
         profile_asof_bar_date = candidate_bars["bar_date"].max()
         rows: list[dict[str, object]] = []
         for ticker in sorted(listed_tickers):
-            ticker_bars = (
-                candidate_bars.filter((pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date))
-                .sort("bar_date")
-            )
+            ticker_bars = candidate_bars.filter(
+                (pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date)
+            ).sort("bar_date")
             if ticker_bars.is_empty() or ticker_bars.height < self.min_history_bars:
                 continue
             if ticker_bars["bar_date"].n_unique() != ticker_bars.height:
@@ -415,23 +403,21 @@ class TrendPullbackQualityV1Profile:
             closes_float = [float(value) for value in closes]
             adjusted_closes_float = [float(value) for value in adjusted_closes]
             volumes_float = [float(value) for value in volumes]
-            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+            if any(
+                value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float
+            ):
                 continue
             if any(value < 0.0 for value in volumes_float):
                 continue
             if any(
                 high < low or high < open_ or high < close or low > open_ or low > close
-                for high, low, open_, close in zip(
-                    highs_float, lows_float, opens_float, closes_float, strict=True
-                )
+                for high, low, open_, close in zip(highs_float, lows_float, opens_float, closes_float, strict=True)
             ):
                 continue
 
             latest_close = closes_float[-1]
             latest_adjusted_close = adjusted_closes_float[-1]
-            traded_values = [
-                close * volume for close, volume in zip(closes_float, volumes_float, strict=True)
-            ]
+            traded_values = [close * volume for close, volume in zip(closes_float, volumes_float, strict=True)]
             traded_values_5d = traded_values[-5:]
             traded_values_20d = traded_values[-20:]
             avg_traded_value_5d_local = _mean(traded_values_5d)
@@ -490,9 +476,7 @@ class TrendPullbackQualityV1Profile:
             sma_50d_vs_sma_200d = sma_50d / sma_200d - 1.0
             pullback_from_60d_high = latest_adjusted_close / max(adjusted_closes_float[-60:]) - 1.0
             pullback_from_120d_high = latest_adjusted_close / max(adjusted_closes_float[-120:]) - 1.0
-            volatility_adjusted_pullback_120d = abs(pullback_from_120d_high) / (
-                volatility_60d * math.sqrt(20.0)
-            )
+            volatility_adjusted_pullback_120d = abs(pullback_from_120d_high) / (volatility_60d * math.sqrt(20.0))
             days_since_60d_high = _most_recent_days_since_high(adjusted_closes_float[-60:])
             days_since_120d_high = _most_recent_days_since_high(adjusted_closes_float[-120:])
             max_drawdown_120d = _max_drawdown(adjusted_closes_float[-120:])
@@ -618,9 +602,7 @@ class TrendPullbackQualityV1Profile:
                 )
             invalid_count = snapshot.filter(pl.col(column).is_null() | (~pl.col(column).is_finite())).height
             if invalid_count > 0:
-                raise ValidationError(
-                    f"trend_pullback_quality_v1 snapshot contains non-finite ranking input: {column}"
-                )
+                raise ValidationError(f"trend_pullback_quality_v1 snapshot contains non-finite ranking input: {column}")
 
         ranking_frames = []
         for partition in snapshot.partition_by(["run_id", "market"], maintain_order=True):
@@ -666,49 +648,46 @@ class TrendPullbackQualityV1Profile:
     def _assign_single_run_market_rankings(self, frame: pl.DataFrame) -> pl.DataFrame:
         rows = frame.sort("ticker").to_dicts()
         score_return_120d_ex_recent = _percentile_scores(
-            [float(row["return_120d_ex_recent_20d"]) for row in rows]
+            [metric_float(row["return_120d_ex_recent_20d"]) for row in rows]
         )
-        score_return_60d = _percentile_scores([float(row["return_60d"]) for row in rows])
+        score_return_60d = _percentile_scores([metric_float(row["return_60d"]) for row in rows])
         score_risk_adjusted_return = _percentile_scores(
-            [float(row["risk_adjusted_return_120d_ex_recent_20d"]) for row in rows]
+            [metric_float(row["risk_adjusted_return_120d_ex_recent_20d"]) for row in rows]
         )
-        score_trend_slope = _positive_only_percentile_scores([float(row["trend_slope_60d"]) for row in rows])
-        score_sma_50d_vs_sma_200d = _percentile_scores(
-            [float(row["sma_50d_vs_sma_200d"]) for row in rows]
-        )
-        score_price_vs_sma_200d = _percentile_scores([float(row["price_vs_sma_200d"]) for row in rows])
-        score_trend_consistency = _percentile_scores([float(row["trend_consistency_60d"]) for row in rows])
-        score_drawdown_control = _percentile_scores([float(row["max_drawdown_120d"]) for row in rows])
+        score_trend_slope = _positive_only_percentile_scores([metric_float(row["trend_slope_60d"]) for row in rows])
+        score_sma_50d_vs_sma_200d = _percentile_scores([metric_float(row["sma_50d_vs_sma_200d"]) for row in rows])
+        score_price_vs_sma_200d = _percentile_scores([metric_float(row["price_vs_sma_200d"]) for row in rows])
+        score_trend_consistency = _percentile_scores([metric_float(row["trend_consistency_60d"]) for row in rows])
+        score_drawdown_control = _percentile_scores([metric_float(row["max_drawdown_120d"]) for row in rows])
         score_volatility_ratio = _percentile_scores(
-            [float(row["volatility_20d_to_60d_ratio"]) for row in rows],
+            [metric_float(row["volatility_20d_to_60d_ratio"]) for row in rows],
             higher_is_better=False,
         )
         score_stale_close = _percentile_scores(
-            [float(row["stale_close_days_20d"]) for row in rows],
+            [metric_float(row["stale_close_days_20d"]) for row in rows],
             higher_is_better=False,
         )
 
         scored_rows: list[dict[str, object]] = []
         for index, row in enumerate(rows):
-            pullback_from_120d_high = float(row["pullback_from_120d_high"])
-            pullback_from_60d_high = float(row["pullback_from_60d_high"])
-            volatility_adjusted_pullback_120d = float(row["volatility_adjusted_pullback_120d"])
-            days_since_60d_high = float(row["days_since_60d_high"])
-            return_120d_ex_recent_20d = float(row["return_120d_ex_recent_20d"])
-            trend_slope_60d = float(row["trend_slope_60d"])
-            uptrend_r2_60d = float(row["uptrend_r2_60d"])
-            trend_consistency_60d = float(row["trend_consistency_60d"])
-            price_vs_sma_20d = float(row["price_vs_sma_20d"])
-            price_vs_sma_50d = float(row["price_vs_sma_50d"])
-            price_vs_sma_200d = float(row["price_vs_sma_200d"])
-            sma_50d_vs_sma_200d = float(row["sma_50d_vs_sma_200d"])
-            max_drawdown_120d = float(row["max_drawdown_120d"])
-            close_position_20d_range = _clamp(float(row["close_position_20d_range"]), 0.0, 1.0)
-            low_10d_vs_sma_50d = float(row["low_10d_vs_sma_50d"])
-            traded_value_5d_to_20d_ratio = float(row["traded_value_5d_to_20d_ratio"])
-            volatility_20d_to_60d_ratio = float(row["volatility_20d_to_60d_ratio"])
-            stale_close_days_20d = float(row["stale_close_days_20d"])
-            data_quality_extreme_return_flag = float(row["data_quality_extreme_return_flag"])
+            pullback_from_120d_high = metric_float(row["pullback_from_120d_high"])
+            volatility_adjusted_pullback_120d = metric_float(row["volatility_adjusted_pullback_120d"])
+            days_since_60d_high = metric_float(row["days_since_60d_high"])
+            return_120d_ex_recent_20d = metric_float(row["return_120d_ex_recent_20d"])
+            trend_slope_60d = metric_float(row["trend_slope_60d"])
+            uptrend_r2_60d = metric_float(row["uptrend_r2_60d"])
+            trend_consistency_60d = metric_float(row["trend_consistency_60d"])
+            price_vs_sma_20d = metric_float(row["price_vs_sma_20d"])
+            price_vs_sma_50d = metric_float(row["price_vs_sma_50d"])
+            price_vs_sma_200d = metric_float(row["price_vs_sma_200d"])
+            sma_50d_vs_sma_200d = metric_float(row["sma_50d_vs_sma_200d"])
+            max_drawdown_120d = metric_float(row["max_drawdown_120d"])
+            close_position_20d_range = _clamp(metric_float(row["close_position_20d_range"]), 0.0, 1.0)
+            low_10d_vs_sma_50d = metric_float(row["low_10d_vs_sma_50d"])
+            traded_value_5d_to_20d_ratio = metric_float(row["traded_value_5d_to_20d_ratio"])
+            volatility_20d_to_60d_ratio = metric_float(row["volatility_20d_to_60d_ratio"])
+            stale_close_days_20d = metric_float(row["stale_close_days_20d"])
+            data_quality_extreme_return_flag = metric_float(row["data_quality_extreme_return_flag"])
 
             score_prior_strength = score_return_120d_ex_recent[index]
             prior_strength_score = (
@@ -796,9 +775,7 @@ class TrendPullbackQualityV1Profile:
                 sma_50d_vs_sma_200d=sma_50d_vs_sma_200d,
                 return_120d_ex_recent_20d=return_120d_ex_recent_20d,
             )
-            pullback_depth_cap_score = self._pullback_depth_cap_score(
-                pullback_from_120d_high=pullback_from_120d_high
-            )
+            pullback_depth_cap_score = self._pullback_depth_cap_score(pullback_from_120d_high=pullback_from_120d_high)
             overheat_cap_score = self._overheat_cap_score(
                 pullback_from_120d_high=pullback_from_120d_high,
                 price_vs_sma_20d=price_vs_sma_20d,
@@ -823,9 +800,7 @@ class TrendPullbackQualityV1Profile:
             tag_setup_near_sma50 = 1.0 if -0.02 <= price_vs_sma_50d <= 0.05 else 0.0
             tag_setup_trend_resume = (
                 1.0
-                if tag_setup_healthy_pullback == 1.0
-                and close_position_20d_range >= 0.50
-                and price_vs_sma_20d >= -0.05
+                if tag_setup_healthy_pullback == 1.0 and close_position_20d_range >= 0.50 and price_vs_sma_20d >= -0.05
                 else 0.0
             )
             tag_risk_false_pullback = (
@@ -833,19 +808,13 @@ class TrendPullbackQualityV1Profile:
             )
             tag_risk_breakdown = (
                 1.0
-                if price_vs_sma_50d < -0.03
-                or low_10d_vs_sma_50d < -0.06
-                or close_position_20d_range < 0.25
+                if price_vs_sma_50d < -0.03 or low_10d_vs_sma_50d < -0.06 or close_position_20d_range < 0.25
                 else 0.0
             )
-            tag_risk_deep_drawdown = (
-                1.0 if pullback_from_120d_high <= -0.20 or max_drawdown_120d <= -0.25 else 0.0
-            )
+            tag_risk_deep_drawdown = 1.0 if pullback_from_120d_high <= -0.20 or max_drawdown_120d <= -0.25 else 0.0
             tag_risk_liquidity_fade = 1.0 if traded_value_5d_to_20d_ratio < 0.75 else 0.0
             tag_risk_still_overheated = (
-                1.0
-                if pullback_from_120d_high > -0.03 or price_vs_sma_20d > 0.10 or price_vs_sma_50d > 0.12
-                else 0.0
+                1.0 if pullback_from_120d_high > -0.03 or price_vs_sma_20d > 0.10 or price_vs_sma_50d > 0.12 else 0.0
             )
             tag_risk_volatility_spike = 1.0 if volatility_20d_to_60d_ratio > 1.75 else 0.0
             tag_risk_data_quality_warning = 1.0 if data_quality_extreme_return_flag == 1.0 else 0.0
@@ -898,38 +867,38 @@ class TrendPullbackQualityV1Profile:
             for row in scored_rows:
                 if horizon == "composite":
                     raw_score = (
-                        0.25 * float(row["prior_strength_score"])
-                        + 0.25 * float(row["trend_intact_score"])
-                        + 0.25 * float(row["pullback_setup_score"])
-                        + 0.15 * float(row["support_quality_score"])
-                        + 0.10 * float(row["risk_control_score"])
+                        0.25 * metric_float(row["prior_strength_score"])
+                        + 0.25 * metric_float(row["trend_intact_score"])
+                        + 0.25 * metric_float(row["pullback_setup_score"])
+                        + 0.15 * metric_float(row["support_quality_score"])
+                        + 0.10 * metric_float(row["risk_control_score"])
                     )
                 elif horizon == "near_support":
                     raw_score = (
-                        0.20 * float(row["prior_strength_score"])
-                        + 0.20 * float(row["trend_intact_score"])
-                        + 0.25 * float(row["pullback_setup_score"])
-                        + 0.25 * float(row["support_quality_score"])
-                        + 0.10 * float(row["risk_control_score"])
+                        0.20 * metric_float(row["prior_strength_score"])
+                        + 0.20 * metric_float(row["trend_intact_score"])
+                        + 0.25 * metric_float(row["pullback_setup_score"])
+                        + 0.25 * metric_float(row["support_quality_score"])
+                        + 0.10 * metric_float(row["risk_control_score"])
                     )
                 elif horizon == "trend_resume":
                     raw_score = (
-                        0.25 * float(row["prior_strength_score"])
-                        + 0.30 * float(row["trend_intact_score"])
-                        + 0.15 * float(row["pullback_setup_score"])
-                        + 0.20 * float(row["support_quality_score"])
-                        + 0.10 * float(row["risk_control_score"])
+                        0.25 * metric_float(row["prior_strength_score"])
+                        + 0.30 * metric_float(row["trend_intact_score"])
+                        + 0.15 * metric_float(row["pullback_setup_score"])
+                        + 0.20 * metric_float(row["support_quality_score"])
+                        + 0.10 * metric_float(row["risk_control_score"])
                     )
                 else:
                     raise ValidationError(f"unknown horizon {horizon}")
                 score = min(
-                    raw_score - float(row["penalty_score"]),
-                    float(row["structure_cap_score"]),
-                    float(row["pullback_depth_cap_score"]),
-                    float(row["overheat_cap_score"]),
-                    float(row["breakdown_cap_score"]),
+                    raw_score - metric_float(row["penalty_score"]),
+                    metric_float(row["structure_cap_score"]),
+                    metric_float(row["pullback_depth_cap_score"]),
+                    metric_float(row["overheat_cap_score"]),
+                    metric_float(row["breakdown_cap_score"]),
                 )
-                ranking_values = [float(row[key]) for key in self.ranking_metric_keys] + [score]
+                ranking_values = [metric_float(row[key]) for key in self.ranking_metric_keys] + [score]
                 if not _all_finite(ranking_values):
                     raise ValidationError("trend_pullback_quality_v1 produced a non-finite ranking metric")
                 horizon_rows.append(
@@ -942,13 +911,11 @@ class TrendPullbackQualityV1Profile:
                         "score": score,
                     }
                 )
-            horizon_rows.sort(key=lambda item: (-float(item["score"]), str(item["ticker"])))
+            horizon_rows.sort(key=lambda item: (-metric_float(item["score"]), str(item["ticker"])))
             for rank, row in enumerate(horizon_rows, start=1):
                 row["rank"] = rank
                 ranking_rows.append(row)
-        return pl.DataFrame(ranking_rows, schema=TREND_PULLBACK_QUALITY_RANKING_SCHEMA).select(
-            self._ranking_columns()
-        )
+        return pl.DataFrame(ranking_rows, schema=TREND_PULLBACK_QUALITY_RANKING_SCHEMA).select(self._ranking_columns())
 
     def _liquidity_continuity_score(
         self,
@@ -1037,5 +1004,5 @@ class TrendPullbackQualityV1Profile:
 
 TREND_PULLBACK_QUALITY_V1_REGISTRATION = RankingProfileRegistration(
     profile_id=TREND_PULLBACK_QUALITY_PROFILE_ID,
-    factory=TrendPullbackQualityV1Profile,
+    factory=lambda: TrendPullbackQualityV1Profile(),
 )

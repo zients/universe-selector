@@ -333,15 +333,13 @@ def test_relative_strength_leader_assigns_rankings_tags_and_caps() -> None:
         assert rows["rank"].to_list() == [1, 2, 3, 4]
         assert rows["score"].is_sorted(descending=True)
 
-    composite = {
-        row["ticker"]: row
-        for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()
-    }
+    composite = {row["ticker"]: row for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()}
     assert composite["LEADER"]["tag_positive_rs_leader"] == 1.0
     assert composite["LEADER"]["tag_positive_persistent_leader"] == 1.0
-    assert composite["LEADER"]["relative_strength_persistence_score"] > composite["SHORTTERM"][
-        "relative_strength_persistence_score"
-    ]
+    assert (
+        composite["LEADER"]["relative_strength_persistence_score"]
+        > composite["SHORTTERM"]["relative_strength_persistence_score"]
+    )
     assert composite["CHASE"]["tag_risk_chasing_extension"] == 1.0
     assert composite["CHASE"]["overheat_cap_score"] < composite["LEADER"]["overheat_cap_score"]
     assert composite["FADE"]["tag_risk_recent_rs_fade"] == 1.0
@@ -385,9 +383,7 @@ def test_relative_strength_leader_positive_tag_requires_current_and_risk_adjuste
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "composite")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()
     }
 
     assert rows["LEADER"]["tag_positive_rs_leader"] == 1.0
@@ -420,9 +416,7 @@ def test_relative_strength_leader_flags_absolute_risk_surfaces() -> None:
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "composite")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()
     }
 
     assert rows["HIGHVOL"]["tag_risk_high_volatility"] == 1.0

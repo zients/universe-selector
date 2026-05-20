@@ -18,6 +18,7 @@ from universe_selector.ranking_profiles._alpha_common import (
     immutable_market_int_mapping,
     max_drawdown,
     mean,
+    metric_float,
     ols_slope_r2,
     percentile_scores,
     positive_only_percentile_scores,
@@ -27,7 +28,7 @@ from universe_selector.ranking_profiles._alpha_common import (
 from universe_selector.ranking_profiles.registration import RankingProfileRegistration
 
 
-RELATIVE_STRENGTH_LEADER_PROFILE_ID = "relative_strength_leader_v1"
+RELATIVE_STRENGTH_LEADER_PROFILE_ID: Literal["relative_strength_leader_v1"] = "relative_strength_leader_v1"
 RELATIVE_STRENGTH_LEADER_SCORE_METHOD = "market_relative_strength_leader_v1"
 RELATIVE_STRENGTH_LEADER_RANK_INTERPRETATION_NOTE = (
     "Relative strength leader scores are market-local relative rankings for persistent leadership "
@@ -143,18 +144,12 @@ def _empty_rankings() -> pl.DataFrame:
 class RelativeStrengthLeaderV1Profile:
     profile_id: Literal["relative_strength_leader_v1"] = RELATIVE_STRENGTH_LEADER_PROFILE_ID
     min_history_bars: int = 274
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 50_000_000.0, Market.US: 10_000_000.0}
     )
-    active_trading_min_days_60: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 50, Market.US: 55}
-    )
-    zero_volume_max_days_20: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 3, Market.US: 1}
-    )
+    active_trading_min_days_60: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 50, Market.US: 55})
+    zero_volume_max_days_20: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 3, Market.US: 1})
     stale_close_max_days_20: int = 5
     extreme_return_abs_cutoff: float = 0.80
     volatility_floor: float = 0.0001
@@ -241,12 +236,8 @@ class RelativeStrengthLeaderV1Profile:
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
-            "active_trading_min_days_60": {
-                market.value: self.active_trading_min_days_60[market] for market in Market
-            },
-            "zero_volume_max_days_20": {
-                market.value: self.zero_volume_max_days_20[market] for market in Market
-            },
+            "active_trading_min_days_60": {market.value: self.active_trading_min_days_60[market] for market in Market},
+            "zero_volume_max_days_20": {market.value: self.zero_volume_max_days_20[market] for market in Market},
             "stale_close_max_days_20": self.stale_close_max_days_20,
             "extreme_return_abs_cutoff": self.extreme_return_abs_cutoff,
             "volatility_floor": self.volatility_floor,
@@ -285,10 +276,9 @@ class RelativeStrengthLeaderV1Profile:
         profile_asof_bar_date = candidate_bars["bar_date"].max()
         rows: list[dict[str, object]] = []
         for ticker in sorted(listed_tickers):
-            ticker_bars = (
-                candidate_bars.filter((pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date))
-                .sort("bar_date")
-            )
+            ticker_bars = candidate_bars.filter(
+                (pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date)
+            ).sort("bar_date")
             if ticker_bars.is_empty() or ticker_bars.height < self.min_history_bars:
                 continue
             if ticker_bars["bar_date"].n_unique() != ticker_bars.height:
@@ -312,23 +302,21 @@ class RelativeStrengthLeaderV1Profile:
             closes_float = [float(value) for value in closes]
             adjusted_closes_float = [float(value) for value in adjusted_closes]
             volumes_float = [float(value) for value in volumes]
-            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+            if any(
+                value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float
+            ):
                 continue
             if any(value < 0.0 for value in volumes_float):
                 continue
             if any(
                 high < low or high < open_ or high < close or low > open_ or low > close
-                for high, low, open_, close in zip(
-                    highs_float, lows_float, opens_float, closes_float, strict=True
-                )
+                for high, low, open_, close in zip(highs_float, lows_float, opens_float, closes_float, strict=True)
             ):
                 continue
 
             latest_close = closes_float[-1]
             latest_adjusted_close = adjusted_closes_float[-1]
-            traded_values = [
-                close * volume for close, volume in zip(closes_float, volumes_float, strict=True)
-            ]
+            traded_values = [close * volume for close, volume in zip(closes_float, volumes_float, strict=True)]
             traded_values_5d = traded_values[-5:]
             traded_values_20d = traded_values[-20:]
             avg_traded_value_5d_local = mean(traded_values_5d)
@@ -373,7 +361,11 @@ class RelativeStrengthLeaderV1Profile:
             volatility_126d = std(returns_126d, ddof=self.stdev_ddof)
             if volatility_20d is None or volatility_60d is None or volatility_126d is None:
                 continue
-            if volatility_20d <= 0.0 or volatility_60d <= self.volatility_floor or volatility_126d <= self.volatility_floor:
+            if (
+                volatility_20d <= 0.0
+                or volatility_60d <= self.volatility_floor
+                or volatility_126d <= self.volatility_floor
+            ):
                 continue
             returns_6_1 = returns[-147:-21]
             returns_12_1 = returns[-273:-21]
@@ -414,9 +406,7 @@ class RelativeStrengthLeaderV1Profile:
             max_drawdown_120d = max_drawdown(adjusted_closes_float[-120:])
             largest_daily_return_60d = max(returns_60d)
             gain_concentration_60d = (
-                clamp(max(largest_daily_return_60d, 0.0) / return_60d, 0.0, 1.0)
-                if return_60d > 0.0
-                else 0.0
+                clamp(max(largest_daily_return_60d, 0.0) / return_60d, 0.0, 1.0) if return_60d > 0.0 else 0.0
             )
 
             if price_vs_sma_50d <= -0.03 or price_vs_sma_200d <= 0.0:
@@ -581,24 +571,24 @@ class RelativeStrengthLeaderV1Profile:
 
     def _assign_single_run_market_rankings(self, frame: pl.DataFrame) -> pl.DataFrame:
         rows = frame.sort("ticker").to_dicts()
-        score_relative_strength_20d = positive_only_percentile_scores([float(row["return_20d"]) for row in rows])
-        score_relative_strength_60d = positive_only_percentile_scores([float(row["return_60d"]) for row in rows])
-        score_relative_strength_120d = positive_only_percentile_scores([float(row["return_120d"]) for row in rows])
+        score_relative_strength_20d = positive_only_percentile_scores([metric_float(row["return_20d"]) for row in rows])
+        score_relative_strength_60d = positive_only_percentile_scores([metric_float(row["return_60d"]) for row in rows])
+        score_relative_strength_120d = positive_only_percentile_scores(
+            [metric_float(row["return_120d"]) for row in rows]
+        )
         score_risk_adjusted_6_1 = positive_only_percentile_scores(
-            [float(row["risk_adjusted_momentum_6_1"]) for row in rows]
+            [metric_float(row["risk_adjusted_momentum_6_1"]) for row in rows]
         )
         score_risk_adjusted_12_1 = positive_only_percentile_scores(
-            [float(row["risk_adjusted_momentum_12_1"]) for row in rows]
+            [metric_float(row["risk_adjusted_momentum_12_1"]) for row in rows]
         )
-        score_trend_slope = positive_only_percentile_scores([float(row["trend_slope_60d"]) for row in rows])
-        score_sma_50d_vs_sma_200d = percentile_scores(
-            [float(row["sma_50d_vs_sma_200d"]) for row in rows]
-        )
-        score_price_vs_sma_200d = percentile_scores([float(row["price_vs_sma_200d"]) for row in rows])
-        score_trend_consistency = percentile_scores([float(row["trend_consistency_60d"]) for row in rows])
+        score_trend_slope = positive_only_percentile_scores([metric_float(row["trend_slope_60d"]) for row in rows])
+        score_sma_50d_vs_sma_200d = percentile_scores([metric_float(row["sma_50d_vs_sma_200d"]) for row in rows])
+        score_price_vs_sma_200d = percentile_scores([metric_float(row["price_vs_sma_200d"]) for row in rows])
+        score_trend_consistency = percentile_scores([metric_float(row["trend_consistency_60d"]) for row in rows])
         score_new_high_proximity = [
             band_score(
-                float(row["pct_below_120d_high"]),
+                metric_float(row["pct_below_120d_high"]),
                 ideal_low=-0.05,
                 ideal_high=0.04,
                 outer_low=-0.20,
@@ -606,35 +596,34 @@ class RelativeStrengthLeaderV1Profile:
             )
             for row in rows
         ]
-        score_drawdown_control = percentile_scores([float(row["max_drawdown_120d"]) for row in rows])
+        score_drawdown_control = percentile_scores([metric_float(row["max_drawdown_120d"]) for row in rows])
         score_volatility_control = percentile_scores(
-            [float(row["volatility_60d"]) for row in rows],
+            [metric_float(row["volatility_60d"]) for row in rows],
             higher_is_better=False,
         )
 
         scored_rows: list[dict[str, object]] = []
         for index, row in enumerate(rows):
-            return_20d = float(row["return_20d"])
-            return_60d = float(row["return_60d"])
-            return_120d = float(row["return_120d"])
-            price_vs_sma_50d = float(row["price_vs_sma_50d"])
-            price_vs_sma_200d = float(row["price_vs_sma_200d"])
-            sma_50d_vs_sma_200d = float(row["sma_50d_vs_sma_200d"])
-            trend_slope_60d = float(row["trend_slope_60d"])
-            uptrend_r2_60d = float(row["uptrend_r2_60d"])
-            trend_consistency_60d = float(row["trend_consistency_60d"])
-            pct_below_60d_high = float(row["pct_below_60d_high"])
-            pct_below_120d_high = float(row["pct_below_120d_high"])
-            max_drawdown_120d = float(row["max_drawdown_120d"])
-            largest_daily_return_60d = float(row["largest_daily_return_60d"])
-            gain_concentration_60d = float(row["gain_concentration_60d"])
-            traded_value_5d_to_20d_ratio = float(row["traded_value_5d_to_20d_ratio"])
-            volatility_20d_to_60d_ratio = float(row["volatility_20d_to_60d_ratio"])
-            data_quality_extreme_return_flag = float(row["data_quality_extreme_return_flag"])
+            return_20d = metric_float(row["return_20d"])
+            return_60d = metric_float(row["return_60d"])
+            return_120d = metric_float(row["return_120d"])
+            price_vs_sma_50d = metric_float(row["price_vs_sma_50d"])
+            price_vs_sma_200d = metric_float(row["price_vs_sma_200d"])
+            sma_50d_vs_sma_200d = metric_float(row["sma_50d_vs_sma_200d"])
+            trend_slope_60d = metric_float(row["trend_slope_60d"])
+            uptrend_r2_60d = metric_float(row["uptrend_r2_60d"])
+            trend_consistency_60d = metric_float(row["trend_consistency_60d"])
+            pct_below_60d_high = metric_float(row["pct_below_60d_high"])
+            pct_below_120d_high = metric_float(row["pct_below_120d_high"])
+            max_drawdown_120d = metric_float(row["max_drawdown_120d"])
+            largest_daily_return_60d = metric_float(row["largest_daily_return_60d"])
+            gain_concentration_60d = metric_float(row["gain_concentration_60d"])
+            traded_value_5d_to_20d_ratio = metric_float(row["traded_value_5d_to_20d_ratio"])
+            volatility_20d_to_60d_ratio = metric_float(row["volatility_20d_to_60d_ratio"])
+            data_quality_extreme_return_flag = metric_float(row["data_quality_extreme_return_flag"])
 
             score_risk_adjusted_momentum = (
-                0.45 * score_risk_adjusted_6_1[index]
-                + 0.55 * score_risk_adjusted_12_1[index]
+                0.45 * score_risk_adjusted_6_1[index] + 0.55 * score_risk_adjusted_12_1[index]
             )
             rs_average = (
                 score_relative_strength_20d[index]
@@ -686,16 +675,12 @@ class RelativeStrengthLeaderV1Profile:
                 and return_20d > 0.0
                 and return_60d > 0.0
                 and return_120d > 0.0
-                and float(row["risk_adjusted_momentum_6_1"]) > 0.0
-                and float(row["risk_adjusted_momentum_12_1"]) > 0.0
+                and metric_float(row["risk_adjusted_momentum_6_1"]) > 0.0
+                and metric_float(row["risk_adjusted_momentum_12_1"]) > 0.0
                 else 0.0
             )
-            tag_positive_persistent_leader = (
-                1.0 if relative_strength_persistence_score >= 0.65 else 0.0
-            )
-            tag_positive_new_high_leader = (
-                1.0 if pct_below_60d_high >= -0.03 and pct_below_120d_high >= -0.03 else 0.0
-            )
+            tag_positive_persistent_leader = 1.0 if relative_strength_persistence_score >= 0.65 else 0.0
+            tag_positive_new_high_leader = 1.0 if pct_below_60d_high >= -0.03 and pct_below_120d_high >= -0.03 else 0.0
             tag_risk_chasing_extension = (
                 1.0
                 if return_20d > 0.35
@@ -708,16 +693,13 @@ class RelativeStrengthLeaderV1Profile:
             tag_risk_recent_rs_fade = (
                 1.0
                 if return_20d < 0.0
-                or (
-                    score_relative_strength_20d[index] < 0.30
-                    and score_relative_strength_60d[index] >= 0.65
-                )
+                or (score_relative_strength_20d[index] < 0.30 and score_relative_strength_60d[index] >= 0.65)
                 else 0.0
             )
             tag_risk_high_volatility = (
                 1.0
-                if float(row["volatility_60d"]) > 0.06
-                or float(row["volatility_20d"]) > 0.08
+                if metric_float(row["volatility_60d"]) > 0.06
+                or metric_float(row["volatility_20d"]) > 0.08
                 or volatility_20d_to_60d_ratio > 1.60
                 or score_volatility_control[index] < 0.25
                 else 0.0
@@ -742,8 +724,8 @@ class RelativeStrengthLeaderV1Profile:
                 gain_concentration_60d=gain_concentration_60d,
             )
             volatility_cap_score = self._volatility_cap_score(
-                volatility_20d=float(row["volatility_20d"]),
-                volatility_60d=float(row["volatility_60d"]),
+                volatility_20d=metric_float(row["volatility_20d"]),
+                volatility_60d=metric_float(row["volatility_60d"]),
                 volatility_20d_to_60d_ratio=volatility_20d_to_60d_ratio,
             )
             trend_structure_cap_score = self._trend_structure_cap_score(
@@ -810,40 +792,40 @@ class RelativeStrengthLeaderV1Profile:
             for row in scored_rows:
                 if horizon == "composite":
                     raw_score = (
-                        0.35 * float(row["leader_quality_score"])
-                        + 0.25 * float(row["relative_strength_persistence_score"])
-                        + 0.20 * float(row["trend_durability_score"])
-                        + 0.15 * float(row["risk_control_score"])
-                        + 0.05 * float(row["score_new_high_proximity"])
+                        0.35 * metric_float(row["leader_quality_score"])
+                        + 0.25 * metric_float(row["relative_strength_persistence_score"])
+                        + 0.20 * metric_float(row["trend_durability_score"])
+                        + 0.15 * metric_float(row["risk_control_score"])
+                        + 0.05 * metric_float(row["score_new_high_proximity"])
                     )
                 elif horizon == "shortterm_leader":
                     raw_score = (
-                        0.35 * float(row["score_relative_strength_20d"])
-                        + 0.25 * float(row["score_relative_strength_60d"])
-                        + 0.15 * float(row["relative_strength_persistence_score"])
-                        + 0.10 * float(row["trend_durability_score"])
-                        + 0.10 * float(row["score_new_high_proximity"])
-                        + 0.05 * float(row["risk_control_score"])
+                        0.35 * metric_float(row["score_relative_strength_20d"])
+                        + 0.25 * metric_float(row["score_relative_strength_60d"])
+                        + 0.15 * metric_float(row["relative_strength_persistence_score"])
+                        + 0.10 * metric_float(row["trend_durability_score"])
+                        + 0.10 * metric_float(row["score_new_high_proximity"])
+                        + 0.05 * metric_float(row["risk_control_score"])
                     )
                 elif horizon == "midterm_leader":
                     raw_score = (
-                        0.30 * float(row["score_relative_strength_120d"])
-                        + 0.25 * float(row["score_relative_strength_60d"])
-                        + 0.20 * float(row["score_risk_adjusted_momentum"])
-                        + 0.15 * float(row["relative_strength_persistence_score"])
-                        + 0.10 * float(row["trend_durability_score"])
+                        0.30 * metric_float(row["score_relative_strength_120d"])
+                        + 0.25 * metric_float(row["score_relative_strength_60d"])
+                        + 0.20 * metric_float(row["score_risk_adjusted_momentum"])
+                        + 0.15 * metric_float(row["relative_strength_persistence_score"])
+                        + 0.10 * metric_float(row["trend_durability_score"])
                     )
                 else:
                     raise ValidationError(f"unknown horizon {horizon}")
                 score = min(
-                    raw_score - float(row["penalty_score"]),
-                    float(row["overheat_cap_score"]),
-                    float(row["volatility_cap_score"]),
-                    float(row["trend_structure_cap_score"]),
-                    float(row["drawdown_cap_score"]),
-                    float(row["concentration_cap_score"]),
+                    raw_score - metric_float(row["penalty_score"]),
+                    metric_float(row["overheat_cap_score"]),
+                    metric_float(row["volatility_cap_score"]),
+                    metric_float(row["trend_structure_cap_score"]),
+                    metric_float(row["drawdown_cap_score"]),
+                    metric_float(row["concentration_cap_score"]),
                 )
-                ranking_values = [float(row[key]) for key in self.ranking_metric_keys] + [score]
+                ranking_values = [metric_float(row[key]) for key in self.ranking_metric_keys] + [score]
                 if not all_finite(ranking_values):
                     raise ValidationError("relative_strength_leader_v1 produced a non-finite ranking metric")
                 horizon_rows.append(
@@ -856,7 +838,7 @@ class RelativeStrengthLeaderV1Profile:
                         "score": score,
                     }
                 )
-            horizon_rows.sort(key=lambda item: (-float(item["score"]), str(item["ticker"])))
+            horizon_rows.sort(key=lambda item: (-metric_float(item["score"]), str(item["ticker"])))
             for rank, row in enumerate(horizon_rows, start=1):
                 row["rank"] = rank
                 ranking_rows.append(row)
@@ -961,5 +943,5 @@ class RelativeStrengthLeaderV1Profile:
 
 RELATIVE_STRENGTH_LEADER_V1_REGISTRATION = RankingProfileRegistration(
     profile_id=RELATIVE_STRENGTH_LEADER_PROFILE_ID,
-    factory=RelativeStrengthLeaderV1Profile,
+    factory=lambda: RelativeStrengthLeaderV1Profile(),
 )

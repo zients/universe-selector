@@ -10,12 +10,23 @@ from universe_selector.providers.models import ListingCandidate
 
 
 class RankingProfile(Protocol):
-    profile_id: str
-    snapshot_metric_keys: tuple[str, ...]
-    ranking_metric_keys: tuple[str, ...]
-    inspect_metric_keys: tuple[str, ...]
-    horizon_order: tuple[str, ...]
-    rank_interpretation_note: str
+    @property
+    def profile_id(self) -> str: ...
+
+    @property
+    def snapshot_metric_keys(self) -> tuple[str, ...]: ...
+
+    @property
+    def ranking_metric_keys(self) -> tuple[str, ...]: ...
+
+    @property
+    def inspect_metric_keys(self) -> tuple[str, ...]: ...
+
+    @property
+    def horizon_order(self) -> tuple[str, ...]: ...
+
+    @property
+    def rank_interpretation_note(self) -> str: ...
 
     def validate(self) -> None: ...
 

@@ -369,10 +369,7 @@ def test_base_breakout_quality_assigns_rankings_tags_and_caps() -> None:
         assert rows["rank"].to_list() == [1, 2, 3, 4]
         assert rows["score"].is_sorted(descending=True)
 
-    composite = {
-        row["ticker"]: row
-        for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()
-    }
+    composite = {row["ticker"]: row for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()}
     assert composite["AAA"]["tag_setup_valid_base"] == 1.0
     assert composite["AAA"]["tag_setup_near_breakout"] == 1.0
     assert composite["CONFIRM"]["tag_setup_confirmed_breakout"] == 1.0
@@ -398,9 +395,7 @@ def test_base_breakout_quality_scores_proximity_inside_setup_window_only() -> No
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "near_breakout")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "near_breakout").to_dicts()
     }
 
     assert rows["OUTER"]["tag_setup_near_breakout"] == 1.0
@@ -494,9 +489,7 @@ def test_base_breakout_quality_does_not_confirm_no_base_breakouts() -> None:
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "breakout_readiness")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "breakout_readiness").to_dicts()
     }
 
     assert rows["NOBASE"]["tag_setup_valid_base"] == 0.0
@@ -522,9 +515,7 @@ def test_base_breakout_quality_uses_prior_strength_in_rankings() -> None:
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "composite")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()
     }
 
     assert rows["LEADER"]["score_prior_strength"] > rows["LAGGING"]["score_prior_strength"]
@@ -570,9 +561,7 @@ def test_base_breakout_quality_caps_weak_prior_strength_drift() -> None:
 
     rows = {
         row["ticker"]: row
-        for row in profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "composite")
-        .to_dicts()
+        for row in profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()
     }
 
     assert rows["LEADER"]["rank"] == 1
@@ -608,11 +597,7 @@ def test_base_breakout_quality_allows_mature_base_after_short_pause() -> None:
         ]
     )
 
-    row = (
-        profile.assign_rankings(snapshot)
-        .filter(pl.col("horizon") == "composite")
-        .to_dicts()[0]
-    )
+    row = profile.assign_rankings(snapshot).filter(pl.col("horizon") == "composite").to_dicts()[0]
 
     assert row["tag_setup_valid_base"] == 1.0
     assert row["tag_risk_weak_base"] == 0.0

@@ -19,6 +19,7 @@ from universe_selector.ranking_profiles._alpha_common import (
     immutable_market_int_mapping,
     max_drawdown,
     mean,
+    metric_float,
     ols_slope_r2,
     percentile_scores,
     std,
@@ -27,7 +28,7 @@ from universe_selector.ranking_profiles._alpha_common import (
 from universe_selector.ranking_profiles.registration import RankingProfileRegistration
 
 
-MEAN_REVERSION_QUALITY_PROFILE_ID = "mean_reversion_quality_v1"
+MEAN_REVERSION_QUALITY_PROFILE_ID: Literal["mean_reversion_quality_v1"] = "mean_reversion_quality_v1"
 MEAN_REVERSION_QUALITY_SCORE_METHOD = "market_relative_mean_reversion_quality_v1"
 MEAN_REVERSION_QUALITY_RANK_INTERPRETATION_NOTE = (
     "Mean reversion quality scores are market-local relative rankings for short-term oversold "
@@ -137,18 +138,12 @@ def _empty_rankings() -> pl.DataFrame:
 class MeanReversionQualityV1Profile:
     profile_id: Literal["mean_reversion_quality_v1"] = MEAN_REVERSION_QUALITY_PROFILE_ID
     min_history_bars: int = 252
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 50_000_000.0, Market.US: 10_000_000.0}
     )
-    active_trading_min_days_60: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 50, Market.US: 55}
-    )
-    zero_volume_max_days_20: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 3, Market.US: 1}
-    )
+    active_trading_min_days_60: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 50, Market.US: 55})
+    zero_volume_max_days_20: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 3, Market.US: 1})
     stale_close_max_days_20: int = 5
     extreme_return_abs_cutoff: float = 0.80
     volatility_floor: float = 0.0001
@@ -235,12 +230,8 @@ class MeanReversionQualityV1Profile:
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
-            "active_trading_min_days_60": {
-                market.value: self.active_trading_min_days_60[market] for market in Market
-            },
-            "zero_volume_max_days_20": {
-                market.value: self.zero_volume_max_days_20[market] for market in Market
-            },
+            "active_trading_min_days_60": {market.value: self.active_trading_min_days_60[market] for market in Market},
+            "zero_volume_max_days_20": {market.value: self.zero_volume_max_days_20[market] for market in Market},
             "stale_close_max_days_20": self.stale_close_max_days_20,
             "extreme_return_abs_cutoff": self.extreme_return_abs_cutoff,
             "volatility_floor": self.volatility_floor,
@@ -278,10 +269,9 @@ class MeanReversionQualityV1Profile:
         profile_asof_bar_date = candidate_bars["bar_date"].max()
         rows: list[dict[str, object]] = []
         for ticker in sorted(listed_tickers):
-            ticker_bars = (
-                candidate_bars.filter((pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date))
-                .sort("bar_date")
-            )
+            ticker_bars = candidate_bars.filter(
+                (pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date)
+            ).sort("bar_date")
             if ticker_bars.is_empty() or ticker_bars.height < self.min_history_bars:
                 continue
             if ticker_bars["bar_date"].n_unique() != ticker_bars.height:
@@ -305,23 +295,21 @@ class MeanReversionQualityV1Profile:
             closes_float = [float(value) for value in closes]
             adjusted_closes_float = [float(value) for value in adjusted_closes]
             volumes_float = [float(value) for value in volumes]
-            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+            if any(
+                value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float
+            ):
                 continue
             if any(value < 0.0 for value in volumes_float):
                 continue
             if any(
                 high < low or high < open_ or high < close or low > open_ or low > close
-                for high, low, open_, close in zip(
-                    highs_float, lows_float, opens_float, closes_float, strict=True
-                )
+                for high, low, open_, close in zip(highs_float, lows_float, opens_float, closes_float, strict=True)
             ):
                 continue
 
             latest_close = closes_float[-1]
             latest_adjusted_close = adjusted_closes_float[-1]
-            traded_values = [
-                close * volume for close, volume in zip(closes_float, volumes_float, strict=True)
-            ]
+            traded_values = [close * volume for close, volume in zip(closes_float, volumes_float, strict=True)]
             traded_values_5d = traded_values[-5:]
             traded_values_20d = traded_values[-20:]
             avg_traded_value_5d_local = mean(traded_values_5d)
@@ -388,9 +376,7 @@ class MeanReversionQualityV1Profile:
             high_20d = max(adjusted_closes_float[-20:])
             low_20d = min(adjusted_closes_float[-20:])
             close_position_20d_range = (
-                0.5
-                if high_20d == low_20d
-                else (latest_adjusted_close - low_20d) / (high_20d - low_20d)
+                0.5 if high_20d == low_20d else (latest_adjusted_close - low_20d) / (high_20d - low_20d)
             )
             max_drawdown_120d = max_drawdown(adjusted_closes_float[-120:])
             max_drawdown_252d = max_drawdown(adjusted_closes_float[-252:])
@@ -416,8 +402,12 @@ class MeanReversionQualityV1Profile:
             )
             rebound_confirmation_score_raw = (
                 0.45 * band_score(return_5d, ideal_low=0.0, ideal_high=0.08, outer_low=-0.10, outer_high=0.18)
-                + 0.35 * band_score(close_position_20d_range, ideal_low=0.25, ideal_high=0.65, outer_low=0.0, outer_high=1.0)
-                + 0.20 * band_score(traded_value_5d_to_20d_ratio, ideal_low=0.80, ideal_high=2.00, outer_low=0.45, outer_high=3.50)
+                + 0.35
+                * band_score(close_position_20d_range, ideal_low=0.25, ideal_high=0.65, outer_low=0.0, outer_high=1.0)
+                + 0.20
+                * band_score(
+                    traded_value_5d_to_20d_ratio, ideal_low=0.80, ideal_high=2.00, outer_low=0.45, outer_high=3.50
+                )
             )
             liquidity_continuity_score_raw = band_score(
                 traded_value_5d_to_20d_ratio,
@@ -427,11 +417,7 @@ class MeanReversionQualityV1Profile:
                 outer_high=3.50,
             )
 
-            has_reversion_setup = (
-                return_20d < 0.0
-                or distance_from_sma_20d < 0.0
-                or close_position_20d_range <= 0.35
-            )
+            has_reversion_setup = return_20d < 0.0 or distance_from_sma_20d < 0.0 or close_position_20d_range <= 0.35
             if not has_reversion_setup:
                 continue
             if max_drawdown_120d <= -0.40 or max_drawdown_252d <= -0.50:
@@ -545,9 +531,7 @@ class MeanReversionQualityV1Profile:
                 )
             invalid_count = snapshot.filter(pl.col(column).is_null() | (~pl.col(column).is_finite())).height
             if invalid_count > 0:
-                raise ValidationError(
-                    f"mean_reversion_quality_v1 snapshot contains non-finite ranking input: {column}"
-                )
+                raise ValidationError(f"mean_reversion_quality_v1 snapshot contains non-finite ranking input: {column}")
 
         ranking_frames = []
         for partition in snapshot.partition_by(["run_id", "market"], maintain_order=True):
@@ -592,38 +576,36 @@ class MeanReversionQualityV1Profile:
 
     def _assign_single_run_market_rankings(self, frame: pl.DataFrame) -> pl.DataFrame:
         rows = frame.sort("ticker").to_dicts()
-        score_drawdown_control = percentile_scores([float(row["max_drawdown_120d"]) for row in rows])
+        score_drawdown_control = percentile_scores([metric_float(row["max_drawdown_120d"]) for row in rows])
         score_volatility_control_rank = percentile_scores(
-            [float(row["volatility_20d_to_60d_ratio"]) for row in rows],
+            [metric_float(row["volatility_20d_to_60d_ratio"]) for row in rows],
             higher_is_better=False,
         )
         score_downside_volatility = percentile_scores(
-            [float(row["downside_volatility_20d"]) for row in rows],
+            [metric_float(row["downside_volatility_20d"]) for row in rows],
             higher_is_better=False,
         )
-        score_trend_preservation_rank = percentile_scores([float(row["price_vs_sma_200d"]) for row in rows])
+        score_trend_preservation_rank = percentile_scores([metric_float(row["price_vs_sma_200d"]) for row in rows])
 
         scored_rows: list[dict[str, object]] = []
         for index, row in enumerate(rows):
-            return_5d = float(row["return_5d"])
-            return_20d = float(row["return_20d"])
-            distance_from_sma_20d = float(row["distance_from_sma_20d"])
-            distance_from_sma_50d = float(row["distance_from_sma_50d"])
-            distance_from_sma_200d = float(row["distance_from_sma_200d"])
-            close_position_20d_range = clamp(float(row["close_position_20d_range"]), 0.0, 1.0)
-            volatility_20d_to_60d_ratio = float(row["volatility_20d_to_60d_ratio"])
-            max_drawdown_120d = float(row["max_drawdown_120d"])
-            max_drawdown_252d = float(row["max_drawdown_252d"])
-            support_proximity_score_raw = float(row["support_proximity_score_raw"])
-            rebound_confirmation_score_raw = float(row["rebound_confirmation_score_raw"])
-            liquidity_continuity_score_raw = float(row["liquidity_continuity_score_raw"])
-            trend_slope_60d = float(row["trend_slope_60d"])
-            uptrend_r2_60d = float(row["uptrend_r2_60d"])
-            price_vs_sma_50d = float(row["price_vs_sma_50d"])
-            price_vs_sma_200d = float(row["price_vs_sma_200d"])
-            sma_50d_vs_sma_200d = float(row["sma_50d_vs_sma_200d"])
-            traded_value_5d_to_20d_ratio = float(row["traded_value_5d_to_20d_ratio"])
-            data_quality_extreme_return_flag = float(row["data_quality_extreme_return_flag"])
+            return_5d = metric_float(row["return_5d"])
+            return_20d = metric_float(row["return_20d"])
+            distance_from_sma_20d = metric_float(row["distance_from_sma_20d"])
+            close_position_20d_range = clamp(metric_float(row["close_position_20d_range"]), 0.0, 1.0)
+            volatility_20d_to_60d_ratio = metric_float(row["volatility_20d_to_60d_ratio"])
+            max_drawdown_120d = metric_float(row["max_drawdown_120d"])
+            max_drawdown_252d = metric_float(row["max_drawdown_252d"])
+            support_proximity_score_raw = metric_float(row["support_proximity_score_raw"])
+            rebound_confirmation_score_raw = metric_float(row["rebound_confirmation_score_raw"])
+            liquidity_continuity_score_raw = metric_float(row["liquidity_continuity_score_raw"])
+            trend_slope_60d = metric_float(row["trend_slope_60d"])
+            uptrend_r2_60d = metric_float(row["uptrend_r2_60d"])
+            price_vs_sma_50d = metric_float(row["price_vs_sma_50d"])
+            price_vs_sma_200d = metric_float(row["price_vs_sma_200d"])
+            sma_50d_vs_sma_200d = metric_float(row["sma_50d_vs_sma_200d"])
+            traded_value_5d_to_20d_ratio = metric_float(row["traded_value_5d_to_20d_ratio"])
+            data_quality_extreme_return_flag = metric_float(row["data_quality_extreme_return_flag"])
 
             score_oversold_depth = max(
                 band_score(return_20d, ideal_low=-0.18, ideal_high=-0.04, outer_low=-0.35, outer_high=0.04),
@@ -633,8 +615,7 @@ class MeanReversionQualityV1Profile:
             score_support_proximity = support_proximity_score_raw
             score_rebound_confirmation = rebound_confirmation_score_raw
             score_volatility_control = (
-                0.55 * score_volatility_control_rank[index]
-                + 0.45 * score_downside_volatility[index]
+                0.55 * score_volatility_control_rank[index] + 0.45 * score_downside_volatility[index]
             )
             score_liquidity_continuity = liquidity_continuity_score_raw
             score_trend_preservation = (
@@ -670,9 +651,7 @@ class MeanReversionQualityV1Profile:
 
             tag_setup_oversold_quality = (
                 1.0
-                if score_oversold_depth >= 0.65
-                and score_trend_preservation >= 0.45
-                and max_drawdown_120d > -0.30
+                if score_oversold_depth >= 0.65 and score_trend_preservation >= 0.45 and max_drawdown_120d > -0.30
                 else 0.0
             )
             tag_setup_near_support = 1.0 if score_support_proximity >= 0.65 else 0.0
@@ -695,9 +674,7 @@ class MeanReversionQualityV1Profile:
             tag_risk_volatility_spike = 1.0 if volatility_20d_to_60d_ratio > 1.80 else 0.0
             tag_risk_liquidity_fade = 1.0 if traded_value_5d_to_20d_ratio < 0.75 else 0.0
             tag_risk_no_reversion_setup = (
-                1.0
-                if return_20d >= 0.0 and distance_from_sma_20d >= 0.0 and close_position_20d_range > 0.35
-                else 0.0
+                1.0 if return_20d >= 0.0 and distance_from_sma_20d >= 0.0 and close_position_20d_range > 0.35 else 0.0
             )
             tag_risk_data_quality_warning = 1.0 if data_quality_extreme_return_flag == 1.0 else 0.0
 
@@ -713,9 +690,7 @@ class MeanReversionQualityV1Profile:
                 close_position_20d_range=close_position_20d_range,
                 rebound_confirmation_score=score_rebound_confirmation,
             )
-            volatility_cap_score = self._volatility_cap_score(
-                volatility_20d_to_60d_ratio=volatility_20d_to_60d_ratio
-            )
+            volatility_cap_score = self._volatility_cap_score(volatility_20d_to_60d_ratio=volatility_20d_to_60d_ratio)
             drawdown_cap_score = self._drawdown_cap_score(
                 max_drawdown_120d=max_drawdown_120d,
                 max_drawdown_252d=max_drawdown_252d,
@@ -768,35 +743,35 @@ class MeanReversionQualityV1Profile:
             for row in scored_rows:
                 if horizon == "composite":
                     raw_score = (
-                        0.30 * float(row["oversold_quality_score"])
-                        + 0.25 * float(row["support_reversion_score"])
-                        + 0.20 * float(row["rebound_quality_score"])
-                        + 0.25 * float(row["risk_control_score"])
+                        0.30 * metric_float(row["oversold_quality_score"])
+                        + 0.25 * metric_float(row["support_reversion_score"])
+                        + 0.20 * metric_float(row["rebound_quality_score"])
+                        + 0.25 * metric_float(row["risk_control_score"])
                     )
                 elif horizon == "oversold_bounce":
                     raw_score = (
-                        0.40 * float(row["oversold_quality_score"])
-                        + 0.30 * float(row["rebound_quality_score"])
-                        + 0.15 * float(row["support_reversion_score"])
-                        + 0.15 * float(row["risk_control_score"])
+                        0.40 * metric_float(row["oversold_quality_score"])
+                        + 0.30 * metric_float(row["rebound_quality_score"])
+                        + 0.15 * metric_float(row["support_reversion_score"])
+                        + 0.15 * metric_float(row["risk_control_score"])
                     )
                 elif horizon == "support_reversion":
                     raw_score = (
-                        0.40 * float(row["support_reversion_score"])
-                        + 0.25 * float(row["oversold_quality_score"])
-                        + 0.20 * float(row["risk_control_score"])
-                        + 0.15 * float(row["rebound_quality_score"])
+                        0.40 * metric_float(row["support_reversion_score"])
+                        + 0.25 * metric_float(row["oversold_quality_score"])
+                        + 0.20 * metric_float(row["risk_control_score"])
+                        + 0.15 * metric_float(row["rebound_quality_score"])
                     )
                 else:
                     raise ValidationError(f"unknown horizon {horizon}")
                 score = min(
-                    raw_score - float(row["penalty_score"]),
-                    float(row["structure_cap_score"]),
-                    float(row["falling_knife_cap_score"]),
-                    float(row["volatility_cap_score"]),
-                    float(row["drawdown_cap_score"]),
+                    raw_score - metric_float(row["penalty_score"]),
+                    metric_float(row["structure_cap_score"]),
+                    metric_float(row["falling_knife_cap_score"]),
+                    metric_float(row["volatility_cap_score"]),
+                    metric_float(row["drawdown_cap_score"]),
                 )
-                ranking_values = [float(row[key]) for key in self.ranking_metric_keys] + [score]
+                ranking_values = [metric_float(row[key]) for key in self.ranking_metric_keys] + [score]
                 if not all_finite(ranking_values):
                     raise ValidationError("mean_reversion_quality_v1 produced a non-finite ranking metric")
                 horizon_rows.append(
@@ -809,13 +784,11 @@ class MeanReversionQualityV1Profile:
                         "score": score,
                     }
                 )
-            horizon_rows.sort(key=lambda item: (-float(item["score"]), str(item["ticker"])))
+            horizon_rows.sort(key=lambda item: (-metric_float(item["score"]), str(item["ticker"])))
             for rank, row in enumerate(horizon_rows, start=1):
                 row["rank"] = rank
                 ranking_rows.append(row)
-        return pl.DataFrame(ranking_rows, schema=MEAN_REVERSION_QUALITY_RANKING_SCHEMA).select(
-            self._ranking_columns()
-        )
+        return pl.DataFrame(ranking_rows, schema=MEAN_REVERSION_QUALITY_RANKING_SCHEMA).select(self._ranking_columns())
 
     def _structure_cap_score(
         self,
@@ -870,5 +843,5 @@ class MeanReversionQualityV1Profile:
 
 MEAN_REVERSION_QUALITY_V1_REGISTRATION = RankingProfileRegistration(
     profile_id=MEAN_REVERSION_QUALITY_PROFILE_ID,
-    factory=MeanReversionQualityV1Profile,
+    factory=lambda: MeanReversionQualityV1Profile(),
 )

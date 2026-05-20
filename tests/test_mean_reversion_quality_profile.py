@@ -292,10 +292,7 @@ def test_mean_reversion_quality_assigns_rankings_tags_and_caps() -> None:
         assert rows["rank"].to_list() == [1, 2, 3, 4]
         assert rows["score"].is_sorted(descending=True)
 
-    composite = {
-        row["ticker"]: row
-        for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()
-    }
+    composite = {row["ticker"]: row for row in rankings.filter(pl.col("horizon") == "composite").to_dicts()}
     assert composite["QUALITY"]["tag_setup_oversold_quality"] == 1.0
     assert composite["QUALITY"]["tag_setup_near_support"] == 1.0
     assert composite["BOUNCE"]["tag_setup_rebound_confirmation"] == 1.0

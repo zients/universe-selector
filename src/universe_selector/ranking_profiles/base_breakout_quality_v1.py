@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from datetime import date
 from statistics import median
@@ -19,6 +18,7 @@ from universe_selector.ranking_profiles._alpha_common import (
     immutable_market_int_mapping,
     max_drawdown,
     mean,
+    metric_float,
     ols_slope_r2,
     percentile_scores,
     positive_only_percentile_scores,
@@ -28,7 +28,7 @@ from universe_selector.ranking_profiles._alpha_common import (
 from universe_selector.ranking_profiles.registration import RankingProfileRegistration
 
 
-BASE_BREAKOUT_QUALITY_PROFILE_ID = "base_breakout_quality_v1"
+BASE_BREAKOUT_QUALITY_PROFILE_ID: Literal["base_breakout_quality_v1"] = "base_breakout_quality_v1"
 BASE_BREAKOUT_QUALITY_SCORE_METHOD = "market_relative_base_breakout_quality_v1"
 BASE_BREAKOUT_QUALITY_RANK_INTERPRETATION_NOTE = (
     "Base breakout quality scores are market-local relative scores for constructive bases near "
@@ -139,18 +139,12 @@ def _empty_rankings() -> pl.DataFrame:
 class BaseBreakoutQualityV1Profile:
     profile_id: Literal["base_breakout_quality_v1"] = BASE_BREAKOUT_QUALITY_PROFILE_ID
     min_history_bars: int = 252
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 50_000_000.0, Market.US: 10_000_000.0}
     )
-    active_trading_min_days_60: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 50, Market.US: 55}
-    )
-    zero_volume_max_days_20: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 3, Market.US: 1}
-    )
+    active_trading_min_days_60: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 50, Market.US: 55})
+    zero_volume_max_days_20: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 3, Market.US: 1})
     stale_close_max_days_20: int = 5
     extreme_return_abs_cutoff: float = 0.80
     volatility_floor: float = 0.0001
@@ -237,12 +231,8 @@ class BaseBreakoutQualityV1Profile:
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
-            "active_trading_min_days_60": {
-                market.value: self.active_trading_min_days_60[market] for market in Market
-            },
-            "zero_volume_max_days_20": {
-                market.value: self.zero_volume_max_days_20[market] for market in Market
-            },
+            "active_trading_min_days_60": {market.value: self.active_trading_min_days_60[market] for market in Market},
+            "zero_volume_max_days_20": {market.value: self.zero_volume_max_days_20[market] for market in Market},
             "stale_close_max_days_20": self.stale_close_max_days_20,
             "extreme_return_abs_cutoff": self.extreme_return_abs_cutoff,
             "volatility_floor": self.volatility_floor,
@@ -280,10 +270,9 @@ class BaseBreakoutQualityV1Profile:
         profile_asof_bar_date = candidate_bars["bar_date"].max()
         rows: list[dict[str, object]] = []
         for ticker in sorted(listed_tickers):
-            ticker_bars = (
-                candidate_bars.filter((pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date))
-                .sort("bar_date")
-            )
+            ticker_bars = candidate_bars.filter(
+                (pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date)
+            ).sort("bar_date")
             if ticker_bars.is_empty() or ticker_bars.height < self.min_history_bars:
                 continue
             if ticker_bars["bar_date"].n_unique() != ticker_bars.height:
@@ -307,23 +296,21 @@ class BaseBreakoutQualityV1Profile:
             closes_float = [float(value) for value in closes]
             adjusted_closes_float = [float(value) for value in adjusted_closes]
             volumes_float = [float(value) for value in volumes]
-            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+            if any(
+                value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float
+            ):
                 continue
             if any(value < 0.0 for value in volumes_float):
                 continue
             if any(
                 high < low or high < open_ or high < close or low > open_ or low > close
-                for high, low, open_, close in zip(
-                    highs_float, lows_float, opens_float, closes_float, strict=True
-                )
+                for high, low, open_, close in zip(highs_float, lows_float, opens_float, closes_float, strict=True)
             ):
                 continue
 
             latest_close = closes_float[-1]
             latest_adjusted_close = adjusted_closes_float[-1]
-            traded_values = [
-                close * volume for close, volume in zip(closes_float, volumes_float, strict=True)
-            ]
+            traded_values = [close * volume for close, volume in zip(closes_float, volumes_float, strict=True)]
             traded_values_5d = traded_values[-5:]
             traded_values_20d = traded_values[-20:]
             avg_traded_value_5d_local = mean(traded_values_5d)
@@ -393,9 +380,7 @@ class BaseBreakoutQualityV1Profile:
             base_tightness_20d = 1.0 - clamp((high_20d / low_20d - 1.0) / 0.20, 0.0, 1.0)
             base_tightness_60d = 1.0 - clamp((high_60d_range / low_60d_range - 1.0) / 0.35, 0.0, 1.0)
             close_position_20d_range = (
-                0.5
-                if high_20d == low_20d
-                else (latest_adjusted_close - low_20d) / (high_20d - low_20d)
+                0.5 if high_20d == low_20d else (latest_adjusted_close - low_20d) / (high_20d - low_20d)
             )
             return_20d = latest_adjusted_close / adjusted_closes_float[-21] - 1.0
             return_60d = latest_adjusted_close / adjusted_closes_float[-61] - 1.0
@@ -522,14 +507,10 @@ class BaseBreakoutQualityV1Profile:
             raise ValidationError("base_breakout_quality_v1 snapshot is missing required ranking inputs")
         for column in ("close", "adjusted_close", *BASE_BREAKOUT_QUALITY_SNAPSHOT_METRIC_KEYS):
             if not snapshot.schema[column].is_numeric():
-                raise ValidationError(
-                    f"base_breakout_quality_v1 snapshot contains non-numeric ranking input: {column}"
-                )
+                raise ValidationError(f"base_breakout_quality_v1 snapshot contains non-numeric ranking input: {column}")
             invalid_count = snapshot.filter(pl.col(column).is_null() | (~pl.col(column).is_finite())).height
             if invalid_count > 0:
-                raise ValidationError(
-                    f"base_breakout_quality_v1 snapshot contains non-finite ranking input: {column}"
-                )
+                raise ValidationError(f"base_breakout_quality_v1 snapshot contains non-finite ranking input: {column}")
 
         ranking_frames = []
         for partition in snapshot.partition_by(["run_id", "market"], maintain_order=True):
@@ -574,43 +555,38 @@ class BaseBreakoutQualityV1Profile:
 
     def _assign_single_run_market_rankings(self, frame: pl.DataFrame) -> pl.DataFrame:
         rows = frame.sort("ticker").to_dicts()
-        score_trend_slope = positive_only_percentile_scores([float(row["trend_slope_60d"]) for row in rows])
-        score_sma_50d_vs_sma_200d = percentile_scores(
-            [float(row["sma_50d_vs_sma_200d"]) for row in rows]
-        )
-        score_price_vs_sma_200d = percentile_scores([float(row["price_vs_sma_200d"]) for row in rows])
-        score_trend_consistency = percentile_scores([float(row["trend_consistency_60d"]) for row in rows])
-        score_return_60d = positive_only_percentile_scores([float(row["return_60d"]) for row in rows])
-        score_return_120d = positive_only_percentile_scores([float(row["return_120d"]) for row in rows])
-        score_drawdown_control = percentile_scores(
-            [float(row["base_depth_120d"]) for row in rows]
-        )
+        score_trend_slope = positive_only_percentile_scores([metric_float(row["trend_slope_60d"]) for row in rows])
+        score_sma_50d_vs_sma_200d = percentile_scores([metric_float(row["sma_50d_vs_sma_200d"]) for row in rows])
+        score_price_vs_sma_200d = percentile_scores([metric_float(row["price_vs_sma_200d"]) for row in rows])
+        score_trend_consistency = percentile_scores([metric_float(row["trend_consistency_60d"]) for row in rows])
+        score_return_60d = positive_only_percentile_scores([metric_float(row["return_60d"]) for row in rows])
+        score_return_120d = positive_only_percentile_scores([metric_float(row["return_120d"]) for row in rows])
+        score_drawdown_control = percentile_scores([metric_float(row["base_depth_120d"]) for row in rows])
         score_volatility_ratio = percentile_scores(
-            [float(row["volatility_20d_to_60d_ratio"]) for row in rows],
+            [metric_float(row["volatility_20d_to_60d_ratio"]) for row in rows],
             higher_is_better=False,
         )
 
         scored_rows: list[dict[str, object]] = []
         for index, row in enumerate(rows):
-            base_depth_60d = float(row["base_depth_60d"])
-            base_depth_120d = float(row["base_depth_120d"])
-            base_tightness_20d = float(row["base_tightness_20d"])
-            base_tightness_60d = float(row["base_tightness_60d"])
-            pct_below_60d_high = float(row["pct_below_60d_high"])
-            pct_below_120d_high = float(row["pct_below_120d_high"])
-            close_position_20d_range = clamp(float(row["close_position_20d_range"]), 0.0, 1.0)
-            return_20d = float(row["return_20d"])
-            price_vs_sma_20d = float(row["price_vs_sma_20d"])
-            price_vs_sma_50d = float(row["price_vs_sma_50d"])
-            price_vs_sma_200d = float(row["price_vs_sma_200d"])
-            sma_50d_vs_sma_200d = float(row["sma_50d_vs_sma_200d"])
-            trend_slope_60d = float(row["trend_slope_60d"])
-            uptrend_r2_60d = float(row["uptrend_r2_60d"])
-            trend_consistency_60d = float(row["trend_consistency_60d"])
-            traded_value_5d_to_20d_ratio = float(row["traded_value_5d_to_20d_ratio"])
-            volatility_20d_to_60d_ratio = float(row["volatility_20d_to_60d_ratio"])
-            stale_close_days_20d = float(row["stale_close_days_20d"])
-            data_quality_extreme_return_flag = float(row["data_quality_extreme_return_flag"])
+            base_depth_60d = metric_float(row["base_depth_60d"])
+            base_depth_120d = metric_float(row["base_depth_120d"])
+            base_tightness_20d = metric_float(row["base_tightness_20d"])
+            base_tightness_60d = metric_float(row["base_tightness_60d"])
+            pct_below_120d_high = metric_float(row["pct_below_120d_high"])
+            close_position_20d_range = clamp(metric_float(row["close_position_20d_range"]), 0.0, 1.0)
+            return_20d = metric_float(row["return_20d"])
+            price_vs_sma_20d = metric_float(row["price_vs_sma_20d"])
+            price_vs_sma_50d = metric_float(row["price_vs_sma_50d"])
+            price_vs_sma_200d = metric_float(row["price_vs_sma_200d"])
+            sma_50d_vs_sma_200d = metric_float(row["sma_50d_vs_sma_200d"])
+            trend_slope_60d = metric_float(row["trend_slope_60d"])
+            uptrend_r2_60d = metric_float(row["uptrend_r2_60d"])
+            trend_consistency_60d = metric_float(row["trend_consistency_60d"])
+            traded_value_5d_to_20d_ratio = metric_float(row["traded_value_5d_to_20d_ratio"])
+            volatility_20d_to_60d_ratio = metric_float(row["volatility_20d_to_60d_ratio"])
+            stale_close_days_20d = metric_float(row["stale_close_days_20d"])
+            data_quality_extreme_return_flag = metric_float(row["data_quality_extreme_return_flag"])
 
             score_base_tightness = 0.60 * base_tightness_20d + 0.40 * base_tightness_60d
             score_base_depth = band_score(
@@ -649,15 +625,9 @@ class BaseBreakoutQualityV1Profile:
                 + 0.25 * clamp(traded_value_5d_to_20d_ratio, 0.0, 1.0)
             )
 
-            base_quality_score = (
-                0.50 * score_base_tightness
-                + 0.35 * score_base_depth
-                + 0.15 * close_position_20d_range
-            )
+            base_quality_score = 0.50 * score_base_tightness + 0.35 * score_base_depth + 0.15 * close_position_20d_range
             breakout_setup_score = (
-                0.55 * score_breakout_proximity
-                + 0.25 * close_position_20d_range
-                + 0.20 * score_volume_confirmation
+                0.55 * score_breakout_proximity + 0.25 * close_position_20d_range + 0.20 * score_volume_confirmation
             )
             trend_structure_score = score_trend_structure
             volume_confirmation_score = score_volume_confirmation
@@ -674,8 +644,8 @@ class BaseBreakoutQualityV1Profile:
                 and price_vs_sma_200d > 0.0
                 and price_vs_sma_200d >= 0.05
                 and sma_50d_vs_sma_200d >= 0.0
-                and float(row["return_120d"]) >= 0.08
-                and (float(row["return_60d"]) >= 0.0 or float(row["return_120d"]) >= 0.12)
+                and metric_float(row["return_120d"]) >= 0.08
+                and (metric_float(row["return_60d"]) >= 0.0 or metric_float(row["return_120d"]) >= 0.12)
                 else 0.0
             )
             tag_setup_near_breakout = (
@@ -699,9 +669,7 @@ class BaseBreakoutQualityV1Profile:
                 else 0.0
             )
             tag_risk_overextended_breakout = (
-                1.0
-                if return_20d > 0.35 or price_vs_sma_50d > 0.20 or pct_below_120d_high > 0.08
-                else 0.0
+                1.0 if return_20d > 0.35 or price_vs_sma_50d > 0.20 or pct_below_120d_high > 0.08 else 0.0
             )
             tag_risk_weak_base = (
                 1.0
@@ -710,7 +678,7 @@ class BaseBreakoutQualityV1Profile:
                 or base_depth_60d > 0.0
                 or base_tightness_20d < 0.25
                 or base_tightness_60d < 0.20
-                or float(row["return_120d"]) < 0.08
+                or metric_float(row["return_120d"]) < 0.08
                 or price_vs_sma_200d < 0.05
                 else 0.0
             )
@@ -732,8 +700,8 @@ class BaseBreakoutQualityV1Profile:
                 trend_consistency_60d=trend_consistency_60d,
                 price_vs_sma_200d=price_vs_sma_200d,
                 sma_50d_vs_sma_200d=sma_50d_vs_sma_200d,
-                return_60d=float(row["return_60d"]),
-                return_120d=float(row["return_120d"]),
+                return_60d=metric_float(row["return_60d"]),
+                return_120d=metric_float(row["return_120d"]),
             )
             breakout_extension_cap_score = self._breakout_extension_cap_score(
                 return_20d=return_20d,
@@ -801,38 +769,38 @@ class BaseBreakoutQualityV1Profile:
             for row in scored_rows:
                 if horizon == "composite":
                     raw_score = (
-                        0.25 * float(row["base_quality_score"])
-                        + 0.25 * float(row["breakout_setup_score"])
-                        + 0.20 * float(row["trend_structure_score"])
-                        + 0.15 * float(row["volume_confirmation_score"])
-                        + 0.15 * float(row["risk_control_score"])
+                        0.25 * metric_float(row["base_quality_score"])
+                        + 0.25 * metric_float(row["breakout_setup_score"])
+                        + 0.20 * metric_float(row["trend_structure_score"])
+                        + 0.15 * metric_float(row["volume_confirmation_score"])
+                        + 0.15 * metric_float(row["risk_control_score"])
                     )
                 elif horizon == "near_breakout":
                     raw_score = (
-                        0.35 * float(row["base_quality_score"])
-                        + 0.35 * float(row["breakout_setup_score"])
-                        + 0.15 * float(row["trend_structure_score"])
-                        + 0.10 * float(row["volume_confirmation_score"])
-                        + 0.05 * float(row["risk_control_score"])
+                        0.35 * metric_float(row["base_quality_score"])
+                        + 0.35 * metric_float(row["breakout_setup_score"])
+                        + 0.15 * metric_float(row["trend_structure_score"])
+                        + 0.10 * metric_float(row["volume_confirmation_score"])
+                        + 0.05 * metric_float(row["risk_control_score"])
                     )
                 elif horizon == "breakout_readiness":
                     raw_score = (
-                        0.10 * float(row["base_quality_score"])
-                        + 0.35 * float(row["breakout_setup_score"])
-                        + 0.25 * float(row["trend_structure_score"])
-                        + 0.20 * float(row["volume_confirmation_score"])
-                        + 0.10 * float(row["risk_control_score"])
+                        0.10 * metric_float(row["base_quality_score"])
+                        + 0.35 * metric_float(row["breakout_setup_score"])
+                        + 0.25 * metric_float(row["trend_structure_score"])
+                        + 0.20 * metric_float(row["volume_confirmation_score"])
+                        + 0.10 * metric_float(row["risk_control_score"])
                     )
                 else:
                     raise ValidationError(f"unknown horizon {horizon}")
                 score = min(
-                    raw_score - float(row["penalty_score"]),
-                    float(row["structure_cap_score"]),
-                    float(row["breakout_extension_cap_score"]),
-                    float(row["base_depth_cap_score"]),
-                    float(row["false_breakout_cap_score"]),
+                    raw_score - metric_float(row["penalty_score"]),
+                    metric_float(row["structure_cap_score"]),
+                    metric_float(row["breakout_extension_cap_score"]),
+                    metric_float(row["base_depth_cap_score"]),
+                    metric_float(row["false_breakout_cap_score"]),
                 )
-                ranking_values = [float(row[key]) for key in self.ranking_metric_keys] + [score]
+                ranking_values = [metric_float(row[key]) for key in self.ranking_metric_keys] + [score]
                 if not all_finite(ranking_values):
                     raise ValidationError("base_breakout_quality_v1 produced a non-finite ranking metric")
                 horizon_rows.append(
@@ -845,13 +813,11 @@ class BaseBreakoutQualityV1Profile:
                         "score": score,
                     }
                 )
-            horizon_rows.sort(key=lambda item: (-float(item["score"]), str(item["ticker"])))
+            horizon_rows.sort(key=lambda item: (-metric_float(item["score"]), str(item["ticker"])))
             for rank, row in enumerate(horizon_rows, start=1):
                 row["rank"] = rank
                 ranking_rows.append(row)
-        return pl.DataFrame(ranking_rows, schema=BASE_BREAKOUT_QUALITY_RANKING_SCHEMA).select(
-            self._ranking_columns()
-        )
+        return pl.DataFrame(ranking_rows, schema=BASE_BREAKOUT_QUALITY_RANKING_SCHEMA).select(self._ranking_columns())
 
     def _is_persisted_setup(
         self,
@@ -977,5 +943,5 @@ class BaseBreakoutQualityV1Profile:
 
 BASE_BREAKOUT_QUALITY_V1_REGISTRATION = RankingProfileRegistration(
     profile_id=BASE_BREAKOUT_QUALITY_PROFILE_ID,
-    factory=BaseBreakoutQualityV1Profile,
+    factory=lambda: BaseBreakoutQualityV1Profile(),
 )

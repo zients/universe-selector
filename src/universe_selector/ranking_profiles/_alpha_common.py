@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from datetime import date
 from types import MappingProxyType
 from typing import Mapping
@@ -8,11 +9,17 @@ from typing import Mapping
 from universe_selector.domain import Market
 
 
-def all_finite(values: list[object]) -> bool:
+def all_finite(values: Sequence[object]) -> bool:
     return all(
         isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(float(value))
         for value in values
     )
+
+
+def metric_float(value: object) -> float:
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise TypeError("expected numeric metric")
+    return float(value)
 
 
 def mean(values: list[float]) -> float:
@@ -56,7 +63,9 @@ def ols_slope_r2(values: list[float]) -> tuple[float, float]:
     return slope, 1.0 - residual / total
 
 
-def yyyymmdd(value: date) -> float:
+def yyyymmdd(value: object) -> float:
+    if not isinstance(value, date):
+        raise TypeError("expected date")
     return float(value.year * 10_000 + value.month * 100 + value.day)
 
 
