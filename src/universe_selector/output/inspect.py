@@ -46,12 +46,7 @@ def render_inspect(
         row = ranking_by_horizon[horizon]
         metric_parts = [f"{key} {row[key]}" for key in profile.ranking_metric_keys]
         metric_text = ", ".join(metric_parts)
-        lines.append(
-            f"- {row['horizon']}: "
-            f"rank {row['rank']}, "
-            f"score {row['score']}, "
-            f"{metric_text}"
-        )
+        lines.append(f"- {row['horizon']}: rank {row['rank']}, score {row['score']}, {metric_text}")
     lines.extend(
         [
             "",

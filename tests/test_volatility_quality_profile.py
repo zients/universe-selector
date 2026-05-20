@@ -112,9 +112,7 @@ def test_volatility_quality_builds_snapshot_metrics() -> None:
     assert row["avg_traded_value_20d_local"] > 10_000_000.0
     assert row["volatility_20d"] == pytest.approx(expected_vol_20d)
     assert row["volatility_60d"] == pytest.approx(expected_vol_60d)
-    assert row["downside_volatility_60d"] == pytest.approx(
-        (sum(value * value for value in downside) / 60.0) ** 0.5
-    )
+    assert row["downside_volatility_60d"] == pytest.approx((sum(value * value for value in downside) / 60.0) ** 0.5)
     assert row["volatility_20d_to_60d_ratio"] == pytest.approx(expected_vol_20d / expected_vol_60d)
     assert row["volatility_stability_60d"] == pytest.approx(abs(math.log(expected_vol_20d / expected_vol_60d)))
     assert row["max_drawdown_120d"] == pytest.approx(_max_drawdown_for_test(adjusted[-120:]))
@@ -181,10 +179,7 @@ def test_volatility_quality_filters_insufficient_active_trading_days() -> None:
     bars = _bars("AAA", latest)
     zero_dates = set(bars.sort("bar_date")["bar_date"].to_list()[-60:-54])
     bars = bars.with_columns(
-        pl.when(pl.col("bar_date").is_in(list(zero_dates)))
-        .then(0.0)
-        .otherwise(pl.col("volume"))
-        .alias("volume")
+        pl.when(pl.col("bar_date").is_in(list(zero_dates))).then(0.0).otherwise(pl.col("volume")).alias("volume")
     )
 
     snapshot = profile.build_snapshot(
@@ -221,10 +216,7 @@ def test_volatility_quality_filters_invalid_ohlcv_values() -> None:
     latest = date(2026, 5, 8)
     profile = VolatilityQualityV1Profile()
     bars = _bars("BAD", latest).with_columns(
-        pl.when(pl.col("bar_date") == latest)
-        .then(pl.col("low") - 1.0)
-        .otherwise(pl.col("high"))
-        .alias("high")
+        pl.when(pl.col("bar_date") == latest).then(pl.col("low") - 1.0).otherwise(pl.col("high")).alias("high")
     )
 
     snapshot = profile.build_snapshot(
@@ -242,10 +234,7 @@ def test_volatility_quality_filters_open_outside_daily_range() -> None:
     latest = date(2026, 5, 8)
     profile = VolatilityQualityV1Profile()
     bars = _bars("BADOPEN", latest).with_columns(
-        pl.when(pl.col("bar_date") == latest)
-        .then(pl.col("high") + 1.0)
-        .otherwise(pl.col("open"))
-        .alias("open")
+        pl.when(pl.col("bar_date") == latest).then(pl.col("high") + 1.0).otherwise(pl.col("open")).alias("open")
     )
 
     snapshot = profile.build_snapshot(
@@ -264,10 +253,7 @@ def test_volatility_quality_filters_non_finite_ohlcv_values(column: str) -> None
     latest = date(2026, 5, 8)
     profile = VolatilityQualityV1Profile()
     bars = _bars("NAN", latest).with_columns(
-        pl.when(pl.col("bar_date") == latest)
-        .then(float("nan"))
-        .otherwise(pl.col(column))
-        .alias(column)
+        pl.when(pl.col("bar_date") == latest).then(float("nan")).otherwise(pl.col(column)).alias(column)
     )
 
     snapshot = profile.build_snapshot(
@@ -416,9 +402,7 @@ def test_volatility_quality_uses_exact_component_and_horizon_formulas() -> None:
     expected_trading_smoothness = 0.50 * (2.0 / 3.0) + 0.30 * (1.0 / 3.0) + 0.20 * 1.0
     expected_drawdown_quality = 1.0
     expected_composite = (
-        0.45 * expected_volatility_control
-        + 0.30 * expected_drawdown_quality
-        + 0.25 * expected_trading_smoothness
+        0.45 * expected_volatility_control + 0.30 * expected_drawdown_quality + 0.25 * expected_trading_smoothness
     )
     expected_shortterm = 0.45 * (2.0 / 3.0) + 0.35 * (2.0 / 3.0) + 0.20 * 1.0
     expected_stable = 0.40 * 0.0 + 0.25 * (1.0 / 3.0) + 0.25 * 1.0 + 0.10 * (1.0 / 3.0)
@@ -515,8 +499,6 @@ def test_volatility_quality_rejects_malformed_or_non_finite_snapshot() -> None:
     with pytest.raises(ValidationError, match="non-finite ranking input"):
         profile.assign_rankings(snapshot)
 
-    non_numeric_snapshot = _snapshot_rows([{"ticker": "AAA"}]).with_columns(
-        pl.lit("bad").alias("volatility_20d")
-    )
+    non_numeric_snapshot = _snapshot_rows([{"ticker": "AAA"}]).with_columns(pl.lit("bad").alias("volatility_20d"))
     with pytest.raises(ValidationError, match="non-numeric ranking input"):
         profile.assign_rankings(non_numeric_snapshot)

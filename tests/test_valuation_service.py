@@ -133,9 +133,7 @@ def _copy_fixture_with_reference_price_override(tmp_path: Path) -> Path:
     text = target.read_text()
     text = text.replace("reference_price: null", "reference_price: 185.0", 1)
     text = text.replace(
-        "  shares_outstanding: null\n"
-        "  net_debt: null\n"
-        "  reference_price: null\n",
+        "  shares_outstanding: null\n  net_debt: null\n  reference_price: null\n",
         "  shares_outstanding: null\n"
         "  net_debt: null\n"
         "  reference_price: Reference price supplied for scenario review.\n",
@@ -150,9 +148,7 @@ def _copy_fixture_with_starting_fcf_override(tmp_path: Path) -> Path:
     text = target.read_text()
     text = text.replace(
         "      method: provider_ttm_fcf\n",
-        "      method: override\n"
-        "      value: 100.0\n"
-        "      note: Normalized for one-time working capital movement.\n",
+        "      method: override\n      value: 100.0\n      note: Normalized for one-time working capital movement.\n",
         1,
     )
     target.write_text(text)

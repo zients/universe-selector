@@ -148,18 +148,12 @@ def _immutable_market_int_mapping(value: Mapping[Market, int]) -> Mapping[Market
 class VolatilityQualityV1Profile:
     profile_id: Literal["volatility_quality_v1"] = VOLATILITY_QUALITY_PROFILE_ID
     min_history_bars: int = 126
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 50_000_000.0, Market.US: 10_000_000.0}
     )
-    active_trading_min_days_60: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 50, Market.US: 55}
-    )
-    zero_volume_max_days_20: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 3, Market.US: 1}
-    )
+    active_trading_min_days_60: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 50, Market.US: 55})
+    zero_volume_max_days_20: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 3, Market.US: 1})
     volatility_floor: float = 0.0001
     snapshot_metric_keys: tuple[str, ...] = VOLATILITY_QUALITY_SNAPSHOT_METRIC_KEYS
     ranking_metric_keys: tuple[str, ...] = VOLATILITY_QUALITY_RANKING_METRIC_KEYS
@@ -240,12 +234,8 @@ class VolatilityQualityV1Profile:
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
-            "active_trading_min_days_60": {
-                market.value: self.active_trading_min_days_60[market] for market in Market
-            },
-            "zero_volume_max_days_20": {
-                market.value: self.zero_volume_max_days_20[market] for market in Market
-            },
+            "active_trading_min_days_60": {market.value: self.active_trading_min_days_60[market] for market in Market},
+            "zero_volume_max_days_20": {market.value: self.zero_volume_max_days_20[market] for market in Market},
             "volatility_floor": self.volatility_floor,
             "horizon_order": list(self.horizon_order),
             "snapshot_metric_keys": list(self.snapshot_metric_keys),
@@ -298,15 +288,15 @@ class VolatilityQualityV1Profile:
             closes_float = [float(value) for value in closes]
             adjusted_closes_float = [float(value) for value in adjusted_closes]
             volumes_float = [float(value) for value in volumes]
-            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+            if any(
+                value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float
+            ):
                 continue
             if any(value < 0.0 for value in volumes_float):
                 continue
             if any(
                 high < low or high < open_ or high < close or low > open_ or low > close
-                for high, low, open_, close in zip(
-                    highs_float, lows_float, opens_float, closes_float, strict=True
-                )
+                for high, low, open_, close in zip(highs_float, lows_float, opens_float, closes_float, strict=True)
             ):
                 continue
 
@@ -346,8 +336,7 @@ class VolatilityQualityV1Profile:
             volatility_stability_60d = abs(math.log(volatility_20d_to_60d_ratio))
             max_drawdown_120d = _max_drawdown(adjusted_closes_float[-120:])
             range_pct = [
-                (high - low) / close
-                for high, low, close in zip(highs_float, lows_float, closes_float, strict=True)
+                (high - low) / close for high, low, close in zip(highs_float, lows_float, closes_float, strict=True)
             ]
             median_range_pct_20d = float(median(range_pct[-20:]))
             median_range_pct_60d = float(median(range_pct[-60:]))
@@ -413,22 +402,14 @@ class VolatilityQualityV1Profile:
             raise ValidationError("volatility_quality_v1 snapshot is missing required ranking inputs")
         for column in VOLATILITY_QUALITY_SNAPSHOT_METRIC_KEYS:
             if not snapshot.schema[column].is_numeric():
-                raise ValidationError(
-                    f"volatility_quality_v1 snapshot contains non-numeric ranking input: {column}"
-                )
+                raise ValidationError(f"volatility_quality_v1 snapshot contains non-numeric ranking input: {column}")
             invalid_count = snapshot.filter(pl.col(column).is_null() | (~pl.col(column).is_finite())).height
             if invalid_count > 0:
-                raise ValidationError(
-                    f"volatility_quality_v1 snapshot contains non-finite ranking input: {column}"
-                )
+                raise ValidationError(f"volatility_quality_v1 snapshot contains non-finite ranking input: {column}")
         ranking_frames = []
         for partition in snapshot.partition_by(["run_id", "market"], maintain_order=True):
             ranking_frames.append(self._assign_single_run_market_rankings(partition))
-        return (
-            pl.concat(ranking_frames)
-            .sort(["run_id", "market", "horizon", "rank"])
-            .select(self._ranking_columns())
-        )
+        return pl.concat(ranking_frames).sort(["run_id", "market", "horizon", "rank"]).select(self._ranking_columns())
 
     def _has_required_ranking_inputs(self, snapshot: pl.DataFrame) -> bool:
         required = {"run_id", "market", "ticker", *VOLATILITY_QUALITY_SNAPSHOT_METRIC_KEYS}
@@ -545,9 +526,7 @@ class VolatilityQualityV1Profile:
             for rank, row in enumerate(horizon_rows, start=1):
                 row["rank"] = rank
                 ranking_rows.append(row)
-        return pl.DataFrame(ranking_rows, schema=VOLATILITY_QUALITY_RANKING_SCHEMA).select(
-            self._ranking_columns()
-        )
+        return pl.DataFrame(ranking_rows, schema=VOLATILITY_QUALITY_RANKING_SCHEMA).select(self._ranking_columns())
 
 
 VOLATILITY_QUALITY_V1_REGISTRATION = RankingProfileRegistration(

@@ -16,9 +16,7 @@ if TYPE_CHECKING:
     from universe_selector.valuation.models import ValuationResult
 
 
-VALUATION_RESEARCH_DISCLAIMER = (
-    "This valuation report is for quantitative research only and is not investment advice."
-)
+VALUATION_RESEARCH_DISCLAIMER = "This valuation report is for quantitative research only and is not investment advice."
 
 
 def _output_renderer(model_id: str) -> ValuationOutputRenderer:

@@ -3,24 +3,47 @@ from __future__ import annotations
 from pathlib import Path
 
 
-README = Path(__file__).resolve().parents[1] / "README.md"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+README = REPO_ROOT / "README.md"
+DETAIL_DOCS = (
+    REPO_ROOT / "docs/valuation.md",
+    REPO_ROOT / "docs/ranking-profiles.md",
+    REPO_ROOT / "docs/extending.md",
+    REPO_ROOT / "docs/data-and-output.md",
+)
+
+
+def _documentation_corpus() -> str:
+    return "\n\n".join(path.read_text() for path in (README, *DETAIL_DOCS) if path.exists())
+
+
+def test_readme_is_concise_entrypoint_with_links_to_detail_docs() -> None:
+    text = README.read_text()
+
+    assert len(text.splitlines()) <= 360
+    assert "- [Valuation](docs/valuation.md)" in text
+    assert "- [Ranking profiles](docs/ranking-profiles.md)" in text
+    assert "- [Extending](docs/extending.md)" in text
+    assert "- [Data and output](docs/data-and-output.md)" in text
+    for path in DETAIL_DOCS:
+        assert path.is_file()
 
 
 def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
-    text = README.read_text()
+    text = _documentation_corpus()
     normalized = " ".join(text.split())
 
     assert "The CLI has four command families:" in text
     assert "`value MARKET --ticker TICKER`" in text
     assert "Valuation command: `value` uses yfinance fundamentals for `US` and `TW` in v1." in text
-    assert (
-        "valuation_assumptions/{market}/{ticker}.yaml + fundamentals provider -> "
-        "valuation model -> stdout"
-    ) in text
+    assert ("valuation_assumptions/{market}/{ticker}.yaml + fundamentals provider -> valuation model -> stdout") in text
     assert "batch remains the only command that computes persisted rankings." in normalized
     assert "`report` and `inspect` still only read persisted ranking runs" in normalized
     assert "`value` is a live ephemeral single-ticker valuation analysis and is not persisted in v1" in normalized
-    assert "`output/` renders markdown and JSON reports plus per-ticker inspect output from persisted data, plus thin command output adapters." in normalized
+    assert (
+        "`output/` renders markdown and JSON reports plus per-ticker inspect output from persisted data, plus thin command output adapters."
+        in normalized
+    )
     assert "`valuation/` owns valuation assumptions, model logic, orchestration, and valuation output." in normalized
     assert "`batch` is the only command that fetches data or computes rankings." not in normalized
     assert "`batch` is the only command that computes and persists ranking runs." in normalized
@@ -29,7 +52,10 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "uv run universe-selector report us --json" in text
     assert "uv run universe-selector inspect us --ticker AXTI --json" in text
     assert "uv run universe-selector value us --ticker AAPL --json" in text
-    assert "Report JSON includes the full persisted ticker snapshots and rankings plus a `top_horizons` report view." in normalized
+    assert (
+        "Report JSON includes the full persisted ticker snapshots and rankings plus a `top_horizons` report view."
+        in normalized
+    )
     assert "uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1" in text
@@ -53,7 +79,10 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "does not read DuckDB" in normalized
     assert "does not persist the result" in normalized
     assert "The default assumptions path is `valuation_assumptions/{market}/{ticker}.yaml`" in normalized
-    assert "`valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml` are sample schemas only" in normalized
+    assert (
+        "`valuation_assumptions/us/AAPL.yaml` and `valuation_assumptions/tw/2330.yaml` are sample schemas only"
+        in normalized
+    )
     assert "Each valuation assumptions file declares a root `default_model`" in normalized
     assert "`fcf_dcf_v1` uses `models.fcf_dcf_v1.starting_fcf` to choose the DCF starting FCF" in normalized
     assert "templates default to `starting_fcf.method: provider_ttm_fcf`" in normalized
@@ -65,11 +94,14 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "uses provider raw FCF as a starting proxy so the command can run directly" in normalized
     assert "model-implied scenario results" in normalized
     assert "not forecasts, expected outcomes, target cases, or recommendations" in normalized
-    assert "TW valuation templates use TWD ordinary-share basis with no ADR-ratio, board-lot, or currency adjustment" in normalized
+    assert (
+        "TW valuation templates use TWD ordinary-share basis with no ADR-ratio, board-lot, or currency adjustment"
+        in normalized
+    )
 
 
 def test_readme_documents_registered_public_quality_ranking_profiles() -> None:
-    text = README.read_text()
+    text = _documentation_corpus()
     normalized = " ".join(text.split())
 
     assert "`momentum_quality_v1`" in text

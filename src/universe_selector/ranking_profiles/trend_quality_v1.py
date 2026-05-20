@@ -151,17 +151,12 @@ def _ols_slope_r2(values: list[float]) -> tuple[float, float]:
     x_mean = _mean([float(value) for value in x_values])
     y_mean = _mean(y_values)
     ss_xx = sum((float(value) - x_mean) ** 2 for value in x_values)
-    slope = sum(
-        (float(x) - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=True)
-    ) / ss_xx
+    slope = sum((float(x) - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=True)) / ss_xx
     intercept = y_mean - slope * x_mean
     total = sum((value - y_mean) ** 2 for value in y_values)
     if total == 0.0:
         return slope, 0.0
-    residual = sum(
-        (y - (intercept + slope * float(x))) ** 2
-        for x, y in zip(x_values, y_values, strict=True)
-    )
+    residual = sum((y - (intercept + slope * float(x))) ** 2 for x, y in zip(x_values, y_values, strict=True))
     return slope, 1.0 - residual / total
 
 
@@ -213,18 +208,12 @@ def _immutable_market_int_mapping(value: Mapping[Market, int]) -> Mapping[Market
 class TrendQualityV1Profile:
     profile_id: Literal["trend_quality_v1"] = TREND_QUALITY_PROFILE_ID
     min_history_bars: int = 252
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 50_000_000.0, Market.US: 10_000_000.0}
     )
-    active_trading_min_days_60: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 50, Market.US: 55}
-    )
-    zero_volume_max_days_20: Mapping[Market, int] = field(
-        default_factory=lambda: {Market.TW: 3, Market.US: 1}
-    )
+    active_trading_min_days_60: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 50, Market.US: 55})
+    zero_volume_max_days_20: Mapping[Market, int] = field(default_factory=lambda: {Market.TW: 3, Market.US: 1})
     volatility_floor: float = 0.0001
     snapshot_metric_keys: tuple[str, ...] = TREND_QUALITY_SNAPSHOT_METRIC_KEYS
     ranking_metric_keys: tuple[str, ...] = TREND_QUALITY_RANKING_METRIC_KEYS
@@ -305,12 +294,8 @@ class TrendQualityV1Profile:
             "min_history_bars": self.min_history_bars,
             "price_floor": {market.value: self.price_floor[market] for market in Market},
             "liquidity_floor": {market.value: self.liquidity_floor[market] for market in Market},
-            "active_trading_min_days_60": {
-                market.value: self.active_trading_min_days_60[market] for market in Market
-            },
-            "zero_volume_max_days_20": {
-                market.value: self.zero_volume_max_days_20[market] for market in Market
-            },
+            "active_trading_min_days_60": {market.value: self.active_trading_min_days_60[market] for market in Market},
+            "zero_volume_max_days_20": {market.value: self.zero_volume_max_days_20[market] for market in Market},
             "volatility_floor": self.volatility_floor,
             "horizon_order": list(self.horizon_order),
             "snapshot_metric_keys": list(self.snapshot_metric_keys),
@@ -348,10 +333,9 @@ class TrendQualityV1Profile:
         profile_asof_bar_date = candidate_bars["bar_date"].max()
         rows: list[dict[str, object]] = []
         for ticker in sorted(listed_tickers):
-            ticker_bars = (
-                candidate_bars.filter((pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date))
-                .sort("bar_date")
-            )
+            ticker_bars = candidate_bars.filter(
+                (pl.col("ticker") == ticker) & (pl.col("bar_date") <= profile_asof_bar_date)
+            ).sort("bar_date")
             if ticker_bars.is_empty() or ticker_bars.height < self.min_history_bars:
                 continue
             if ticker_bars["bar_date"].n_unique() != ticker_bars.height:
@@ -375,15 +359,15 @@ class TrendQualityV1Profile:
             closes_float = [float(value) for value in closes]
             adjusted_closes_float = [float(value) for value in adjusted_closes]
             volumes_float = [float(value) for value in volumes]
-            if any(value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float):
+            if any(
+                value <= 0.0 for value in opens_float + highs_float + lows_float + closes_float + adjusted_closes_float
+            ):
                 continue
             if any(value < 0.0 for value in volumes_float):
                 continue
             if any(
                 high < low or high < open_ or high < close or low > open_ or low > close
-                for high, low, open_, close in zip(
-                    highs_float, lows_float, opens_float, closes_float, strict=True
-                )
+                for high, low, open_, close in zip(highs_float, lows_float, opens_float, closes_float, strict=True)
             ):
                 continue
 
@@ -520,7 +504,11 @@ class TrendQualityV1Profile:
             return _empty_rankings()
         return (
             pl.concat(ranking_frames)
-            .with_columns(pl.col("horizon").replace_strict({horizon: index for index, horizon in enumerate(self.horizon_order)}).alias("_horizon_order"))
+            .with_columns(
+                pl.col("horizon")
+                .replace_strict({horizon: index for index, horizon in enumerate(self.horizon_order)})
+                .alias("_horizon_order")
+            )
             .sort(["run_id", "market", "_horizon_order", "rank", "ticker"])
             .drop("_horizon_order")
             .select(self._ranking_columns())
@@ -546,12 +534,8 @@ class TrendQualityV1Profile:
         score_return_20d = _percentile_scores([float(row["return_20d"]) for row in rows])
         score_return_60d = _percentile_scores([float(row["return_60d"]) for row in rows])
         score_return_120d = _percentile_scores([float(row["return_120d"]) for row in rows])
-        score_trend_slope_60d = _positive_only_percentile_scores(
-            [float(row["trend_slope_60d"]) for row in rows]
-        )
-        score_trend_consistency_60d = _percentile_scores(
-            [float(row["trend_consistency_60d"]) for row in rows]
-        )
+        score_trend_slope_60d = _positive_only_percentile_scores([float(row["trend_slope_60d"]) for row in rows])
+        score_trend_consistency_60d = _percentile_scores([float(row["trend_consistency_60d"]) for row in rows])
         score_price_vs_sma_50d = _percentile_scores([float(row["price_vs_sma_50d"]) for row in rows])
         score_price_vs_sma_200d = _percentile_scores([float(row["price_vs_sma_200d"]) for row in rows])
         score_sma_50d_vs_sma_200d = _percentile_scores([float(row["sma_50d_vs_sma_200d"]) for row in rows])
@@ -713,9 +697,7 @@ class TrendQualityV1Profile:
                     "tag_structure_negative_60d_return": 1.0 if return_60d < 0.0 else 0.0,
                     "tag_structure_below_sma_50d": 1.0 if price_vs_sma_50d < 0.0 else 0.0,
                     "tag_structure_below_sma_200d": 1.0 if price_vs_sma_200d < 0.0 else 0.0,
-                    "tag_structure_sma_50d_below_sma_200d": (
-                        1.0 if sma_50d_vs_sma_200d < 0.0 else 0.0
-                    ),
+                    "tag_structure_sma_50d_below_sma_200d": (1.0 if sma_50d_vs_sma_200d < 0.0 else 0.0),
                     "tag_structure_weak_trend_component": 1.0 if weak_structure_fail_count > 0.0 else 0.0,
                     "tag_structure_large_drawdown": 1.0 if max_drawdown_120d <= -0.25 else 0.0,
                     "tag_structure_overextended": 1.0 if moderately_overextended else 0.0,
@@ -778,9 +760,7 @@ class TrendQualityV1Profile:
             for rank, row in enumerate(horizon_rows, start=1):
                 row["rank"] = rank
                 ranking_rows.append(row)
-        return pl.DataFrame(ranking_rows, schema=TREND_QUALITY_RANKING_SCHEMA).select(
-            self._ranking_columns()
-        )
+        return pl.DataFrame(ranking_rows, schema=TREND_QUALITY_RANKING_SCHEMA).select(self._ranking_columns())
 
     def _trend_cleanliness_cap_score(self, *, trend_slope_60d: float, uptrend_r2_60d: float) -> float:
         if trend_slope_60d <= 0.0:

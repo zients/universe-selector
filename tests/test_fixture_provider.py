@@ -59,10 +59,7 @@ def test_fixture_provider_rejects_rows_after_run_latest_bar_date(tmp_path: Path,
     shutil.copytree(fixture_dir, temp_fixture_dir)
 
     ohlcv_path = temp_fixture_dir / "ohlcv.csv"
-    ohlcv_path.write_text(
-        ohlcv_path.read_text()
-        + "US,AAA,2026-04-27,10.0,10.0,10.0,10.0,10.0,2000000\n"
-    )
+    ohlcv_path.write_text(ohlcv_path.read_text() + "US,AAA,2026-04-27,10.0,10.0,10.0,10.0,10.0,2000000\n")
 
     provider = FixtureProvider(temp_fixture_dir)
 

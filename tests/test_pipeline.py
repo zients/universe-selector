@@ -76,9 +76,7 @@ def test_pipeline_runs_momentum_profile_and_persists_metrics(tmp_path: Path, fix
     assert {row["horizon"] for row in payload.rankings} == {"swing", "midterm"}
 
 
-def test_pipeline_runs_liquidity_quality_profile_and_persists_metrics(
-    tmp_path: Path, fixture_dir: Path
-) -> None:
+def test_pipeline_runs_liquidity_quality_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
     config = AppConfig(
         data_mode="fixture",
         duckdb_path=str(tmp_path / "runs.duckdb"),
@@ -107,9 +105,7 @@ def test_pipeline_runs_liquidity_quality_profile_and_persists_metrics(
     assert "tag_risk_thin_liquidity" in payload.rankings[0]
 
 
-def test_pipeline_runs_volatility_quality_profile_and_persists_metrics(
-    tmp_path: Path, fixture_dir: Path
-) -> None:
+def test_pipeline_runs_volatility_quality_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
     config = AppConfig(
         data_mode="fixture",
         duckdb_path=str(tmp_path / "runs.duckdb"),
@@ -200,9 +196,7 @@ def test_pipeline_runs_volatility_quality_profile_and_persists_metrics(
     assert short_by_horizon["composite"]["penalty_score"] == 0.0
 
 
-def test_pipeline_runs_trend_quality_profile_and_persists_metrics(
-    tmp_path: Path, fixture_dir: Path
-) -> None:
+def test_pipeline_runs_trend_quality_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
     config = AppConfig(
         data_mode="fixture",
         duckdb_path=str(tmp_path / "runs.duckdb"),
@@ -279,10 +273,14 @@ def test_pipeline_runs_defensive_compounder_quality_profile_and_persists_metrics
     profile = config.selected_ranking_profile
     resolved = repo.resolve_latest_successful_run(Market.US, ranking_profile="defensive_compounder_quality_v1")
     report = repo.read_report_markdown(result.run_id)
-    snapshot_rows = repo.connect(read_only=True).execute(
-        "select ticker from run_ticker_snapshot where run_id = ? order by ticker",
-        [result.run_id],
-    ).fetchall()
+    snapshot_rows = (
+        repo.connect(read_only=True)
+        .execute(
+            "select ticker from run_ticker_snapshot where run_id = ? order by ticker",
+            [result.run_id],
+        )
+        .fetchall()
+    )
     payload = repo.read_inspect_payload(result.run_id, snapshot_rows[0][0], profile=profile)
 
     assert resolved.run_id == result.run_id
@@ -335,8 +333,7 @@ def test_pipeline_marks_failed_run_when_provider_has_no_usable_rows(tmp_path: Pa
     (empty_fixture_dir / "metadata.json").write_bytes((fixture_dir / "metadata.json").read_bytes())
     (empty_fixture_dir / "listings.csv").write_text((fixture_dir / "listings.csv").read_text().splitlines()[0] + "\n")
     (empty_fixture_dir / "ohlcv.csv").write_text(
-        (fixture_dir / "ohlcv.csv").read_text().splitlines()[0]
-        + "\nTW,ZZZ,2026-04-24,10.0,10.0,10.0,10.0,10.0,1000\n"
+        (fixture_dir / "ohlcv.csv").read_text().splitlines()[0] + "\nTW,ZZZ,2026-04-24,10.0,10.0,10.0,10.0,10.0,1000\n"
     )
 
     with pytest.raises(ProviderDataError, match="listing provider returned no usable listings"):
@@ -427,8 +424,7 @@ def test_pipeline_multi_profile_provider_failure_writes_no_runs(tmp_path: Path, 
     (empty_fixture_dir / "metadata.json").write_bytes((fixture_dir / "metadata.json").read_bytes())
     (empty_fixture_dir / "listings.csv").write_text((fixture_dir / "listings.csv").read_text().splitlines()[0] + "\n")
     (empty_fixture_dir / "ohlcv.csv").write_text(
-        (fixture_dir / "ohlcv.csv").read_text().splitlines()[0]
-        + "\nTW,ZZZ,2026-04-24,10.0,10.0,10.0,10.0,10.0,1000\n"
+        (fixture_dir / "ohlcv.csv").read_text().splitlines()[0] + "\nTW,ZZZ,2026-04-24,10.0,10.0,10.0,10.0,10.0,1000\n"
     )
     config = replace(config, fixture_dir=str(empty_fixture_dir))
 
@@ -505,10 +501,14 @@ def test_pipeline_multi_profile_partial_failure_carries_completed_and_failed_run
 
     repo = DuckDbRepository(config.duckdb_path)
     assert repo.resolve_successful_run(exc.completed_results[0].run_id).ranking_profile == "sample_price_trend_v1"
-    failed = repo.connect(read_only=True).execute(
-        "select status, ranking_profile from run_log where run_id = ?",
-        [exc.failed_result.run_id],
-    ).fetchone()
+    failed = (
+        repo.connect(read_only=True)
+        .execute(
+            "select status, ranking_profile from run_log where run_id = ?",
+            [exc.failed_result.run_id],
+        )
+        .fetchone()
+    )
     assert failed == ("failed", "failing_profile")
 
 
@@ -533,12 +533,16 @@ def test_pipeline_multi_profile_first_failure_carries_failed_run_only(
     assert exc.exit_code == ValidationError.exit_code
 
     repo = DuckDbRepository(config.duckdb_path)
-    failed = repo.connect(read_only=True).execute(
-        "select status, ranking_profile from run_log where run_id = ?",
-        [exc.failed_result.run_id],
-    ).fetchone()
+    failed = (
+        repo.connect(read_only=True)
+        .execute(
+            "select status, ranking_profile from run_log where run_id = ?",
+            [exc.failed_result.run_id],
+        )
+        .fetchone()
+    )
     assert failed == ("failed", "failing_profile")
-    successful_count = repo.connect(read_only=True).execute(
-        "select count(*) from run_log where status = 'successful'"
-    ).fetchone()
+    successful_count = (
+        repo.connect(read_only=True).execute("select count(*) from run_log where status = 'successful'").fetchone()
+    )
     assert successful_count == (0,)

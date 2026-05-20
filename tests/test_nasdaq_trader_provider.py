@@ -100,8 +100,7 @@ def test_nasdaq_trader_provider_rejects_non_us_market() -> None:
 def test_nasdaq_trader_provider_rejects_unsafe_duplicate_canonical_tickers() -> None:
     texts = _sample_texts()
     texts[OTHER_LISTED_SOURCE_ID] = (
-        texts[OTHER_LISTED_SOURCE_ID]
-        + "AAPL|Apple Holdings Different Common Stock|N|AAPL|N|100|N|AAPL\n"
+        texts[OTHER_LISTED_SOURCE_ID] + "AAPL|Apple Holdings Different Common Stock|N|AAPL|N|100|N|AAPL\n"
     )
 
     with pytest.raises(ProviderDataError, match="duplicate canonical ticker"):

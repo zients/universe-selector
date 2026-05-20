@@ -76,7 +76,7 @@ with (fixture_dir / "ohlcv.csv").open("w", newline="") as handle:
     writer.writerow(["market", "ticker", "bar_date", "open", "high", "low", "close", "adjusted_close", "volume"])
     for market, series_by_ticker in series_by_market.items():
         for ticker, closes in series_by_ticker.items():
-            ticker_dates = dates[-len(closes):]
+            ticker_dates = dates[-len(closes) :]
             for bar_date, close in zip(ticker_dates, closes, strict=True):
                 writer.writerow(
                     [

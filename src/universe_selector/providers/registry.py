@@ -25,9 +25,7 @@ _LISTING_PROVIDER_REGISTRATIONS: tuple[_ListingProviderRegistration, ...] = (
     NASDAQ_TRADER_LISTING_REGISTRATION,
     TWSE_ISIN_LISTING_REGISTRATION,
 )
-_OHLCV_PROVIDER_REGISTRATIONS: tuple[_OhlcvProviderRegistration, ...] = (
-    YFINANCE_OHLCV_REGISTRATION,
-)
+_OHLCV_PROVIDER_REGISTRATIONS: tuple[_OhlcvProviderRegistration, ...] = (YFINANCE_OHLCV_REGISTRATION,)
 
 _FUNDAMENTALS_PROVIDER_REGISTRY: Mapping[str, _FundamentalsProviderRegistration] = (
     _build_fundamentals_provider_registration_map(_FUNDAMENTALS_PROVIDER_REGISTRATIONS)

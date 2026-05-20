@@ -183,10 +183,12 @@ def test_render_valuation_includes_context_disclosures_and_inputs() -> None:
     assert "This valuation output is ephemeral and is not persisted." in markdown
     assert "simplified constant-growth explicit forecast with perpetual-growth terminal value" in markdown
     assert (
-        "highly sensitive to starting FCF, share count, discount rate, "
-        "terminal growth, and terminal value assumptions"
+        "highly sensitive to starting FCF, share count, discount rate, terminal growth, and terminal value assumptions"
     ) in markdown
-    assert "third-party convenience data may be stale, incomplete, restated, mapped inconsistently, or unavailable" in markdown
+    assert (
+        "third-party convenience data may be stale, incomplete, restated, mapped inconsistently, or unavailable"
+        in markdown
+    )
     assert "Facts should be independently verified before research use." in markdown
     assert "## Provider Context" in markdown
     assert "fundamentals_provider_id: yfinance_fundamentals" in markdown
@@ -333,7 +335,10 @@ def test_render_valuation_includes_provenance_and_model_implied_scenarios_withou
     markdown = render_valuation_markdown(_result())
 
     assert "## Input Provenance" in markdown
-    assert "| starting_fcf | provider_ttm_fcf | Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm. |" in markdown
+    assert (
+        "| starting_fcf | provider_ttm_fcf | Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm. |"
+        in markdown
+    )
     assert "| shares_outstanding | provider_fact |  |" in markdown
     assert "| reference_price | assumption_override | Reference price supplied for scenario review. |" in markdown
     assert "model-implied spread vs reference price" in markdown

@@ -16,9 +16,7 @@ from universe_selector.ranking_profiles.registration import RankingProfileRegist
 
 MOMENTUM_QUALITY_PROFILE_ID = "momentum_quality_v1"
 MOMENTUM_QUALITY_SCORE_METHOD = "raw_weighted_momentum_quality_v1"
-MOMENTUM_QUALITY_RANK_INTERPRETATION_NOTE = (
-    "Momentum quality scores are raw weighted composites; risk tags describe absolute risk conditions and scores are not capped at 100."
-)
+MOMENTUM_QUALITY_RANK_INTERPRETATION_NOTE = "Momentum quality scores are raw weighted composites; risk tags describe absolute risk conditions and scores are not capped at 100."
 MOMENTUM_QUALITY_HORIZON_ORDER = ("composite", "swing", "midterm")
 
 MOMENTUM_QUALITY_SNAPSHOT_METRIC_KEYS = (
@@ -160,7 +158,9 @@ def _immutable_market_float_mapping(value: Mapping[Market, float]) -> Mapping[Ma
     return MappingProxyType({market: float(value[market]) for market in Market})
 
 
-def _moving_average_structure_score(adjusted_closes: list[float], end_index: int) -> tuple[float, float, float, float, float]:
+def _moving_average_structure_score(
+    adjusted_closes: list[float], end_index: int
+) -> tuple[float, float, float, float, float]:
     ma20 = _moving_average(adjusted_closes, 20, end_index)
     ma60 = _moving_average(adjusted_closes, 60, end_index)
     ma120 = _moving_average(adjusted_closes, 120, end_index)
@@ -208,9 +208,7 @@ class MomentumQualityV1Profile:
     volatility_floor: float = 0.001
     active_trading_min_days_274: int = 230
     zero_volume_max_days_20: int = 2
-    price_floor: Mapping[Market, float] = field(
-        default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0}
-    )
+    price_floor: Mapping[Market, float] = field(default_factory=lambda: {Market.TW: 10.0, Market.US: 5.0})
     liquidity_floor: Mapping[Market, float] = field(
         default_factory=lambda: {Market.TW: 20_000_000.0, Market.US: 5_000_000.0}
     )
@@ -336,14 +334,13 @@ class MomentumQualityV1Profile:
             if volatility_12_1 <= self.volatility_floor or volatility_6_1 <= self.volatility_floor:
                 continue
 
-            avg_traded_value_20d_local = sum(
-                close * volume
-                for close, volume in zip(closes_float[-20:], volumes_float[-20:], strict=True)
-            ) / 20.0
-            avg_traded_value_5d_local = sum(
-                close * volume
-                for close, volume in zip(closes_float[-5:], volumes_float[-5:], strict=True)
-            ) / 5.0
+            avg_traded_value_20d_local = (
+                sum(close * volume for close, volume in zip(closes_float[-20:], volumes_float[-20:], strict=True))
+                / 20.0
+            )
+            avg_traded_value_5d_local = (
+                sum(close * volume for close, volume in zip(closes_float[-5:], volumes_float[-5:], strict=True)) / 5.0
+            )
             latest_close = closes_float[-1]
             if avg_traded_value_20d_local < self.liquidity_floor[market]:
                 continue
@@ -357,22 +354,18 @@ class MomentumQualityV1Profile:
             short_term_strength_20d = adjusted_close_t / adjusted_closes_float[-21] - 1.0
             risk_adjusted_momentum_12_1 = momentum_return_12_1 / volatility_12_1
             risk_adjusted_momentum_6_1 = momentum_return_6_1 / volatility_6_1
-            ma20, ma60, ma120, ma200, moving_average_structure_raw_score = (
-                _moving_average_structure_score(adjusted_closes_float, end_index)
+            ma20, ma60, ma120, ma200, moving_average_structure_raw_score = _moving_average_structure_score(
+                adjusted_closes_float, end_index
             )
             max_drawdown_252d = _max_drawdown(adjusted_closes_float[-252:])
             above_ma60_ratio_126d = _above_ma60_ratio(adjusted_closes_float, end_index)
-            positive_21d_return_ratio_126d = _positive_21d_return_ratio(
-                adjusted_closes_float, end_index
-            )
+            positive_21d_return_ratio_126d = _positive_21d_return_ratio(adjusted_closes_float, end_index)
             uptrend_consistency_raw_score = 100.0 * (
                 0.70 * above_ma60_ratio_126d + 0.30 * positive_21d_return_ratio_126d
             )
             distance_from_ma20 = adjusted_close_t / ma20 - 1.0
             prior_60d_high_adjusted_close = max(adjusted_closes_float[-61:-1])
-            data_quality_extreme_return_flag = (
-                1.0 if any(abs(value) > 0.80 for value in returns) else 0.0
-            )
+            data_quality_extreme_return_flag = 1.0 if any(abs(value) > 0.80 for value in returns) else 0.0
 
             computed_factors = [
                 avg_traded_value_20d_local,
@@ -475,16 +468,12 @@ class MomentumQualityV1Profile:
             volatility_6_1 = float(row["volatility_6_1"])
             row["score_risk_adjusted_momentum_12_1"] = float(row["risk_adjusted_momentum_12_1"])
             row["score_risk_adjusted_momentum_6_1"] = float(row["risk_adjusted_momentum_6_1"])
-            row["score_short_term_strength_20d"] = (
-                float(row["short_term_strength_20d"]) / volatility_6_1
-            )
+            row["score_short_term_strength_20d"] = float(row["short_term_strength_20d"]) / volatility_6_1
             row["score_short_term_extension_20d"] = float(row["short_term_extension_20d"])
             row["score_distance_from_ma20"] = float(row["distance_from_ma20"])
             row["score_volatility_12_1"] = float(row["volatility_12_1"])
             row["score_volatility_6_1"] = volatility_6_1
-            row["moving_average_structure_score"] = (
-                float(row["moving_average_structure_raw_score"]) / 100.0
-            )
+            row["moving_average_structure_score"] = float(row["moving_average_structure_raw_score"]) / 100.0
             row["drawdown_control_score"] = 1.0 + float(row["max_drawdown_252d"])
             row["uptrend_consistency_score"] = float(row["uptrend_consistency_raw_score"]) / 100.0
             row["trend_quality_score"] = (
@@ -497,25 +486,17 @@ class MomentumQualityV1Profile:
                 + 0.35 * float(row["score_risk_adjusted_momentum_6_1"])
                 + 0.10 * float(row["score_short_term_strength_20d"])
             )
-            row["overheat_score"] = (
-                0.60 * float(row["score_short_term_extension_20d"])
-                + 0.40 * float(row["score_distance_from_ma20"])
+            row["overheat_score"] = 0.60 * float(row["score_short_term_extension_20d"]) + 0.40 * float(
+                row["score_distance_from_ma20"]
             )
-            row["overheat_penalty_score"] = (
-                max(0.0, (float(row["score_short_term_extension_20d"]) - 0.25) * 20.0)
-                + max(0.0, (float(row["score_distance_from_ma20"]) - 0.20) * 20.0)
-            )
+            row["overheat_penalty_score"] = max(
+                0.0, (float(row["score_short_term_extension_20d"]) - 0.25) * 20.0
+            ) + max(0.0, (float(row["score_distance_from_ma20"]) - 0.20) * 20.0)
 
         finite_rows = [
             row
             for row in rows
-            if _all_finite(
-                [
-                    row[key]
-                    for key in self.ranking_metric_keys
-                    if not key.startswith("tag_")
-                ]
-            )
+            if _all_finite([row[key] for key in self.ranking_metric_keys if not key.startswith("tag_")])
         ]
         return pl.DataFrame(finite_rows) if finite_rows else pl.DataFrame()
 
@@ -528,41 +509,26 @@ class MomentumQualityV1Profile:
                 or float(row["score_distance_from_ma20"]) >= 0.25
                 else 0.0
             )
-            row["tag_risk_extended_from_ma20"] = (
-                1.0 if float(row["score_distance_from_ma20"]) >= 0.15 else 0.0
-            )
+            row["tag_risk_extended_from_ma20"] = 1.0 if float(row["score_distance_from_ma20"]) >= 0.15 else 0.0
             row["tag_risk_high_volatility"] = (
                 1.0
-                if float(row["score_volatility_12_1"]) >= 0.06
-                or float(row["score_volatility_6_1"]) >= 0.06
+                if float(row["score_volatility_12_1"]) >= 0.06 or float(row["score_volatility_6_1"]) >= 0.06
                 else 0.0
             )
-            row["tag_risk_large_drawdown"] = (
-                1.0 if float(row["max_drawdown_252d"]) <= -0.30 else 0.0
-            )
+            row["tag_risk_large_drawdown"] = 1.0 if float(row["max_drawdown_252d"]) <= -0.30 else 0.0
             row["tag_risk_weak_trend_quality"] = (
-                1.0
-                if float(row["momentum_blend_score"]) >= 7.0
-                and float(row["trend_quality_score"]) <= 0.45
-                else 0.0
+                1.0 if float(row["momentum_blend_score"]) >= 7.0 and float(row["trend_quality_score"]) <= 0.45 else 0.0
             )
             row["tag_risk_thin_recent_volume"] = (
                 1.0
-                if float(row["avg_traded_value_5d_local"])
-                / float(row["avg_traded_value_20d_local"])
-                < 0.50
+                if float(row["avg_traded_value_5d_local"]) / float(row["avg_traded_value_20d_local"]) < 0.50
                 else 0.0
             )
-            row["tag_risk_data_quality_warning"] = (
-                1.0 if float(row["data_quality_extreme_return_flag"]) == 1.0 else 0.0
-            )
-            row["tag_positive_strong_momentum"] = (
-                1.0 if float(row["momentum_blend_score"]) >= 7.0 else 0.0
-            )
+            row["tag_risk_data_quality_warning"] = 1.0 if float(row["data_quality_extreme_return_flag"]) == 1.0 else 0.0
+            row["tag_positive_strong_momentum"] = 1.0 if float(row["momentum_blend_score"]) >= 7.0 else 0.0
             row["tag_positive_stable_uptrend"] = (
                 1.0
-                if float(row["trend_quality_score"]) >= 0.80
-                and float(row["tag_risk_large_drawdown"]) == 0.0
+                if float(row["trend_quality_score"]) >= 0.80 and float(row["tag_risk_large_drawdown"]) == 0.0
                 else 0.0
             )
             row["tag_positive_early_breakout"] = (
@@ -600,11 +566,7 @@ class MomentumQualityV1Profile:
 
     def _assign_single_run_market_rankings(self, frame: pl.DataFrame) -> pl.DataFrame:
         scored = self._with_tags(self._with_raw_scores(frame))
-        scored_rows = [
-            row
-            for row in scored.to_dicts()
-            if _all_finite([row[key] for key in self.ranking_metric_keys])
-        ]
+        scored_rows = [row for row in scored.to_dicts() if _all_finite([row[key] for key in self.ranking_metric_keys])]
         ranking_rows: list[dict[str, object]] = []
         for horizon in self.horizon_order:
             horizon_rows = []
@@ -626,9 +588,7 @@ class MomentumQualityV1Profile:
             for rank, row in enumerate(horizon_rows, start=1):
                 row["rank"] = rank
                 ranking_rows.append(row)
-        return pl.DataFrame(ranking_rows, schema=MOMENTUM_QUALITY_RANKING_SCHEMA).select(
-            self._ranking_columns()
-        )
+        return pl.DataFrame(ranking_rows, schema=MOMENTUM_QUALITY_RANKING_SCHEMA).select(self._ranking_columns())
 
     def assign_rankings(self, snapshot: pl.DataFrame) -> pl.DataFrame:
         if snapshot.is_empty() or not self._has_required_ranking_inputs(snapshot):
@@ -640,11 +600,7 @@ class MomentumQualityV1Profile:
         ranking_frames = []
         for partition in eligible.partition_by(["run_id", "market"], maintain_order=True):
             ranking_frames.append(self._assign_single_run_market_rankings(partition))
-        return (
-            pl.concat(ranking_frames)
-            .sort(["run_id", "market", "horizon", "rank"])
-            .select(self._ranking_columns())
-        )
+        return pl.concat(ranking_frames).sort(["run_id", "market", "horizon", "rank"]).select(self._ranking_columns())
 
 
 MOMENTUM_QUALITY_V1_REGISTRATION = RankingProfileRegistration(

@@ -87,7 +87,9 @@ def test_provider_registration_maps_reject_duplicate_provider_ids() -> None:
 
 
 def test_provider_registrations_have_specific_types() -> None:
-    assert isinstance(get_fundamentals_registration("yfinance_fundamentals", Market.US), FundamentalsProviderRegistration)
+    assert isinstance(
+        get_fundamentals_registration("yfinance_fundamentals", Market.US), FundamentalsProviderRegistration
+    )
     assert isinstance(get_listing_registration("nasdaq_trader", Market.US), ListingProviderRegistration)
     assert isinstance(get_listing_registration("twse_isin", Market.TW), ListingProviderRegistration)
     assert isinstance(get_ohlcv_registration("yfinance"), OhlcvProviderRegistration)

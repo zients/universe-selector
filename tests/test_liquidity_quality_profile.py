@@ -148,10 +148,7 @@ def test_liquidity_quality_filters_invalid_ohlcv_values() -> None:
     latest = date(2026, 5, 8)
     profile = LiquidityQualityV1Profile()
     bars = _bars("AAA", latest, close=20.0, volume=1_000_000.0).with_columns(
-        pl.when(pl.col("bar_date") == latest)
-        .then(float("nan"))
-        .otherwise(pl.col("close"))
-        .alias("close")
+        pl.when(pl.col("bar_date") == latest).then(float("nan")).otherwise(pl.col("close")).alias("close")
     )
 
     snapshot = profile.build_snapshot(

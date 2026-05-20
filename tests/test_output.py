@@ -57,10 +57,7 @@ def test_json_helpers_convert_domain_values_and_emit_compact_sorted_json() -> No
         "a": {"when": "2026-05-18", "values": [3, 4]},
         "dt": "2026-05-18T01:02:03+00:00",
     }
-    assert encoded == (
-        '{"a":{"values":[3,4],"when":"2026-05-18"},'
-        '"dt":"2026-05-18T01:02:03+00:00","z":{"a":1,"b":2}}'
-    )
+    assert encoded == ('{"a":{"values":[3,4],"when":"2026-05-18"},"dt":"2026-05-18T01:02:03+00:00","z":{"a":1,"b":2}}')
     assert json.loads(encoded)["a"]["when"] == "2026-05-18"
 
 
@@ -285,7 +282,9 @@ def test_json_report_renders_top_n_horizon_rows_with_nested_metrics() -> None:
     assert payload["top_horizons"]["midterm"][0]["ranking"]["metrics"]["score_return_60d"] == 90.0
     assert payload["top_horizons"]["midterm"][0]["snapshot"]["metrics"]["return_60d"] == 0.20
     assert [row["ticker"] for row in payload["top_horizons"]["longterm"]] == ["BBB"]
-    assert payload["notes"][-1] == "This report is rendered during batch; report and inspect read persisted results only."
+    assert (
+        payload["notes"][-1] == "This report is rendered during batch; report and inspect read persisted results only."
+    )
 
 
 def test_inspect_renders_sample_profile_metrics_and_rankings() -> None:

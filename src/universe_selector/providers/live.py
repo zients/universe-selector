@@ -10,7 +10,7 @@ from universe_selector.domain import Market
 from universe_selector.errors import ProviderDataError
 from universe_selector.providers.base import ListingProvider, MarketDataProvider, OhlcvProvider
 from universe_selector.providers.context import build_provider_run_context
-from universe_selector.providers.models import ListingCandidate, ProviderMetadata, ProviderRunData
+from universe_selector.providers.models import ProviderMetadata, ProviderRunData
 from universe_selector.providers.registration import ListingProviderRegistration, OhlcvProviderRegistration
 from universe_selector.providers.registry import (
     get_listing_registration,
@@ -34,9 +34,7 @@ def _clean_ohlcv_bars(bars: pl.DataFrame) -> pl.DataFrame:
 def _run_latest_bar_date(cleaned_bars: pl.DataFrame):
     if "ticker" not in cleaned_bars.columns:
         return cleaned_bars["bar_date"].max()
-    ticker_latest_dates = cleaned_bars.group_by("ticker").agg(
-        pl.col("bar_date").max().alias("ticker_latest_bar_date")
-    )
+    ticker_latest_dates = cleaned_bars.group_by("ticker").agg(pl.col("bar_date").max().alias("ticker_latest_bar_date"))
     return ticker_latest_dates["ticker_latest_bar_date"].max()
 
 

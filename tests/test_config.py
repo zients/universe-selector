@@ -123,7 +123,9 @@ def _use_config(
 
 
 def test_config_hash_is_stable_and_ignores_runtime_paths() -> None:
-    config_a = AppConfig(data_mode="fixture", duckdb_path="/tmp/a.duckdb", lock_path="/tmp/a.lock", fixture_dir="/tmp/a")
+    config_a = AppConfig(
+        data_mode="fixture", duckdb_path="/tmp/a.duckdb", lock_path="/tmp/a.lock", fixture_dir="/tmp/a"
+    )
     config_b = AppConfig(data_mode="live", duckdb_path="/tmp/b.duckdb", lock_path="/tmp/b.lock", fixture_dir="/tmp/b")
 
     assert config_a.ranking_config_hash() == config_b.ranking_config_hash()
@@ -359,9 +361,7 @@ def test_trend_quality_profile_is_immutable() -> None:
     [
         (VolatilityQualityV1Profile(price_floor={Market.TW: 11.0, Market.US: 5.0}), "price_floor"),
         (
-            VolatilityQualityV1Profile(
-                liquidity_floor={Market.TW: 50_000_000.0, Market.US: 9_000_000.0}
-            ),
+            VolatilityQualityV1Profile(liquidity_floor={Market.TW: 50_000_000.0, Market.US: 9_000_000.0}),
             "liquidity_floor",
         ),
         (
@@ -375,9 +375,7 @@ def test_trend_quality_profile_is_immutable() -> None:
         (VolatilityQualityV1Profile(volatility_floor=0.001), "volatility_floor"),
     ],
 )
-def test_volatility_quality_profile_rejects_contract_changes(
-    profile: VolatilityQualityV1Profile, message: str
-) -> None:
+def test_volatility_quality_profile_rejects_contract_changes(profile: VolatilityQualityV1Profile, message: str) -> None:
     with pytest.raises(ValidationError, match=message):
         profile.validate()
 
@@ -389,9 +387,7 @@ def test_volatility_quality_profile_rejects_contract_changes(
         (TrendQualityV1Profile(profile_id="bad"), "profile_id"),
         (TrendQualityV1Profile(price_floor={Market.TW: 11.0, Market.US: 5.0}), "price_floor"),
         (
-            TrendQualityV1Profile(
-                liquidity_floor={Market.TW: 50_000_000.0, Market.US: 9_000_000.0}
-            ),
+            TrendQualityV1Profile(liquidity_floor={Market.TW: 50_000_000.0, Market.US: 9_000_000.0}),
             "liquidity_floor",
         ),
         (
@@ -412,9 +408,7 @@ def test_volatility_quality_profile_rejects_contract_changes(
         (TrendQualityV1Profile(rank_interpretation_note="bad"), "rank_interpretation_note"),
     ],
 )
-def test_trend_quality_profile_rejects_contract_changes(
-    profile: TrendQualityV1Profile, message: str
-) -> None:
+def test_trend_quality_profile_rejects_contract_changes(profile: TrendQualityV1Profile, message: str) -> None:
     with pytest.raises(ValidationError, match=message):
         profile.validate()
 
@@ -571,7 +565,9 @@ def test_canonical_json_is_stable() -> None:
 
 
 def test_ensure_runtime_dirs_creates_parent_directories(tmp_path: Path) -> None:
-    config = AppConfig(duckdb_path=str(tmp_path / "state" / "runs.duckdb"), lock_path=str(tmp_path / "locks" / "batch.lock"))
+    config = AppConfig(
+        duckdb_path=str(tmp_path / "state" / "runs.duckdb"), lock_path=str(tmp_path / "locks" / "batch.lock")
+    )
 
     ensure_runtime_dirs(config)
 

@@ -235,8 +235,7 @@ def test_default_yfinance_adapter_falls_back_to_yearly_and_fetch_date_price_time
     assert data.facts.reference_price_as_of == date(2026, 5, 17)
     assert data.facts.reference_price_as_of_source == "fetch_date_fallback"
     assert data.facts.reference_price_as_of_note == (
-        "yfinance did not provide a usable quote timestamp; using fetch date, "
-        "not a provider-reported quote timestamp."
+        "yfinance did not provide a usable quote timestamp; using fetch date, not a provider-reported quote timestamp."
     )
     assert data.metadata.latest_source_date == date(2026, 5, 17)
 

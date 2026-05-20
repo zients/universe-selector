@@ -137,8 +137,7 @@ class FcfDcfV1Model:
                 for year in range(1, assumptions.forecast_years + 1)
             )
             present_value_projected_fcf = tuple(
-                fcf / (1.0 + scenario.discount_rate) ** year
-                for year, fcf in enumerate(projected_fcf, start=1)
+                fcf / (1.0 + scenario.discount_rate) ** year for year, fcf in enumerate(projected_fcf, start=1)
             )
             terminal_value = (
                 projected_fcf[-1]
@@ -193,13 +192,9 @@ class FcfDcfV1Model:
         if not 0.0 < discount_rate <= 0.50:
             raise ValidationError(f"scenarios.{scenario_id}.discount_rate must be greater than 0.0 and at most 0.50")
         if not -0.05 <= terminal_growth_rate <= 0.05:
-            raise ValidationError(
-                f"scenarios.{scenario_id}.terminal_growth_rate must be between -0.05 and 0.05"
-            )
+            raise ValidationError(f"scenarios.{scenario_id}.terminal_growth_rate must be between -0.05 and 0.05")
         if discount_rate - terminal_growth_rate < 0.03:
-            raise ValidationError(
-                f"scenarios.{scenario_id}.discount_rate - terminal_growth_rate must be at least 0.03"
-            )
+            raise ValidationError(f"scenarios.{scenario_id}.discount_rate - terminal_growth_rate must be at least 0.03")
 
         return ValuationScenarioAssumptions(
             scenario_id=scenario_id,

@@ -19,12 +19,22 @@ from universe_selector.output.value import (
 from universe_selector.persistence.repository import DuckDbRepository, ResolvedRun
 from universe_selector.persistence.schema import validate_schema
 from universe_selector.pipeline import BatchResult, MultiProfileBatchError, run_batch, run_batch_profiles
-from universe_selector.ranking_profiles import get_ranking_profile
+from universe_selector.ranking_profiles import get_ranking_profile, supported_ranking_profile_ids
 from universe_selector.valuation.registry import get_valuation_model
 from universe_selector.valuation.service import run_valuation
 
 
-app = typer.Typer(no_args_is_help=True)
+SUPPORTED_MARKETS_HELP = "Supported markets: us, tw."
+RANKING_PROFILE_HELP = (
+    "Ranking profile override. Supported: " + ", ".join(supported_ranking_profile_ids()) + ". "
+    "Run more than once to persist separate runs from one provider snapshot."
+)
+
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="Run-centric quantitative universe selector.",
+)
 T = TypeVar("T")
 
 
@@ -60,12 +70,9 @@ def _config_with_cli_overrides(
     *,
     ranking_profile: str | None = None,
 ) -> AppConfig:
-    updates: dict[str, object] = {}
-    if ranking_profile is not None:
-        updates["ranking_profile"] = ranking_profile
-    if not updates:
+    if ranking_profile is None:
         return config
-    overridden = replace(config, **updates)
+    overridden = replace(config, ranking_profile=ranking_profile)
     overridden.validate()
     return overridden
 
@@ -155,10 +162,10 @@ def _echo_batch_results_with_market(results: tuple[BatchResult, ...], *, include
         typer.echo(f"market: {results[0].market.value}")
 
 
-@app.command()
+@app.command(help="Fetch provider data, run ranking profiles, and persist reports.")
 def batch(
-    market: Annotated[str, typer.Argument()],
-    ranking_profile: Annotated[list[str] | None, typer.Option("--ranking-profile")] = None,
+    market: Annotated[str, typer.Argument(help=SUPPORTED_MARKETS_HELP)],
+    ranking_profile: Annotated[list[str] | None, typer.Option("--ranking-profile", help=RANKING_PROFILE_HELP)] = None,
 ) -> None:
     def action() -> None:
         config = load_config()
@@ -191,12 +198,21 @@ def batch(
     _guard(action)
 
 
-@app.command()
+@app.command(
+    help=(
+        "Print a persisted report by market or run id. "
+        "Read the latest successful run for MARKET or one explicit --run-id. "
+        "Do not combine --run-id with --ranking-profile."
+    )
+)
 def report(
-    market: Annotated[str | None, typer.Argument()] = None,
-    run_id: Annotated[str | None, typer.Option("--run-id")] = None,
-    ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
-    json_output: Annotated[bool, typer.Option("--json")] = False,
+    market: Annotated[str | None, typer.Argument(help=SUPPORTED_MARKETS_HELP)] = None,
+    run_id: Annotated[str | None, typer.Option("--run-id", help="Read one explicit persisted successful run.")] = None,
+    ranking_profile: Annotated[
+        str | None,
+        typer.Option("--ranking-profile", help="Resolve the latest successful run for this ranking profile."),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Print the persisted JSON report artifact.")] = False,
 ) -> None:
     def action() -> None:
         _validate_read_resolution_request(market=market, run_id=run_id, ranking_profile=ranking_profile)
@@ -222,13 +238,24 @@ def report(
     _guard(action)
 
 
-@app.command()
+@app.command(
+    help=(
+        "Inspect persisted rankings and metrics for one ticker. "
+        "Read persisted metrics for --ticker from MARKET or one explicit --run-id. "
+        "Ticker is normalized before lookup."
+    )
+)
 def inspect(
-    ticker: Annotated[str, typer.Option("--ticker")],
-    market: Annotated[str | None, typer.Argument()] = None,
-    run_id: Annotated[str | None, typer.Option("--run-id")] = None,
-    ranking_profile: Annotated[str | None, typer.Option("--ranking-profile")] = None,
-    json_output: Annotated[bool, typer.Option("--json")] = False,
+    ticker: Annotated[
+        str, typer.Option("--ticker", help="Ticker symbol to inspect. Ticker is normalized before lookup.")
+    ],
+    market: Annotated[str | None, typer.Argument(help=SUPPORTED_MARKETS_HELP)] = None,
+    run_id: Annotated[str | None, typer.Option("--run-id", help="Read one explicit persisted successful run.")] = None,
+    ranking_profile: Annotated[
+        str | None,
+        typer.Option("--ranking-profile", help="Resolve the latest successful run for this ranking profile."),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Print machine-readable inspect JSON.")] = False,
 ) -> None:
     def action() -> None:
         _validate_read_resolution_request(market=market, run_id=run_id, ranking_profile=ranking_profile)
@@ -282,10 +309,10 @@ def inspect(
     _guard(action)
 
 
-@app.command()
+@app.command(help="Run a live single-ticker valuation analysis.")
 def value(
-    market: Annotated[str, typer.Argument()],
-    ticker: Annotated[str, typer.Option("--ticker")],
+    market: Annotated[str, typer.Argument(help=SUPPORTED_MARKETS_HELP)],
+    ticker: Annotated[str, typer.Option("--ticker", help="Ticker symbol to value.")],
     model: Annotated[
         str | None,
         typer.Option(
@@ -293,8 +320,10 @@ def value(
             help="Valuation model override. When omitted, uses the assumptions YAML default_model.",
         ),
     ] = None,
-    assumptions: Annotated[Path | None, typer.Option("--assumptions")] = None,
-    json_output: Annotated[bool, typer.Option("--json")] = False,
+    assumptions: Annotated[
+        Path | None, typer.Option("--assumptions", help="Explicit valuation assumptions YAML path.")
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Print machine-readable valuation JSON.")] = False,
 ) -> None:
     def action() -> None:
         resolved_market = canonical_market(market)
