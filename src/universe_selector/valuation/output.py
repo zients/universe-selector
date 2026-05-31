@@ -164,6 +164,8 @@ def render_valuation_json(result: ValuationResult) -> str:
     raw_facts = run_input.raw_facts
     effective = run_input.effective_inputs
     assumptions = run_input.assumptions
+    reference_equity_value = effective.reference_price * effective.shares_outstanding
+    reference_implied_enterprise_value = reference_equity_value + effective.net_debt
     payload = {
         "schema_version": 1,
         "artifact_type": "universe_selector_valuation",
@@ -197,6 +199,11 @@ def render_valuation_json(result: ValuationResult) -> str:
         },
         "raw_facts": raw_facts,
         "effective_inputs": effective,
+        "valuation_bridge": {
+            "reference_equity_value": reference_equity_value,
+            "net_debt": effective.net_debt,
+            "reference_implied_enterprise_value": reference_implied_enterprise_value,
+        },
         "input_provenance": run_input.input_provenance,
         "model_assumptions": assumptions.model_assumptions,
         "scenario_results": result.scenario_results,

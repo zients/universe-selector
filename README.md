@@ -242,6 +242,7 @@ uv run universe-selector value us --ticker AAPL --model exit_multiple_dcf_v1
 uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1
 uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1
 uv run universe-selector value us --ticker AAPL --model two_stage_fcf_dcf_v1
+uv run universe-selector value us --ticker AAPL --model implied_discount_rate_v1
 uv run universe-selector value us --ticker AAPL \
   --assumptions valuation_assumptions/us/AAPL.yaml
 uv run universe-selector value tw --ticker 2330 \
@@ -249,7 +250,8 @@ uv run universe-selector value tw --ticker 2330 \
 ```
 
 Supported valuation models are `exit_multiple_dcf_v1`, `fcf_dcf_v1`,
-`reverse_dcf_v1`, `multiple_valuation_v1`, and `two_stage_fcf_dcf_v1`.
+`implied_discount_rate_v1`, `multiple_valuation_v1`, `reverse_dcf_v1`, and
+`two_stage_fcf_dcf_v1`.
 
 See [Valuation](docs/valuation.md) for model details and assumption semantics.
 See [Ranking profiles](docs/ranking-profiles.md) for ranking profile behavior.

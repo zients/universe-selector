@@ -61,11 +61,13 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model two_stage_fcf_dcf_v1" in text
+    assert "uv run universe-selector value us --ticker AAPL --model implied_discount_rate_v1" in text
     assert "`value` uses the assumptions file `default_model` when `--model` is omitted" in normalized
     assert "`--model` explicitly overrides the assumptions file default model" in normalized
     assert (
         "Supported valuation models are `exit_multiple_dcf_v1`, `fcf_dcf_v1`, "
-        "`reverse_dcf_v1`, `multiple_valuation_v1`, and `two_stage_fcf_dcf_v1`."
+        "`implied_discount_rate_v1`, `multiple_valuation_v1`, `reverse_dcf_v1`, "
+        "and `two_stage_fcf_dcf_v1`."
     ) in normalized
     assert "`exit_multiple_dcf_v1` projects illustrative explicit-period FCF using scenario assumptions" in normalized
     assert "uses an analyst-supplied EV / FCF exit multiple to calculate terminal value" in normalized
@@ -81,6 +83,15 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "normalized unlevered FCFF requires `starting_fcf.method: override` with a note" in normalized
     assert "terminal-value share of EV" in normalized
     assert "investment signal" in normalized
+    assert "`implied_discount_rate_v1` solves the nominal discount rate" in normalized
+    assert "diagnostic reverse-DCF reconciliation bridge" in normalized
+    assert "not a company WACC estimate" in normalized
+    assert "not a hurdle rate" in normalized
+    assert "not a required return" in normalized
+    assert "not an expected return" in normalized
+    assert "not a recommendation" in normalized
+    assert "not an investment signal" in normalized
+    assert "reference-implied enterprise value is outside solver bounds" in normalized
     assert "`reverse_dcf_v1` solves the explicit-period FCF growth" in normalized
     assert "`multiple_valuation_v1` applies analyst-supplied EV / FCF multiples" in normalized
     assert "Assumptions YAML may omit supported model blocks that are not selected" in normalized

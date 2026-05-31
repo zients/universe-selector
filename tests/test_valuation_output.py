@@ -254,6 +254,9 @@ def test_render_valuation_json_contains_common_and_model_specific_fields() -> No
     assert payload["assumption_context"]["as_of"] == "2026-05-16"
     assert payload["raw_facts"]["free_cash_flow"] == 110_000_000_000.0
     assert payload["effective_inputs"]["reference_price"] == 185.0
+    assert payload["valuation_bridge"]["reference_equity_value"] == 2_775_000_000_000.0
+    assert payload["valuation_bridge"]["net_debt"] == 50_000_000_000.0
+    assert payload["valuation_bridge"]["reference_implied_enterprise_value"] == 2_825_000_000_000.0
     assert payload["input_provenance"]["reference_price_source"] == "assumption_override"
     assert payload["model_assumptions"]["forecast_years"] == 5
     assert payload["model_assumptions"]["scenarios"]["base"]["growth_rate"] == 0.05

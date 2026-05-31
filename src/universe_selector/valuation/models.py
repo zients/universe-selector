@@ -89,6 +89,33 @@ class TwoStageFcfDcfV1Assumptions:
 
 
 @dataclass(frozen=True)
+class ImpliedDiscountRateScenarioAssumptions:
+    scenario_id: str
+    growth_rate: float
+    terminal_growth_rate: float
+    implied_discount_rate_lower_bound: float
+    implied_discount_rate_upper_bound: float
+    note: str
+
+
+@dataclass(frozen=True)
+class ImpliedDiscountRateV1Assumptions:
+    forecast_years: int
+    terminal_method: str
+    starting_fcf: StartingFcfAssumption
+    growth_rate_basis: str
+    terminal_growth_basis: str
+    implied_discount_rate_basis: str
+    solver_abs_tolerance: float
+    solver_max_iterations: int
+    scenario_order: tuple[str, ...]
+    scenarios: Mapping[str, ImpliedDiscountRateScenarioAssumptions]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scenarios", MappingProxyType(dict(self.scenarios)))
+
+
+@dataclass(frozen=True)
 class ReverseDcfScenarioAssumptions:
     scenario_id: str
     discount_rate: float

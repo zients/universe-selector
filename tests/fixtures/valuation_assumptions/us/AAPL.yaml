@@ -76,6 +76,35 @@ models:
         discount_rate: 0.085
         terminal_growth_rate: 0.03
         note: Higher illustrative growth and lower illustrative discount rate.
+  implied_discount_rate_v1:
+    forecast_years: 5
+    terminal_method: perpetual_growth
+    starting_fcf:
+      method: provider_ttm_fcf
+    growth_rate_basis: constant_explicit_fcf_growth
+    terminal_growth_basis: nominal_perpetual_growth
+    implied_discount_rate_basis: nominal_wacc
+    solver_abs_tolerance: 0.000001
+    solver_max_iterations: 100
+    scenarios:
+      conservative:
+        growth_rate: 0.035
+        terminal_growth_rate: 0.02
+        implied_discount_rate_lower_bound: 0.05
+        implied_discount_rate_upper_bound: 0.25
+        note: Lower growth implied-discount diagnostic case.
+      base:
+        growth_rate: 0.05
+        terminal_growth_rate: 0.025
+        implied_discount_rate_lower_bound: 0.055
+        implied_discount_rate_upper_bound: 0.25
+        note: Middle growth implied-discount diagnostic case.
+      upside:
+        growth_rate: 0.07
+        terminal_growth_rate: 0.03
+        implied_discount_rate_lower_bound: 0.06
+        implied_discount_rate_upper_bound: 0.25
+        note: Higher growth implied-discount diagnostic case.
   two_stage_fcf_dcf_v1:
     stage1_years: 3
     stage2_years: 5
