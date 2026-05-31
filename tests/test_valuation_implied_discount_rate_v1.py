@@ -1,23 +1,29 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
+from datetime import datetime, timezone
 from typing import cast
 
 import pytest
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
-from universe_selector.providers.models import FundamentalFacts
+from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     ImpliedDiscountRateScenarioAssumptions,
     ImpliedDiscountRateV1Assumptions,
     StartingFcfAssumption,
     ValuationAssumptionSet,
+    ValuationInputProvenance,
     ValuationModelInput,
+    ValuationResult,
+    ValuationRunInput,
 )
 from universe_selector.valuation.implied_discount_rate_v1 import (
     ImpliedDiscountRateV1Model,
+    ImpliedDiscountRateV1OutputRenderer,
     _solve_implied_discount_rate,
 )
 
@@ -175,6 +181,73 @@ def _assumption_set(model_assumptions: ImpliedDiscountRateV1Assumptions) -> Valu
         model_id="implied_discount_rate_v1",
         model_assumptions=model_assumptions,
     )
+
+
+def _valuation_result(
+    *,
+    inputs: EffectiveValuationInputs | None = None,
+    assumptions: ImpliedDiscountRateV1Assumptions | None = None,
+) -> ValuationResult:
+    inputs = inputs or _inputs()
+    assumptions = assumptions or _assumptions()
+    raw_facts = FundamentalFacts(
+        market=Market.US,
+        ticker="AAA",
+        currency=inputs.currency,
+        reference_price=inputs.reference_price,
+        reference_price_as_of=inputs.reference_price_as_of,
+        reference_price_as_of_source=inputs.reference_price_as_of_source,
+        reference_price_as_of_note=inputs.reference_price_as_of_note,
+        shares_outstanding=inputs.shares_outstanding,
+        cash_and_cash_equivalents=30.0,
+        total_debt=130.0,
+        balance_sheet_as_of=date(2026, 3, 31),
+        net_debt=inputs.net_debt,
+        operating_cash_flow=120.0,
+        capital_expenditures=20.0,
+        free_cash_flow=inputs.starting_fcf,
+        fiscal_period_end=inputs.fiscal_period_end,
+        fiscal_period_type=inputs.fiscal_period_type,
+    )
+    return ValuationResult(
+        run_input=ValuationRunInput(
+            market=Market.US,
+            ticker="AAA",
+            model_id="implied_discount_rate_v1",
+            fundamentals_metadata=FundamentalsMetadata(
+                data_mode="live",
+                fundamentals_provider_id="fake_fundamentals",
+                fundamentals_source_ids=("fake-source",),
+                data_fetch_started_at=datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc),
+                latest_source_date=date(2026, 5, 15),
+            ),
+            raw_facts=raw_facts,
+            effective_inputs=inputs,
+            input_provenance=ValuationInputProvenance(
+                starting_fcf_source="provider_ttm_fcf",
+                shares_outstanding_source="provider_fact",
+                net_debt_source="provider_fact",
+                reference_price_source="provider_fact",
+                starting_fcf_note="Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm.",
+                shares_outstanding_note=None,
+                net_debt_note=None,
+                reference_price_note=None,
+            ),
+            assumptions=_assumption_set(assumptions),
+        ),
+        scenario_results=_value(inputs, assumptions),
+    )
+
+
+def _renderer_markdown(result: ValuationResult) -> str:
+    renderer = ImpliedDiscountRateV1OutputRenderer()
+    lines: list[str] = []
+    lines.extend(renderer.render_risk_disclosures(result))
+    lines.extend(renderer.render_model_assumptions(result))
+    lines.extend(renderer.render_effective_inputs(result))
+    lines.extend(renderer.render_input_provenance(result))
+    lines.extend(renderer.render_scenario_results(result))
+    return "\n".join(lines)
 
 
 def test_implied_discount_rate_v1_solves_deterministic_rate_and_metrics() -> None:
@@ -497,3 +570,105 @@ def test_implied_discount_rate_v1_builds_effective_inputs_from_override_starting
     assert effective.starting_fcf == pytest.approx(123.0)
     assert provenance.starting_fcf_source == "assumption_override"
     assert provenance.starting_fcf_note == "Normalized unlevered FCFF estimate."
+
+
+def test_implied_discount_rate_v1_renderer_discloses_assumptions_bridge_and_results() -> None:
+    markdown = _renderer_markdown(_valuation_result())
+
+    assert "diagnostic reconciliation" in markdown
+    assert "not a company WACC estimate" in markdown
+    assert "not a hurdle rate" in markdown
+    assert "not a required return" in markdown
+    assert "not an expected return" in markdown
+    assert "not a recommendation" in markdown
+    assert "not an investment signal" in markdown
+    assert "provider-FCF-proxy EV/equity reconciliation" in markdown
+    assert "provider TTM FCF is a raw starting proxy" in markdown
+    assert "may not be analyst-normalized" in markdown
+    assert "not clean unlevered FCFF" in markdown
+    assert "accounting classification" in markdown
+    assert "cyclicality" in markdown
+    assert "working capital" in markdown
+    assert "capex" in markdown
+    assert "capital-structure effects" in markdown
+    assert "override for normalized unlevered FCFF" in markdown
+    assert "terminal-value dominance" in markdown
+    assert "terminal-value share of EV" in markdown
+    assert "No result is produced when reference-implied enterprise value is outside solver bounds" in markdown
+    assert (
+        "starting FCF, share count, net debt, reference price, forecast growth, terminal growth, and solver bounds"
+        in markdown
+    )
+    assert "forecast_years: 2" in markdown
+    assert "starting_fcf_method: provider_ttm_fcf" in markdown
+    assert "growth_rate_basis: constant_explicit_fcf_growth" in markdown
+    assert "implied_discount_rate_basis: nominal_wacc" in markdown
+    assert "| base | 5.00% | 2.00% | 5.00% | 25.00% | unit test |" in markdown
+    assert "reference_equity_value" in markdown
+    assert "reference_implied_enterprise_value" in markdown
+    assert "$1248.30" in markdown
+    assert "$1348.30" in markdown
+    assert "implied discount rate" in markdown
+    assert "absolute per-share reconciliation residual" in markdown
+    assert "forecast growth" in markdown
+    assert "terminal growth" in markdown
+    assert "final_year_fcf" in markdown
+    assert "undiscounted_terminal_value" in markdown
+    assert "present_value_terminal_value" in markdown
+    assert "terminal_value_share_of_enterprise_value" in markdown
+    assert "model_implied_enterprise_value" in markdown
+    assert "model-implied value per share" in markdown
+    assert "reference price" in markdown
+    assert "spread vs reference price" in markdown
+    assert "10.00%" in markdown
+    assert "$110.25" in markdown
+    assert "$1405.69" in markdown
+    assert "$1161.73" in markdown
+    assert "86.16%" in markdown
+    assert "$0.0000" in markdown
+    assert (
+        "rows are diagnostic assumption cases, not probabilities, forecasts, expected outcomes, target cases, recommendations, or investment signals"
+        in markdown
+    )
+    assert (
+        "model-implied value per share, spread, and implied discount rate are reconciliation math only, "
+        "not target prices, forecasts, expected returns, required returns, recommendations, or signals"
+    ) in markdown
+
+
+def test_implied_discount_rate_v1_renderer_renders_override_starting_fcf_assumptions() -> None:
+    assumptions = replace(
+        _assumptions(),
+        starting_fcf=StartingFcfAssumption(
+            method="override",
+            value=123.0,
+            note="Normalized unlevered FCFF estimate.",
+        ),
+    )
+
+    markdown = _renderer_markdown(_valuation_result(assumptions=assumptions))
+
+    assert "starting_fcf_method: override" in markdown
+    assert "starting_fcf_value: 123.00" in markdown
+    assert "starting_fcf_note: Normalized unlevered FCFF estimate." in markdown
+
+
+def test_implied_discount_rate_v1_renderer_redacts_and_escapes_scenario_notes() -> None:
+    assumptions = replace(
+        _assumptions(),
+        scenarios={
+            "base": ImpliedDiscountRateScenarioAssumptions(
+                scenario_id="base",
+                growth_rate=0.05,
+                terminal_growth_rate=0.02,
+                implied_discount_rate_lower_bound=0.05,
+                implied_discount_rate_upper_bound=0.25,
+                note="buy | target price\nsecond line",
+            )
+        },
+    )
+
+    markdown = _renderer_markdown(_valuation_result(assumptions=assumptions))
+
+    assert "[redacted] \\| [redacted] second line" in markdown
+    assert "buy \\|" not in markdown.lower()

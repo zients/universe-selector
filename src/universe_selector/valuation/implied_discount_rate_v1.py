@@ -5,6 +5,15 @@ from dataclasses import dataclass
 
 from universe_selector.errors import ValidationError
 from universe_selector.providers.models import FundamentalFacts
+from universe_selector.valuation.formatting import (
+    _format_money,
+    _format_money_precise,
+    _format_note,
+    _format_number,
+    _format_pct,
+    _lines_table,
+    _markdown_text,
+)
 from universe_selector.valuation.input_resolution import (
     _SCENARIO_ORDER,
     build_effective_inputs,
@@ -21,7 +30,12 @@ from universe_selector.valuation.models import (
     ValuationAssumptionSet,
     ValuationInputProvenance,
     ValuationModelInput,
+    ValuationResult,
     ValuationScenarioResult,
+)
+from universe_selector.valuation.output_sections import (
+    render_effective_inputs_section,
+    render_input_provenance_section,
 )
 
 
@@ -273,6 +287,204 @@ class ImpliedDiscountRateV1Model:
             implied_discount_rate_upper_bound=upper_bound,
             note=note.strip(),
         )
+
+
+class ImpliedDiscountRateV1OutputRenderer:
+    model_id = "implied_discount_rate_v1"
+
+    def render_risk_disclosures(self, result: ValuationResult) -> list[str]:
+        del result
+        return [
+            (
+                "- Model risk: implied_discount_rate_v1 is a diagnostic reconciliation that solves the nominal "
+                "discount rate required to reconcile the reference price under stated FCF growth and terminal-growth "
+                "assumptions."
+            ),
+            (
+                "- Interpretation risk: the implied discount rate is not a company WACC estimate, not a hurdle rate, "
+                "not a required return, not an expected return, not a recommendation, and not an investment signal."
+            ),
+            (
+                "- FCF quality risk: provider-FCF-proxy EV/equity reconciliation assumes provider TTM FCF is a raw "
+                "starting proxy, may not be analyst-normalized, is not clean unlevered FCFF, and may be affected by "
+                "accounting classification, cyclicality, working capital, capex, and capital-structure effects; use "
+                "starting_fcf.method override for normalized unlevered FCFF with a note."
+            ),
+            (
+                "- Terminal-value risk: perpetual-growth terminal value can create terminal-value dominance; "
+                "terminal-value share of EV should be reviewed because solved discount rate and terminal growth can "
+                "drive most of enterprise value."
+            ),
+            (
+                "- Solver-bound risk: No result is produced when reference-implied enterprise value is outside solver "
+                "bounds or when the bisection solver cannot reach the residual tolerance."
+            ),
+            (
+                "- Sensitivity risk: outputs are highly sensitive to starting FCF, share count, net debt, reference "
+                "price, forecast growth, terminal growth, and solver bounds."
+            ),
+            (
+                "- Scenario risk: scenario rows are diagnostic assumption cases, not probabilities, forecasts, "
+                "expected outcomes, target cases, recommendations, or investment signals."
+            ),
+            (
+                "- Output interpretation risk: model-implied value per share, spread, and implied discount rate are "
+                "reconciliation math only, not target prices, forecasts, expected returns, required returns, "
+                "recommendations, or signals."
+            ),
+        ]
+
+    def render_model_assumptions(self, result: ValuationResult) -> list[str]:
+        assumptions = result.run_input.assumptions.model_assumptions
+        if not isinstance(assumptions, ImpliedDiscountRateV1Assumptions):
+            raise ValidationError("implied_discount_rate_v1 requires ImpliedDiscountRateV1Assumptions")
+
+        lines = [
+            "## Model Assumptions",
+            "",
+            f"- forecast_years: {assumptions.forecast_years}",
+            f"- terminal_method: {_markdown_text(assumptions.terminal_method)}",
+            f"- starting_fcf_method: {_markdown_text(assumptions.starting_fcf.method)}",
+            f"- growth_rate_basis: {_markdown_text(assumptions.growth_rate_basis)}",
+            f"- terminal_growth_basis: {_markdown_text(assumptions.terminal_growth_basis)}",
+            f"- implied_discount_rate_basis: {_markdown_text(assumptions.implied_discount_rate_basis)}",
+            f"- solver_abs_tolerance: {_format_number(assumptions.solver_abs_tolerance)}",
+            f"- solver_max_iterations: {assumptions.solver_max_iterations}",
+            "",
+        ]
+        if assumptions.starting_fcf.method == "override":
+            if assumptions.starting_fcf.value is None or assumptions.starting_fcf.note is None:
+                raise ValidationError("implied_discount_rate_v1 override starting_fcf requires value and note")
+            lines.extend(
+                [
+                    f"- starting_fcf_value: {_format_number(assumptions.starting_fcf.value)}",
+                    f"- starting_fcf_note: {_markdown_text(assumptions.starting_fcf.note)}",
+                    "",
+                ]
+            )
+        lines.extend(
+            _lines_table(
+                (
+                    "scenario",
+                    "forecast growth",
+                    "terminal growth",
+                    "solver lower bound",
+                    "solver upper bound",
+                    "note",
+                ),
+                (
+                    (
+                        scenario.scenario_id,
+                        _format_pct(scenario.growth_rate),
+                        _format_pct(scenario.terminal_growth_rate),
+                        _format_pct(scenario.implied_discount_rate_lower_bound),
+                        _format_pct(scenario.implied_discount_rate_upper_bound),
+                        _format_note(scenario.note),
+                    )
+                    for scenario in (assumptions.scenarios[item] for item in assumptions.scenario_order)
+                ),
+            )
+        )
+        return lines
+
+    def render_effective_inputs(self, result: ValuationResult) -> list[str]:
+        return render_effective_inputs_section(result)
+
+    def render_input_provenance(self, result: ValuationResult) -> list[str]:
+        return render_input_provenance_section(result)
+
+    def render_scenario_results(self, result: ValuationResult) -> list[str]:
+        effective = result.run_input.effective_inputs
+        assumptions = result.run_input.assumptions.model_assumptions
+        if not isinstance(assumptions, ImpliedDiscountRateV1Assumptions):
+            raise ValidationError("implied_discount_rate_v1 requires ImpliedDiscountRateV1Assumptions")
+
+        reference_equity_value = effective.reference_price * effective.shares_outstanding
+        reference_implied_enterprise_value = reference_equity_value + effective.net_debt
+        lines = [
+            "",
+            "## Valuation Bridge",
+            "",
+        ]
+        lines.extend(
+            _lines_table(
+                ("field", "value"),
+                (
+                    ("reference_equity_value", _format_money(reference_equity_value, effective.currency)),
+                    ("net_debt", _format_money(effective.net_debt, effective.currency)),
+                    (
+                        "reference_implied_enterprise_value",
+                        _format_money(reference_implied_enterprise_value, effective.currency),
+                    ),
+                ),
+            )
+        )
+        lines.extend(
+            [
+                "",
+                "## Scenario Results",
+                "",
+                (
+                    "Implied discount rate is a diagnostic reconciliation to the reference price under the stated "
+                    "forecast growth and terminal growth assumptions."
+                ),
+                (
+                    "Scenario rows are diagnostic assumption cases, not probabilities, forecasts, expected outcomes, "
+                    "target cases, recommendations, or investment signals."
+                ),
+                (
+                    "Model-implied value per share, spread, and implied discount rate are reconciliation math only, "
+                    "not target prices, forecasts, expected returns, required returns, recommendations, or signals."
+                ),
+                "",
+            ]
+        )
+        lines.extend(
+            _lines_table(
+                (
+                    "scenario",
+                    "implied discount rate",
+                    "absolute per-share reconciliation residual",
+                    "forecast growth",
+                    "terminal growth",
+                    "final_year_fcf",
+                    "undiscounted_terminal_value",
+                    "present_value_terminal_value",
+                    "terminal_value_share_of_enterprise_value",
+                    "model_implied_enterprise_value",
+                    "model-implied value per share",
+                    "reference price",
+                    "spread vs reference price",
+                    "note",
+                ),
+                (
+                    (
+                        scenario_result.scenario_id,
+                        _format_pct(scenario_result.model_metrics["implied_discount_rate"]),
+                        _format_money_precise(
+                            scenario_result.model_metrics["solver_abs_residual"],
+                            effective.currency,
+                        ),
+                        _format_pct(scenario_assumption.growth_rate),
+                        _format_pct(scenario_assumption.terminal_growth_rate),
+                        _format_money(scenario_result.projected_fcf[-1], effective.currency),
+                        _format_money(scenario_result.terminal_value, effective.currency),
+                        _format_money(scenario_result.present_value_terminal_value, effective.currency),
+                        _format_pct(
+                            scenario_result.model_metrics["present_value_terminal_value_share_of_enterprise_value"]
+                        ),
+                        _format_money(scenario_result.enterprise_value, effective.currency),
+                        _format_money(scenario_result.model_implied_value_per_share, effective.currency),
+                        _format_money(scenario_result.reference_price, effective.currency),
+                        _format_pct(scenario_result.model_implied_spread_to_reference_price),
+                        _format_note(scenario_assumption.note),
+                    )
+                    for scenario_result in result.scenario_results
+                    for scenario_assumption in (assumptions.scenarios[scenario_result.scenario_id],)
+                ),
+            )
+        )
+        return lines
 
 
 def _value_at_discount_rate(
