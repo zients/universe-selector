@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import date, datetime, timezone
 from typing import cast
@@ -20,6 +21,7 @@ from universe_selector.valuation.models import (
     ValuationResult,
     ValuationRunInput,
 )
+from universe_selector.valuation.output import render_valuation_json, render_valuation_markdown
 from universe_selector.valuation.two_stage_fcf_dcf_v1 import TwoStageFcfDcfV1Model, TwoStageFcfDcfV1OutputRenderer
 
 
@@ -641,3 +643,61 @@ def test_two_stage_fcf_dcf_v1_renderer_renders_negative_equity_outputs() -> None
     assert "scenario_equity_value" in markdown
     assert "$-300.78" in markdown
     assert "$-30.08" in markdown
+
+
+def test_two_stage_fcf_dcf_v1_full_markdown_uses_registered_renderer() -> None:
+    markdown = render_valuation_markdown(_valuation_result())
+
+    assert "model_id: two_stage_fcf_dcf_v1" in markdown
+    assert "illustrative two-stage positive-FCF DCF with perpetual-growth terminal value" in markdown
+    assert "provider-FCF-proxy EV/equity math" in markdown
+    assert "terminal_value_share_of_enterprise_value" in markdown
+    assert "model-implied value/share and spread are not target prices" in markdown
+
+
+def test_two_stage_fcf_dcf_v1_json_contains_common_and_model_specific_fields() -> None:
+    payload = json.loads(render_valuation_json(_valuation_result()))
+    notes = "\n".join(payload["notes"])
+    result_metrics = payload["scenario_results"][0]["model_metrics"]
+
+    assert payload["model_id"] == "two_stage_fcf_dcf_v1"
+    assert payload["assumption_context"]["default_model"] == "two_stage_fcf_dcf_v1"
+    assert payload["model_assumptions"]["stage1_years"] == 2
+    assert payload["model_assumptions"]["stage2_years"] == 2
+    assert payload["model_assumptions"]["terminal_method"] == "perpetual_growth"
+    assert payload["model_assumptions"]["terminal_growth_basis"] == "nominal_perpetual_growth"
+    assert payload["model_assumptions"]["scenarios"]["base"]["stage1_growth_rate"] == 0.10
+    assert payload["model_assumptions"]["scenarios"]["base"]["stage2_growth_rate"] == 0.04
+    assert payload["model_assumptions"]["scenarios"]["base"]["discount_rate"] == 0.10
+    assert payload["model_assumptions"]["scenarios"]["base"]["terminal_growth_rate"] == 0.03
+    assert payload["model_assumptions"]["scenarios"]["base"]["note"] == "unit test"
+    assert set(result_metrics) == {
+        "stage1_final_fcf",
+        "final_year_fcf",
+        "present_value_terminal_value_share_of_enterprise_value",
+    }
+    assert all(isinstance(value, int | float) for value in result_metrics.values())
+    assert "annual_growth_path" not in result_metrics
+    assert "stage1_growth_rate" not in result_metrics
+    assert "stage2_growth_rate" not in result_metrics
+    assert "discount_rate" not in result_metrics
+    assert "terminal_growth_rate" not in result_metrics
+    assert "provider-FCF-proxy EV/equity math" in notes
+    assert "provider TTM FCF is a raw starting proxy" in notes
+    assert "may not be analyst-normalized" in notes
+    assert "not clean unlevered FCFF" in notes
+    assert "accounting classification" in notes
+    assert "cyclicality" in notes
+    assert "working capital" in notes
+    assert "capex" in notes
+    assert "capital-structure effects" in notes
+    assert "terminal-value dominance" in notes
+    assert "positive-FCF companies" in notes
+    assert (
+        "starting FCF, share count, net debt, stage lengths, stage growth rates, discount rate, and terminal growth"
+        in notes
+    )
+    assert (
+        "not probabilities, forecasts, expected outcomes, target cases, recommendations, or investment signals" in notes
+    )
+    assert "not target prices, forecasts, expected returns, recommendations, or signals" in notes

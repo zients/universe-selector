@@ -16,6 +16,10 @@ from universe_selector.valuation.multiple_valuation_v1 import (
     MultipleValuationV1OutputRenderer,
 )
 from universe_selector.valuation.reverse_dcf_v1 import ReverseDcfV1Model, ReverseDcfV1OutputRenderer
+from universe_selector.valuation.two_stage_fcf_dcf_v1 import (
+    TwoStageFcfDcfV1Model,
+    TwoStageFcfDcfV1OutputRenderer,
+)
 
 
 @dataclass(frozen=True, init=False)
@@ -94,6 +98,11 @@ _REGISTRATIONS: Mapping[str, ValuationModelRegistration] = _build_registrations(
             model_id="reverse_dcf_v1",
             model_factory=ReverseDcfV1Model,
             output_renderer_factory=ReverseDcfV1OutputRenderer,
+        ),
+        ValuationModelRegistration(
+            model_id="two_stage_fcf_dcf_v1",
+            model_factory=TwoStageFcfDcfV1Model,
+            output_renderer_factory=TwoStageFcfDcfV1OutputRenderer,
         ),
     )
 )
