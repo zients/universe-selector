@@ -97,6 +97,8 @@ def test_exit_multiple_dcf_v1_computes_deterministic_model_implied_spread() -> N
     assert result.model_implied_spread_to_reference_price == pytest.approx(1.46074380)
     assert result.model_metrics["terminal_ev_to_fcf_multiple"] == pytest.approx(5.0)
     assert result.model_metrics["final_year_fcf"] == pytest.approx(110.25)
+    assert result.model_metrics["present_value_terminal_value"] == pytest.approx(455.57851240)
+    assert result.model_metrics["present_value_terminal_value_share_of_enterprise_value"] == pytest.approx(0.70945946)
 
 
 def test_exit_multiple_dcf_v1_allows_negative_equity_value_without_clamping() -> None:
@@ -452,7 +454,11 @@ def test_exit_multiple_dcf_v1_markdown_includes_disclosures_assumptions_and_resu
     assert "illustrative assumption cases, not probabilities, forecasts, expected outcomes" in markdown
     assert "not target prices, forecasts, expected returns, recommendations, or signals" in markdown
     assert "terminal_value" in markdown
+    assert "present_value_terminal_value" in markdown
+    assert "terminal_value_share_of_enterprise_value" in markdown
     assert "$551.25" in markdown
+    assert "$455.58" in markdown
+    assert "70.95%" in markdown
     assert "$49.21" in markdown
 
 
@@ -508,6 +514,12 @@ def test_exit_multiple_dcf_v1_json_contains_common_and_model_specific_fields() -
     assert payload["model_assumptions"]["scenarios"]["base"]["terminal_ev_to_fcf_multiple"] == 5.0
     assert payload["scenario_results"][0]["model_metrics"]["terminal_ev_to_fcf_multiple"] == 5.0
     assert payload["scenario_results"][0]["model_metrics"]["final_year_fcf"] == 110.25
+    assert payload["scenario_results"][0]["model_metrics"]["present_value_terminal_value"] == pytest.approx(
+        455.57851240
+    )
+    assert payload["scenario_results"][0]["model_metrics"][
+        "present_value_terminal_value_share_of_enterprise_value"
+    ] == pytest.approx(0.70945946)
     assert "analyst-supplied EV / FCF exit multiple" in notes
     assert "peer-derived" in notes
     assert "provider TTM FCF is a raw starting proxy" in notes

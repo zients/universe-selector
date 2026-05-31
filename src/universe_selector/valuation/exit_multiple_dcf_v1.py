@@ -173,6 +173,10 @@ class ExitMultipleDcfV1Model:
                     model_metrics={
                         "terminal_ev_to_fcf_multiple": scenario.terminal_ev_to_fcf_multiple,
                         "final_year_fcf": final_year_fcf,
+                        "present_value_terminal_value": present_value_terminal_value,
+                        "present_value_terminal_value_share_of_enterprise_value": (
+                            present_value_terminal_value / enterprise_value
+                        ),
                     },
                 )
             )
@@ -228,7 +232,12 @@ class ExitMultipleDcfV1OutputRenderer:
             (
                 "- FCF quality risk: provider TTM FCF is a raw starting proxy, may not be "
                 "analyst-normalized, is not clean unlevered FCFF, and may be affected by "
-                "accounting classification, cyclicality, working capital, capex, and capital-structure effects."
+                "accounting classification, cyclicality, working capital, capex, and capital-structure effects; "
+                "use starting_fcf.method override for normalized unlevered FCFF with a note."
+            ),
+            (
+                "- Terminal-value risk: exit-multiple terminal value can dominate enterprise value; "
+                "present-value terminal value and terminal-value share of EV should be reviewed."
             ),
             (
                 "- Sensitivity risk: outputs are highly sensitive to starting FCF, share count, net debt, "
@@ -327,6 +336,8 @@ class ExitMultipleDcfV1OutputRenderer:
                     "terminal EV / FCF multiple",
                     "final_year_fcf",
                     "terminal_value",
+                    "present_value_terminal_value",
+                    "terminal_value_share_of_enterprise_value",
                     "scenario_enterprise_value",
                     "net_debt",
                     "scenario_equity_value",
@@ -341,6 +352,8 @@ class ExitMultipleDcfV1OutputRenderer:
                         _format_multiple(scenario.model_metrics["terminal_ev_to_fcf_multiple"]),
                         _format_money(scenario.model_metrics["final_year_fcf"], effective.currency),
                         _format_money(scenario.terminal_value, effective.currency),
+                        _format_money(scenario.model_metrics["present_value_terminal_value"], effective.currency),
+                        _format_pct(scenario.model_metrics["present_value_terminal_value_share_of_enterprise_value"]),
                         _format_money(scenario.enterprise_value, effective.currency),
                         _format_money(effective.net_debt, effective.currency),
                         _format_money(scenario.equity_value, effective.currency),

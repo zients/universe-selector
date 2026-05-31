@@ -68,6 +68,10 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     ) in normalized
     assert "`exit_multiple_dcf_v1` projects illustrative explicit-period FCF using scenario assumptions" in normalized
     assert "uses an analyst-supplied EV / FCF exit multiple to calculate terminal value" in normalized
+    assert "raw provider TTM FCF may not be analyst-normalized" in normalized
+    assert "not clean unlevered FCFF" in normalized
+    assert "normalized unlevered FCFF requires `starting_fcf.method: override` with a note" in normalized
+    assert "terminal-value share of EV" in normalized
     assert "`reverse_dcf_v1` solves the explicit-period FCF growth" in normalized
     assert "`multiple_valuation_v1` applies analyst-supplied EV / FCF multiples" in normalized
     assert "Assumptions YAML may omit supported model blocks that are not selected" in normalized

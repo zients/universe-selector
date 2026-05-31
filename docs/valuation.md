@@ -53,9 +53,17 @@ terminal value. The multiple is not peer-derived by the model. It reports
 enterprise value, equity value, model-implied value per share, and descriptive
 spread against reference price. The model requires positive starting FCF because
 EV / FCF exit multiple terminal value is not meaningful when starting FCF is zero
-or negative. Scenario rows are illustrative assumption cases, not probabilities,
-forecasts, expected outcomes, target cases, recommendations, or investment
-signals.
+or negative.
+
+The raw provider TTM FCF may not be analyst-normalized, is not clean unlevered
+FCFF, and may be affected by accounting classification, cyclicality, working
+capital, capex, and capital-structure effects; normalized unlevered FCFF
+requires `starting_fcf.method: override` with a note.
+
+The output reports present-value terminal value and terminal-value share of EV
+because exit-multiple terminal value can dominate enterprise value. Scenario
+rows are illustrative assumption cases, not probabilities, forecasts, expected
+outcomes, target cases, recommendations, or investment signals.
 
 ## `fcf_dcf_v1`
 
