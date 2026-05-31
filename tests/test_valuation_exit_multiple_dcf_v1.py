@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
-from universe_selector.providers.models import FundamentalFacts
-from universe_selector.valuation.exit_multiple_dcf_v1 import ExitMultipleDcfV1Model
+from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
+from universe_selector.valuation.exit_multiple_dcf_v1 import ExitMultipleDcfV1Model, ExitMultipleDcfV1OutputRenderer
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     ExitMultipleDcfScenarioAssumptions,
     ExitMultipleDcfV1Assumptions,
     StartingFcfAssumption,
     ValuationAssumptionSet,
+    ValuationInputProvenance,
     ValuationModelInput,
+    ValuationResult,
+    ValuationRunInput,
 )
 
 
@@ -345,3 +348,137 @@ def test_exit_multiple_dcf_v1_builds_effective_inputs_from_override_starting_fcf
     assert effective.starting_fcf == pytest.approx(100.0)
     assert provenance.starting_fcf_source == "assumption_override"
     assert provenance.starting_fcf_note == "Normalized for one-time working capital movement."
+
+
+def _valuation_result(
+    *,
+    assumptions: ExitMultipleDcfV1Assumptions | None = None,
+    inputs: EffectiveValuationInputs | None = None,
+) -> ValuationResult:
+    inputs = inputs or _inputs()
+    assumptions = assumptions or _assumptions()
+    scenario_results = _value(inputs, assumptions)
+    assumption_set = ValuationAssumptionSet(
+        schema_version=1,
+        market=Market.US,
+        ticker="AAA",
+        default_model="exit_multiple_dcf_v1",
+        purpose="research",
+        as_of=date(2026, 5, 17),
+        currency=inputs.currency,
+        amount_unit="currency_units",
+        share_basis="ordinary_share",
+        valuation_basis_note="Uses USD ordinary-share basis; no ADR ratio, board-lot, or currency adjustment is applied.",
+        assumption_source="analyst",
+        prepared_by="Universe Selector",
+        source_note="Exit multiple DCF unit test assumptions.",
+        assumption_path="/tmp/valuation_assumptions/us/AAA.yaml",
+        assumption_hash="abc123",
+        facts_overrides={"shares_outstanding": None, "net_debt": None, "reference_price": None},
+        facts_override_notes={"shares_outstanding": None, "net_debt": None, "reference_price": None},
+        model_id="exit_multiple_dcf_v1",
+        model_assumptions=assumptions,
+    )
+    raw_facts = FundamentalFacts(
+        market=Market.US,
+        ticker="AAA",
+        currency=inputs.currency,
+        reference_price=inputs.reference_price,
+        reference_price_as_of=inputs.reference_price_as_of,
+        reference_price_as_of_source=inputs.reference_price_as_of_source,
+        reference_price_as_of_note=inputs.reference_price_as_of_note,
+        shares_outstanding=inputs.shares_outstanding,
+        cash_and_cash_equivalents=30.0,
+        total_debt=180.0,
+        balance_sheet_as_of=date(2026, 3, 31),
+        net_debt=inputs.net_debt,
+        operating_cash_flow=120.0,
+        capital_expenditures=20.0,
+        free_cash_flow=inputs.starting_fcf,
+        fiscal_period_end=inputs.fiscal_period_end,
+        fiscal_period_type=inputs.fiscal_period_type,
+    )
+    return ValuationResult(
+        run_input=ValuationRunInput(
+            market=Market.US,
+            ticker="AAA",
+            model_id="exit_multiple_dcf_v1",
+            fundamentals_metadata=FundamentalsMetadata(
+                data_mode="live",
+                fundamentals_provider_id="fake_fundamentals",
+                fundamentals_source_ids=("fake-source",),
+                data_fetch_started_at=datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc),
+                latest_source_date=date(2026, 5, 15),
+            ),
+            raw_facts=raw_facts,
+            effective_inputs=inputs,
+            input_provenance=ValuationInputProvenance(
+                starting_fcf_source="provider_ttm_fcf",
+                shares_outstanding_source="provider_fact",
+                net_debt_source="provider_fact",
+                reference_price_source="provider_fact",
+                starting_fcf_note="Provider raw FCF used as starting FCF proxy; fiscal_period_type=ttm.",
+                shares_outstanding_note=None,
+                net_debt_note=None,
+                reference_price_note=None,
+            ),
+            assumptions=assumption_set,
+        ),
+        scenario_results=scenario_results,
+    )
+
+
+def _model_specific_markdown(result: ValuationResult) -> str:
+    renderer = ExitMultipleDcfV1OutputRenderer()
+    lines: list[str] = []
+    lines.extend(renderer.render_risk_disclosures(result))
+    lines.extend(renderer.render_model_assumptions(result))
+    lines.extend(renderer.render_scenario_results(result))
+    return "\n".join(lines)
+
+
+def test_exit_multiple_dcf_v1_markdown_includes_disclosures_assumptions_and_results() -> None:
+    markdown = _model_specific_markdown(_valuation_result())
+
+    assert "analyst-supplied EV / FCF exit multiple" in markdown
+    assert "not peer-derived" in markdown
+    assert "raw starting proxy" in markdown
+    assert "not match clean unlevered FCFF" in markdown
+    assert "terminal_method: exit_multiple" in markdown
+    assert "exit_multiple_basis: ev_to_fcf" in markdown
+    assert "| base | 5.00% | 10.00% | 5.0x | unit test |" in markdown
+    assert "illustrative assumption cases, not probabilities, forecasts, expected outcomes" in markdown
+    assert "not target prices, forecasts, expected returns, recommendations, or signals" in markdown
+    assert "terminal_value" in markdown
+    assert "$551.25" in markdown
+    assert "$49.21" in markdown
+
+
+def test_exit_multiple_dcf_v1_markdown_redacts_and_escapes_scenario_notes() -> None:
+    assumptions = replace(
+        _assumptions(),
+        scenarios={
+            "base": ExitMultipleDcfScenarioAssumptions(
+                scenario_id="base",
+                growth_rate=0.05,
+                discount_rate=0.10,
+                terminal_ev_to_fcf_multiple=5.0,
+                note="buy | target price\nsecond line",
+            )
+        },
+    )
+
+    markdown = _model_specific_markdown(_valuation_result(assumptions=assumptions))
+
+    assert "not target prices, forecasts, expected returns, recommendations, or signals" in markdown
+    assert "redacted" in markdown.lower()
+    assert "[redacted] \\| [redacted] second line" in markdown
+    assert "buy \\|" not in markdown.lower()
+
+
+def test_exit_multiple_dcf_v1_markdown_renders_negative_equity_outputs() -> None:
+    markdown = _model_specific_markdown(_valuation_result(inputs=_inputs(net_debt=1_000.0)))
+
+    assert "scenario_equity_value" in markdown
+    assert "$-357.85" in markdown
+    assert "$-35.79" in markdown

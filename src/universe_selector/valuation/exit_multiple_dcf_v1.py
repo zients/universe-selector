@@ -12,6 +12,15 @@ from universe_selector.valuation.input_resolution import (
     require_literal,
     require_rate,
 )
+from universe_selector.valuation.formatting import (
+    _format_money,
+    _format_multiple,
+    _format_note,
+    _format_number,
+    _format_pct,
+    _lines_table,
+    _markdown_text,
+)
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     ExitMultipleDcfScenarioAssumptions,
@@ -19,7 +28,12 @@ from universe_selector.valuation.models import (
     ValuationAssumptionSet,
     ValuationInputProvenance,
     ValuationModelInput,
+    ValuationResult,
     ValuationScenarioResult,
+)
+from universe_selector.valuation.output_sections import (
+    render_effective_inputs_section,
+    render_input_provenance_section,
 )
 
 
@@ -201,6 +215,133 @@ class ExitMultipleDcfV1Model:
             terminal_ev_to_fcf_multiple=terminal_multiple,
             note=note.strip(),
         )
+
+
+class ExitMultipleDcfV1OutputRenderer:
+    model_id = "exit_multiple_dcf_v1"
+
+    def render_risk_disclosures(self, result: ValuationResult) -> list[str]:
+        del result
+        return [
+            (
+                "- Model risk: exit_multiple_dcf_v1 uses an analyst-supplied EV / FCF exit multiple "
+                "to calculate terminal value and does not infer a peer-derived multiple."
+            ),
+            (
+                "- FCF quality risk: provider TTM FCF is a raw starting proxy, may not be "
+                "analyst-normalized, may not match clean unlevered FCFF, and may be affected by "
+                "accounting classification, cyclicality, working capital, capex, and capital-structure effects."
+            ),
+            (
+                "- Sensitivity risk: outputs are highly sensitive to starting FCF, share count, net debt, "
+                "discount rate, forecast growth, and exit multiple assumptions."
+            ),
+        ]
+
+    def render_model_assumptions(self, result: ValuationResult) -> list[str]:
+        assumptions = result.run_input.assumptions.model_assumptions
+        if not isinstance(assumptions, ExitMultipleDcfV1Assumptions):
+            raise ValidationError("exit_multiple_dcf_v1 requires ExitMultipleDcfV1Assumptions")
+
+        lines = [
+            "## Model Assumptions",
+            "",
+            f"- forecast_years: {assumptions.forecast_years}",
+            f"- terminal_method: {_markdown_text(assumptions.terminal_method)}",
+            f"- starting_fcf_method: {_markdown_text(assumptions.starting_fcf.method)}",
+            f"- discount_rate_basis: {_markdown_text(assumptions.discount_rate_basis)}",
+            f"- exit_multiple_basis: {_markdown_text(assumptions.exit_multiple_basis)}",
+            "",
+        ]
+        if assumptions.starting_fcf.method == "override":
+            lines.extend(
+                [
+                    f"- starting_fcf_value: {_format_number(assumptions.starting_fcf.value)}",
+                    f"- starting_fcf_note: {_markdown_text(assumptions.starting_fcf.note)}",
+                    "",
+                ]
+            )
+        lines.extend(
+            _lines_table(
+                ("scenario", "growth_rate", "discount_rate", "terminal EV / FCF multiple", "note"),
+                (
+                    (
+                        scenario.scenario_id,
+                        _format_pct(scenario.growth_rate),
+                        _format_pct(scenario.discount_rate),
+                        _format_multiple(scenario.terminal_ev_to_fcf_multiple),
+                        _format_note(scenario.note),
+                    )
+                    for scenario in (assumptions.scenarios[item] for item in assumptions.scenario_order)
+                ),
+            )
+        )
+        return lines
+
+    def render_effective_inputs(self, result: ValuationResult) -> list[str]:
+        return render_effective_inputs_section(result)
+
+    def render_input_provenance(self, result: ValuationResult) -> list[str]:
+        return render_input_provenance_section(result)
+
+    def render_scenario_results(self, result: ValuationResult) -> list[str]:
+        assumptions = result.run_input.assumptions.model_assumptions
+        if not isinstance(assumptions, ExitMultipleDcfV1Assumptions):
+            raise ValidationError("exit_multiple_dcf_v1 requires ExitMultipleDcfV1Assumptions")
+        effective = result.run_input.effective_inputs
+        lines = [
+            "",
+            "## Scenario Results",
+            "",
+            (
+                "Exit-multiple DCF uses analyst-supplied EV / FCF exit multiples and is not peer-derived. "
+                "EV / FCF exit multiple terminal value is not meaningful when starting FCF is zero or negative."
+            ),
+            (
+                "Scenario rows are illustrative assumption cases, not probabilities, forecasts, expected outcomes, "
+                "target cases, recommendations, or investment signals."
+            ),
+            (
+                "Model-implied value per share and spread are illustrative scenario math only, not target prices, "
+                "forecasts, expected returns, recommendations, or signals. "
+                "Negative equity value and negative per-share values are rendered when net debt exceeds enterprise value."
+            ),
+            "",
+        ]
+        lines.extend(
+            _lines_table(
+                (
+                    "scenario",
+                    "terminal EV / FCF multiple",
+                    "final_year_fcf",
+                    "terminal_value",
+                    "scenario_enterprise_value",
+                    "net_debt",
+                    "scenario_equity_value",
+                    "model-implied value per share",
+                    "reference price",
+                    "spread vs reference price",
+                    "note",
+                ),
+                (
+                    (
+                        scenario.scenario_id,
+                        _format_multiple(scenario.model_metrics["terminal_ev_to_fcf_multiple"]),
+                        _format_money(scenario.model_metrics["final_year_fcf"], effective.currency),
+                        _format_money(scenario.terminal_value, effective.currency),
+                        _format_money(scenario.enterprise_value, effective.currency),
+                        _format_money(effective.net_debt, effective.currency),
+                        _format_money(scenario.equity_value, effective.currency),
+                        _format_money(scenario.model_implied_value_per_share, effective.currency),
+                        _format_money(scenario.reference_price, effective.currency),
+                        _format_pct(scenario.model_implied_spread_to_reference_price),
+                        _format_note(assumptions.scenarios[scenario.scenario_id].note),
+                    )
+                    for scenario in result.scenario_results
+                ),
+            )
+        )
+        return lines
 
 
 def _validate_exit_multiple_inputs(inputs: EffectiveValuationInputs) -> None:
