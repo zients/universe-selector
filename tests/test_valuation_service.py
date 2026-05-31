@@ -5,6 +5,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
@@ -145,13 +146,13 @@ def _copy_fixture_with_reference_price_override(tmp_path: Path) -> Path:
 
 def _copy_fixture_with_starting_fcf_override(tmp_path: Path) -> Path:
     target = _copy_fixture_with_reference_price_override(tmp_path)
-    text = target.read_text()
-    text = text.replace(
-        "      method: provider_ttm_fcf\n",
-        "      method: override\n      value: 100.0\n      note: Normalized for one-time working capital movement.\n",
-        1,
-    )
-    target.write_text(text)
+    data = yaml.safe_load(target.read_text())
+    data["models"]["fcf_dcf_v1"]["starting_fcf"] = {
+        "method": "override",
+        "value": 100.0,
+        "note": "Normalized for one-time working capital movement.",
+    }
+    target.write_text(yaml.safe_dump(data, sort_keys=False))
     return target
 
 

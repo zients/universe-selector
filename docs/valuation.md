@@ -23,12 +23,12 @@ text. The committed valuation assumption files are repository templates;
 installed wheels do not copy them into your working directory. Create your own
 assumptions file in the working directory or pass `--assumptions`.
 
-Supported valuation models are `fcf_dcf_v1`, `reverse_dcf_v1`, and
-`multiple_valuation_v1`. Assumptions YAML may omit supported model blocks that
-are not selected, but present supported model blocks are validated even when
-unselected so stale or malformed assumptions fail closed. Selecting a supported
-model whose block is omitted fails with `missing model assumptions for
-<model_id>`.
+Supported valuation models are `exit_multiple_dcf_v1`, `fcf_dcf_v1`,
+`reverse_dcf_v1`, and `multiple_valuation_v1`. Assumptions YAML may omit
+supported model blocks that are not selected, but present supported model blocks
+are validated even when unselected so stale or malformed assumptions fail
+closed. Selecting a supported model whose block is omitted fails with
+`missing model assumptions for <model_id>`.
 
 ## Commands
 
@@ -36,6 +36,7 @@ model whose block is omitted fails with `missing model assumptions for
 uv run universe-selector value us --ticker AAPL
 uv run universe-selector value us --ticker AAPL --json
 uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1
+uv run universe-selector value us --ticker AAPL --model exit_multiple_dcf_v1
 uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1
 uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1
 uv run universe-selector value us --ticker AAPL \
@@ -43,6 +44,26 @@ uv run universe-selector value us --ticker AAPL \
 uv run universe-selector value tw --ticker 2330 \
   --assumptions valuation_assumptions/tw/2330.yaml
 ```
+
+## `exit_multiple_dcf_v1`
+
+`exit_multiple_dcf_v1` projects illustrative explicit-period FCF using scenario
+assumptions and uses an analyst-supplied EV / FCF exit multiple to calculate
+terminal value. The multiple is not peer-derived by the model. It reports
+enterprise value, equity value, model-implied value per share, and descriptive
+spread against reference price. The model requires positive starting FCF because
+EV / FCF exit multiple terminal value is not meaningful when starting FCF is zero
+or negative.
+
+The raw provider TTM FCF may not be analyst-normalized, is not clean unlevered
+FCFF, and may be affected by accounting classification, cyclicality, working
+capital, capex, and capital-structure effects; normalized unlevered FCFF
+requires `starting_fcf.method: override` with a note.
+
+The output reports present-value terminal value and terminal-value share of EV
+because exit-multiple terminal value can dominate enterprise value. Scenario
+rows are illustrative assumption cases, not probabilities, forecasts, expected
+outcomes, target cases, recommendations, or investment signals.
 
 ## `fcf_dcf_v1`
 

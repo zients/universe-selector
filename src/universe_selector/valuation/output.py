@@ -151,8 +151,15 @@ def render_valuation_markdown(result: ValuationResult) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _json_note_from_markdown_bullet(value: str) -> str:
+    if value.startswith("- "):
+        return value[2:]
+    return value
+
+
 def render_valuation_json(result: ValuationResult) -> str:
     run_input = result.run_input
+    renderer = _output_renderer(run_input.model_id)
     metadata = run_input.fundamentals_metadata
     raw_facts = run_input.raw_facts
     effective = run_input.effective_inputs
@@ -196,6 +203,7 @@ def render_valuation_json(result: ValuationResult) -> str:
         "notes": [
             VALUATION_RESEARCH_DISCLAIMER,
             "This valuation output is ephemeral and is not persisted.",
+            *(_json_note_from_markdown_bullet(item) for item in renderer.render_risk_disclosures(result)),
         ],
     }
     return json_dumps(payload) + "\n"

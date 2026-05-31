@@ -73,6 +73,7 @@ def test_loads_default_assumptions_and_hash_is_path_independent(monkeypatch, tmp
 @pytest.mark.parametrize(
     "model_id, expected_type_name",
     [
+        ("exit_multiple_dcf_v1", "ExitMultipleDcfV1Assumptions"),
         ("fcf_dcf_v1", "FcfDcfV1Assumptions"),
         ("reverse_dcf_v1", "ReverseDcfV1Assumptions"),
         ("multiple_valuation_v1", "MultipleValuationV1Assumptions"),
@@ -120,6 +121,7 @@ def test_loads_tw_2330_assumptions_fixture() -> None:
 @pytest.mark.parametrize(
     "model_id, expected_type_name",
     [
+        ("exit_multiple_dcf_v1", "ExitMultipleDcfV1Assumptions"),
         ("fcf_dcf_v1", "FcfDcfV1Assumptions"),
         ("reverse_dcf_v1", "ReverseDcfV1Assumptions"),
         ("multiple_valuation_v1", "MultipleValuationV1Assumptions"),
@@ -150,7 +152,10 @@ def test_tw_fixture_supports_explicit_registered_valuation_models(
         (Market.TW, "2330", TW_SAMPLE, "TWD"),
     ],
 )
-@pytest.mark.parametrize("model_id", ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1"))
+@pytest.mark.parametrize(
+    "model_id",
+    ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1", "exit_multiple_dcf_v1"),
+)
 def test_committed_sample_assumptions_support_all_registered_models(
     market: Market,
     ticker: str,

@@ -816,7 +816,7 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
     monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n", raising=False)
 
-    for model_id in ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1"):
+    for model_id in ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1", "exit_multiple_dcf_v1"):
         result = runner.invoke(app, ["value", "us", "--ticker", "aapl", "--model", model_id])
         assert result.exit_code == 0, result.output
 
@@ -828,7 +828,7 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
             "assumptions_path": None,
             "fundamentals_provider_id": "fake_fundamentals",
         }
-        for model_id in ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1")
+        for model_id in ("fcf_dcf_v1", "reverse_dcf_v1", "multiple_valuation_v1", "exit_multiple_dcf_v1")
     ]
 
 

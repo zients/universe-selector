@@ -41,6 +41,29 @@ class FcfDcfV1Assumptions:
 
 
 @dataclass(frozen=True)
+class ExitMultipleDcfScenarioAssumptions:
+    scenario_id: str
+    growth_rate: float
+    discount_rate: float
+    terminal_ev_to_fcf_multiple: float
+    note: str
+
+
+@dataclass(frozen=True)
+class ExitMultipleDcfV1Assumptions:
+    forecast_years: int
+    terminal_method: str
+    starting_fcf: StartingFcfAssumption
+    discount_rate_basis: str
+    exit_multiple_basis: str
+    scenario_order: tuple[str, ...]
+    scenarios: Mapping[str, ExitMultipleDcfScenarioAssumptions]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scenarios", MappingProxyType(dict(self.scenarios)))
+
+
+@dataclass(frozen=True)
 class ReverseDcfScenarioAssumptions:
     scenario_id: str
     discount_rate: float

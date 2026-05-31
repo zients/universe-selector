@@ -6,6 +6,10 @@ from types import MappingProxyType
 
 from universe_selector.errors import ValidationError
 from universe_selector.valuation.base import ValuationModel, ValuationOutputRenderer
+from universe_selector.valuation.exit_multiple_dcf_v1 import (
+    ExitMultipleDcfV1Model,
+    ExitMultipleDcfV1OutputRenderer,
+)
 from universe_selector.valuation.fcf_dcf_v1 import FcfDcfV1Model, FcfDcfV1OutputRenderer
 from universe_selector.valuation.multiple_valuation_v1 import (
     MultipleValuationV1Model,
@@ -71,6 +75,11 @@ def _build_registrations(
 
 _REGISTRATIONS: Mapping[str, ValuationModelRegistration] = _build_registrations(
     (
+        ValuationModelRegistration(
+            model_id="exit_multiple_dcf_v1",
+            model_factory=ExitMultipleDcfV1Model,
+            output_renderer_factory=ExitMultipleDcfV1OutputRenderer,
+        ),
         ValuationModelRegistration(
             model_id="fcf_dcf_v1",
             model_factory=FcfDcfV1Model,
