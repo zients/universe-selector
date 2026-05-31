@@ -26,6 +26,7 @@ def test_registry_returns_fresh_model_and_renderer_instances() -> None:
         "fcf_dcf_v1",
         "multiple_valuation_v1",
         "reverse_dcf_v1",
+        "two_stage_fcf_dcf_v1",
     )
 
     first_model = get_valuation_model("fcf_dcf_v1")
@@ -46,6 +47,8 @@ def test_registry_returns_fresh_model_and_renderer_instances() -> None:
     assert get_valuation_output_renderer("reverse_dcf_v1").model_id == "reverse_dcf_v1"
     assert get_valuation_model("multiple_valuation_v1").model_id == "multiple_valuation_v1"
     assert get_valuation_output_renderer("multiple_valuation_v1").model_id == "multiple_valuation_v1"
+    assert get_valuation_model("two_stage_fcf_dcf_v1").model_id == "two_stage_fcf_dcf_v1"
+    assert get_valuation_output_renderer("two_stage_fcf_dcf_v1").model_id == "two_stage_fcf_dcf_v1"
 
 
 def test_registry_builder_rejects_duplicate_model_ids() -> None:

@@ -24,11 +24,11 @@ installed wheels do not copy them into your working directory. Create your own
 assumptions file in the working directory or pass `--assumptions`.
 
 Supported valuation models are `exit_multiple_dcf_v1`, `fcf_dcf_v1`,
-`reverse_dcf_v1`, and `multiple_valuation_v1`. Assumptions YAML may omit
-supported model blocks that are not selected, but present supported model blocks
-are validated even when unselected so stale or malformed assumptions fail
-closed. Selecting a supported model whose block is omitted fails with
-`missing model assumptions for <model_id>`.
+`reverse_dcf_v1`, `multiple_valuation_v1`, and `two_stage_fcf_dcf_v1`.
+Assumptions YAML may omit supported model blocks that are not selected, but
+present supported model blocks are validated even when unselected so stale or
+malformed assumptions fail closed. Selecting a supported model whose block is
+omitted fails with `missing model assumptions for <model_id>`.
 
 ## Commands
 
@@ -39,6 +39,7 @@ uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1
 uv run universe-selector value us --ticker AAPL --model exit_multiple_dcf_v1
 uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1
 uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1
+uv run universe-selector value us --ticker AAPL --model two_stage_fcf_dcf_v1
 uv run universe-selector value us --ticker AAPL \
   --assumptions valuation_assumptions/us/AAPL.yaml
 uv run universe-selector value tw --ticker 2330 \
@@ -64,6 +65,25 @@ The output reports present-value terminal value and terminal-value share of EV
 because exit-multiple terminal value can dominate enterprise value. Scenario
 rows are illustrative assumption cases, not probabilities, forecasts, expected
 outcomes, target cases, recommendations, or investment signals.
+
+## `two_stage_fcf_dcf_v1`
+
+`two_stage_fcf_dcf_v1` is a positive-FCF two-stage DCF with a
+perpetual-growth terminal value. It uses provider-FCF-proxy EV/equity math
+unless override FCF is supplied. The committed samples keep
+`default_model: fcf_dcf_v1`, so this model is opt-in through
+`--model two_stage_fcf_dcf_v1` or by changing a local assumptions file.
+
+The raw provider TTM FCF may not be analyst-normalized, is not clean unlevered
+FCFF, and may be affected by accounting classification, cyclicality, working
+capital, capex, and capital-structure effects; normalized unlevered FCFF
+requires `starting_fcf.method: override` with a note.
+
+The output distinguishes undiscounted terminal value from present-value terminal
+value and reports terminal-value share of EV. Scenario rows are not
+probabilities, forecasts, expected outcomes, target cases, recommendations, or
+investment signals. Model-implied value per share and spread are not target
+prices, forecasts, expected returns, recommendations, or signals.
 
 ## `fcf_dcf_v1`
 
