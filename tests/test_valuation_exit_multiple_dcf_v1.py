@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
 import pytest
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
+from universe_selector.providers.models import FundamentalFacts
 from universe_selector.valuation.exit_multiple_dcf_v1 import ExitMultipleDcfV1Model
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     ExitMultipleDcfScenarioAssumptions,
     ExitMultipleDcfV1Assumptions,
     StartingFcfAssumption,
+    ValuationAssumptionSet,
     ValuationModelInput,
 )
 
@@ -120,3 +123,225 @@ def test_exit_multiple_dcf_v1_rejects_wrong_assumption_type() -> None:
                 model_assumptions=object(),
             )
         )
+
+
+def _facts() -> FundamentalFacts:
+    return FundamentalFacts(
+        market=Market.US,
+        ticker="AAA",
+        currency="USD",
+        reference_price=50.0,
+        reference_price_as_of=date(2026, 5, 15),
+        reference_price_as_of_source="provider_reported",
+        reference_price_as_of_note=None,
+        shares_outstanding=10.0,
+        cash_and_cash_equivalents=30.0,
+        total_debt=80.0,
+        balance_sheet_as_of=date(2026, 3, 31),
+        net_debt=50.0,
+        operating_cash_flow=120.0,
+        capital_expenditures=10.0,
+        free_cash_flow=110.0,
+        fiscal_period_end=date(2025, 12, 31),
+        fiscal_period_type="ttm",
+    )
+
+
+def _assumption_set(model_assumptions: ExitMultipleDcfV1Assumptions) -> ValuationAssumptionSet:
+    return ValuationAssumptionSet(
+        schema_version=1,
+        market=Market.US,
+        ticker="AAA",
+        default_model="exit_multiple_dcf_v1",
+        purpose="research",
+        as_of=date(2026, 5, 17),
+        currency="USD",
+        amount_unit="currency_units",
+        assumption_source="analyst",
+        prepared_by="Universe Selector",
+        source_note="Unit test assumptions.",
+        assumption_path="/tmp/valuation_assumptions/us/AAA.yaml",
+        assumption_hash="abc123",
+        facts_overrides={"shares_outstanding": None, "net_debt": None, "reference_price": 48.0},
+        facts_override_notes={
+            "shares_outstanding": None,
+            "net_debt": None,
+            "reference_price": "Reference price supplied for scenario review.",
+        },
+        model_id="exit_multiple_dcf_v1",
+        model_assumptions=model_assumptions,
+    )
+
+
+def _model_payload() -> dict[str, object]:
+    return {
+        "forecast_years": 5,
+        "terminal_method": "exit_multiple",
+        "starting_fcf": {"method": "provider_ttm_fcf"},
+        "discount_rate_basis": "nominal_wacc",
+        "exit_multiple_basis": "ev_to_fcf",
+        "scenarios": {
+            "conservative": {
+                "growth_rate": 0.02,
+                "discount_rate": 0.10,
+                "terminal_ev_to_fcf_multiple": 10.0,
+                "note": " Lower assumption case. ",
+            },
+            "base": {
+                "growth_rate": 0.04,
+                "discount_rate": 0.09,
+                "terminal_ev_to_fcf_multiple": 14.0,
+                "note": "Middle assumption case.",
+            },
+            "upside": {
+                "growth_rate": 0.06,
+                "discount_rate": 0.085,
+                "terminal_ev_to_fcf_multiple": 18.0,
+                "note": "Higher assumption case.",
+            },
+        },
+    }
+
+
+def test_exit_multiple_dcf_v1_validates_model_payload_and_trims_notes() -> None:
+    assumptions = ExitMultipleDcfV1Model().validate_assumptions(_model_payload())
+
+    assert assumptions.forecast_years == 5
+    assert assumptions.terminal_method == "exit_multiple"
+    assert assumptions.starting_fcf.method == "provider_ttm_fcf"
+    assert assumptions.discount_rate_basis == "nominal_wacc"
+    assert assumptions.exit_multiple_basis == "ev_to_fcf"
+    assert assumptions.scenario_order == ("conservative", "base", "upside")
+    assert tuple(assumptions.scenarios) == ("conservative", "base", "upside")
+    assert assumptions.scenarios["conservative"].note == "Lower assumption case."
+
+
+@pytest.mark.parametrize(
+    "patch, message",
+    [
+        ({"forecast_years": 0}, "forecast_years"),
+        ({"terminal_method": "perpetual_growth"}, "terminal_method"),
+        ({"starting_fcf": {"method": "unknown"}}, "starting_fcf.method"),
+        ({"discount_rate_basis": "cost_of_equity"}, "discount_rate_basis"),
+        ({"exit_multiple_basis": "ev_to_ebitda"}, "exit_multiple_basis"),
+        ({"unexpected": "nope"}, "unknown exit_multiple_dcf_v1 key"),
+    ],
+)
+def test_exit_multiple_dcf_v1_rejects_invalid_model_payload(patch: dict[str, object], message: str) -> None:
+    payload = _model_payload()
+    payload.update(patch)
+
+    with pytest.raises(ValidationError, match=message):
+        ExitMultipleDcfV1Model().validate_assumptions(payload)
+
+
+@pytest.mark.parametrize(
+    "scenario_patch, message",
+    [
+        ({"growth_rate": -1.0}, "growth_rate"),
+        ({"growth_rate": 1.01}, "growth_rate"),
+        ({"discount_rate": 0.0}, "discount_rate"),
+        ({"discount_rate": 0.51}, "discount_rate"),
+        ({"terminal_ev_to_fcf_multiple": 0.0}, "terminal_ev_to_fcf_multiple"),
+        ({"terminal_ev_to_fcf_multiple": 100.01}, "terminal_ev_to_fcf_multiple"),
+        ({"note": "   "}, "note"),
+        ({"extra": "nope"}, "unknown exit_multiple_dcf_v1 scenario key"),
+    ],
+)
+def test_exit_multiple_dcf_v1_rejects_invalid_scenario_payload(
+    scenario_patch: dict[str, object],
+    message: str,
+) -> None:
+    payload = _model_payload()
+    scenarios = dict(payload["scenarios"])  # type: ignore[arg-type]
+    base = dict(scenarios["base"])  # type: ignore[index]
+    base.update(scenario_patch)
+    scenarios["base"] = base
+    payload["scenarios"] = scenarios
+
+    with pytest.raises(ValidationError, match=message):
+        ExitMultipleDcfV1Model().validate_assumptions(payload)
+
+
+@pytest.mark.parametrize(
+    "scenarios_patch",
+    [
+        {"base": _model_payload()["scenarios"]["base"]},  # type: ignore[index]
+        {
+            **_model_payload()["scenarios"],  # type: ignore[arg-type]
+            "stress": {
+                "growth_rate": 0.0,
+                "discount_rate": 0.12,
+                "terminal_ev_to_fcf_multiple": 8.0,
+                "note": "Extra scenario.",
+            },
+        },
+    ],
+)
+def test_exit_multiple_dcf_v1_rejects_missing_or_extra_scenario_ids(
+    scenarios_patch: dict[str, object],
+) -> None:
+    payload = _model_payload()
+    payload["scenarios"] = scenarios_patch
+
+    with pytest.raises(ValidationError, match="scenarios must contain conservative, base, and upside"):
+        ExitMultipleDcfV1Model().validate_assumptions(payload)
+
+
+@pytest.mark.parametrize(
+    "scenario_name, field, value, message",
+    [
+        ("conservative", "growth_rate", 0.05, "scenario growth rates"),
+        ("conservative", "terminal_ev_to_fcf_multiple", 15.0, "scenario exit multiples"),
+        ("conservative", "discount_rate", 0.08, "scenario discount rates"),
+    ],
+)
+def test_exit_multiple_dcf_v1_rejects_non_monotonic_scenarios(
+    scenario_name: str,
+    field: str,
+    value: float,
+    message: str,
+) -> None:
+    payload = _model_payload()
+    scenarios = dict(payload["scenarios"])  # type: ignore[arg-type]
+    patched = dict(scenarios[scenario_name])  # type: ignore[index]
+    patched[field] = value
+    scenarios[scenario_name] = patched
+    payload["scenarios"] = scenarios
+
+    with pytest.raises(ValidationError, match=message):
+        ExitMultipleDcfV1Model().validate_assumptions(payload)
+
+
+def test_exit_multiple_dcf_v1_builds_effective_inputs_from_provider_ttm_fcf() -> None:
+    effective, provenance = ExitMultipleDcfV1Model().build_inputs(
+        facts=_facts(),
+        assumptions=_assumption_set(_assumptions()),
+    )
+
+    assert effective.starting_fcf == pytest.approx(110.0)
+    assert effective.shares_outstanding == pytest.approx(10.0)
+    assert effective.net_debt == pytest.approx(50.0)
+    assert effective.reference_price == pytest.approx(48.0)
+    assert provenance.starting_fcf_source == "provider_ttm_fcf"
+    assert provenance.reference_price_source == "assumption_override"
+
+
+def test_exit_multiple_dcf_v1_builds_effective_inputs_from_override_starting_fcf() -> None:
+    model_assumptions = replace(
+        _assumptions(),
+        starting_fcf=StartingFcfAssumption(
+            method="override",
+            value=100.0,
+            note="Normalized for one-time working capital movement.",
+        ),
+    )
+
+    effective, provenance = ExitMultipleDcfV1Model().build_inputs(
+        facts=_facts(),
+        assumptions=_assumption_set(model_assumptions),
+    )
+
+    assert effective.starting_fcf == pytest.approx(100.0)
+    assert provenance.starting_fcf_source == "assumption_override"
+    assert provenance.starting_fcf_note == "Normalized for one-time working capital movement."

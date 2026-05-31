@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from universe_selector.errors import ValidationError
 from universe_selector.providers.models import FundamentalFacts
-from universe_selector.valuation.input_resolution import build_effective_inputs
+from universe_selector.valuation.input_resolution import (
+    _SCENARIO_ORDER,
+    build_effective_inputs,
+    parse_starting_fcf,
+    require_int,
+    require_literal,
+    require_rate,
+)
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
+    ExitMultipleDcfScenarioAssumptions,
     ExitMultipleDcfV1Assumptions,
     ValuationAssumptionSet,
     ValuationInputProvenance,
@@ -13,8 +23,85 @@ from universe_selector.valuation.models import (
 )
 
 
+_MODEL_KEYS = frozenset(
+    {
+        "forecast_years",
+        "terminal_method",
+        "starting_fcf",
+        "discount_rate_basis",
+        "exit_multiple_basis",
+        "scenarios",
+    }
+)
+_SCENARIO_KEYS = frozenset({"growth_rate", "discount_rate", "terminal_ev_to_fcf_multiple", "note"})
+
+
 class ExitMultipleDcfV1Model:
     model_id = "exit_multiple_dcf_v1"
+
+    def validate_assumptions(self, assumptions: Mapping[str, object]) -> ExitMultipleDcfV1Assumptions:
+        unknown_keys = sorted(set(assumptions) - _MODEL_KEYS)
+        if unknown_keys:
+            raise ValidationError(f"unknown exit_multiple_dcf_v1 key: {unknown_keys[0]}")
+
+        forecast_years = require_int(assumptions.get("forecast_years"), "forecast_years")
+        if not 1 <= forecast_years <= 10:
+            raise ValidationError("forecast_years must be from 1 through 10")
+
+        terminal_method = require_literal(assumptions.get("terminal_method"), "terminal_method", "exit_multiple")
+        starting_fcf = parse_starting_fcf(assumptions.get("starting_fcf"))
+        discount_rate_basis = require_literal(
+            assumptions.get("discount_rate_basis"),
+            "discount_rate_basis",
+            "nominal_wacc",
+        )
+        exit_multiple_basis = require_literal(
+            assumptions.get("exit_multiple_basis"),
+            "exit_multiple_basis",
+            "ev_to_fcf",
+        )
+
+        scenarios_payload = assumptions.get("scenarios")
+        if not isinstance(scenarios_payload, Mapping):
+            raise ValidationError("scenarios must be a mapping")
+        if set(scenarios_payload) != set(_SCENARIO_ORDER):
+            raise ValidationError("scenarios must contain conservative, base, and upside")
+
+        scenarios: dict[str, ExitMultipleDcfScenarioAssumptions] = {}
+        for scenario_id in _SCENARIO_ORDER:
+            payload = scenarios_payload[scenario_id]
+            if not isinstance(payload, Mapping):
+                raise ValidationError(f"scenario {scenario_id} must be a mapping")
+            scenarios[scenario_id] = self._parse_scenario(scenario_id, payload)
+
+        if not (
+            scenarios["conservative"].growth_rate
+            <= scenarios["base"].growth_rate
+            <= scenarios["upside"].growth_rate
+        ):
+            raise ValidationError("scenario growth rates must satisfy conservative <= base <= upside")
+        if not (
+            scenarios["conservative"].terminal_ev_to_fcf_multiple
+            <= scenarios["base"].terminal_ev_to_fcf_multiple
+            <= scenarios["upside"].terminal_ev_to_fcf_multiple
+        ):
+            raise ValidationError("scenario exit multiples must satisfy conservative <= base <= upside")
+        if not (
+            scenarios["conservative"].discount_rate
+            >= scenarios["base"].discount_rate
+            >= scenarios["upside"].discount_rate
+        ):
+            raise ValidationError("scenario discount rates must satisfy conservative >= base >= upside")
+
+        return ExitMultipleDcfV1Assumptions(
+            forecast_years=forecast_years,
+            terminal_method=terminal_method,
+            starting_fcf=starting_fcf,
+            discount_rate_basis=discount_rate_basis,
+            exit_multiple_basis=exit_multiple_basis,
+            scenario_order=_SCENARIO_ORDER,
+            scenarios=scenarios,
+        )
 
     def build_inputs(
         self,
@@ -78,6 +165,42 @@ class ExitMultipleDcfV1Model:
                 )
             )
         return tuple(results)
+
+    def _parse_scenario(
+        self,
+        scenario_id: str,
+        payload: Mapping[str, object],
+    ) -> ExitMultipleDcfScenarioAssumptions:
+        unknown_keys = sorted(set(payload) - _SCENARIO_KEYS)
+        if unknown_keys:
+            raise ValidationError(f"unknown exit_multiple_dcf_v1 scenario key: {unknown_keys[0]}")
+
+        growth_rate = require_rate(payload.get("growth_rate"), f"scenarios.{scenario_id}.growth_rate")
+        discount_rate = require_rate(payload.get("discount_rate"), f"scenarios.{scenario_id}.discount_rate")
+        terminal_multiple = require_rate(
+            payload.get("terminal_ev_to_fcf_multiple"),
+            f"scenarios.{scenario_id}.terminal_ev_to_fcf_multiple",
+        )
+        note = payload.get("note")
+        if not isinstance(note, str) or not note.strip():
+            raise ValidationError(f"scenarios.{scenario_id}.note is required")
+
+        if not -1.0 < growth_rate <= 1.0:
+            raise ValidationError(f"scenarios.{scenario_id}.growth_rate must be greater than -1.0 and at most 1.0")
+        if not 0.0 < discount_rate <= 0.50:
+            raise ValidationError(f"scenarios.{scenario_id}.discount_rate must be greater than 0.0 and at most 0.50")
+        if not 0.0 < terminal_multiple <= 100.0:
+            raise ValidationError(
+                f"scenarios.{scenario_id}.terminal_ev_to_fcf_multiple must be greater than 0.0 and at most 100.0"
+            )
+
+        return ExitMultipleDcfScenarioAssumptions(
+            scenario_id=scenario_id,
+            growth_rate=growth_rate,
+            discount_rate=discount_rate,
+            terminal_ev_to_fcf_multiple=terminal_multiple,
+            note=note.strip(),
+        )
 
 
 def _validate_exit_multiple_inputs(inputs: EffectiveValuationInputs) -> None:
