@@ -703,6 +703,15 @@ def test_implied_discount_rate_v1_registered_output_paths_render_markdown_and_js
     notes = " ".join(payload["notes"])
 
     assert payload["model_id"] == "implied_discount_rate_v1"
+    assert payload["valuation_bridge"] == {
+        "reference_equity_value": pytest.approx(1248.2954545454543),
+        "net_debt": pytest.approx(100.0),
+        "reference_implied_enterprise_value": pytest.approx(1348.2954545454543),
+    }
+    assert payload["valuation_bridge"]["reference_implied_enterprise_value"] == pytest.approx(
+        payload["effective_inputs"]["reference_price"] * payload["effective_inputs"]["shares_outstanding"]
+        + payload["effective_inputs"]["net_debt"]
+    )
     assert payload["model_assumptions"]["implied_discount_rate_basis"] == "nominal_wacc"
     assert payload["model_assumptions"]["scenarios"]["base"]["implied_discount_rate_lower_bound"] == 0.05
     assert payload["scenario_results"][0]["model_metrics"]["implied_discount_rate"] == pytest.approx(0.10)
