@@ -12,6 +12,14 @@ from universe_selector.valuation.input_resolution import (
     require_literal,
     require_rate,
 )
+from universe_selector.valuation.formatting import (
+    _format_money,
+    _format_note,
+    _format_number,
+    _format_pct,
+    _lines_table,
+    _markdown_text,
+)
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     TwoStageFcfDcfScenarioAssumptions,
@@ -19,7 +27,12 @@ from universe_selector.valuation.models import (
     ValuationAssumptionSet,
     ValuationInputProvenance,
     ValuationModelInput,
+    ValuationResult,
     ValuationScenarioResult,
+)
+from universe_selector.valuation.output_sections import (
+    render_effective_inputs_section,
+    render_input_provenance_section,
 )
 
 
@@ -261,6 +274,168 @@ class TwoStageFcfDcfV1Model:
             terminal_growth_rate=terminal_growth_rate,
             note=note.strip(),
         )
+
+
+class TwoStageFcfDcfV1OutputRenderer:
+    model_id = "two_stage_fcf_dcf_v1"
+
+    def render_risk_disclosures(self, result: ValuationResult) -> list[str]:
+        del result
+        return [
+            (
+                "- Model risk: two_stage_fcf_dcf_v1 is an illustrative two-stage positive-FCF DCF "
+                "with perpetual-growth terminal value."
+            ),
+            (
+                "- FCF quality risk: provider-FCF-proxy EV/equity math assumes provider TTM FCF is a raw "
+                "starting proxy, may not be analyst-normalized, is not clean unlevered FCFF, and may be "
+                "affected by accounting classification, cyclicality, working capital, capex, and "
+                "capital-structure effects; use starting_fcf.method override for normalized unlevered FCFF "
+                "with a note."
+            ),
+            (
+                "- Terminal-value risk: perpetual-growth terminal value can create terminal-value dominance, "
+                "so small discount-rate or terminal-growth changes can drive most of enterprise value."
+            ),
+            (
+                "- Sensitivity risk: outputs are highly sensitive to starting FCF, share count, net debt, "
+                "stage lengths, stage growth rates, discount rate, and terminal growth."
+            ),
+            (
+                "- Starting FCF limitation: two-stage FCF DCF requires positive starting FCF because "
+                "the model is designed for positive-FCF companies."
+            ),
+            (
+                "- Scenario risk: scenario rows are not probabilities, forecasts, expected outcomes, "
+                "target cases, recommendations, or investment signals."
+            ),
+            (
+                "- Output interpretation risk: model-implied value/share and spread are not target prices, "
+                "forecasts, expected returns, recommendations, or signals."
+            ),
+        ]
+
+    def render_model_assumptions(self, result: ValuationResult) -> list[str]:
+        assumptions = result.run_input.assumptions.model_assumptions
+        if not isinstance(assumptions, TwoStageFcfDcfV1Assumptions):
+            raise ValidationError("two_stage_fcf_dcf_v1 requires TwoStageFcfDcfV1Assumptions")
+
+        lines = [
+            "## Model Assumptions",
+            "",
+            f"- stage1_years: {assumptions.stage1_years}",
+            f"- stage2_years: {assumptions.stage2_years}",
+            f"- terminal_method: {_markdown_text(assumptions.terminal_method)}",
+            f"- starting_fcf_method: {_markdown_text(assumptions.starting_fcf.method)}",
+            f"- discount_rate_basis: {_markdown_text(assumptions.discount_rate_basis)}",
+            f"- terminal_growth_basis: {_markdown_text(assumptions.terminal_growth_basis)}",
+            "",
+        ]
+        if assumptions.starting_fcf.method == "override":
+            if assumptions.starting_fcf.value is None or assumptions.starting_fcf.note is None:
+                raise ValidationError("two_stage_fcf_dcf_v1 override starting_fcf requires value and note")
+            lines.extend(
+                [
+                    f"- starting_fcf_value: {_format_number(assumptions.starting_fcf.value)}",
+                    f"- starting_fcf_note: {_markdown_text(assumptions.starting_fcf.note)}",
+                    "",
+                ]
+            )
+        lines.extend(
+            _lines_table(
+                ("scenario", "stage 1 growth", "stage 2 growth", "discount_rate", "terminal growth", "note"),
+                (
+                    (
+                        scenario.scenario_id,
+                        _format_pct(scenario.stage1_growth_rate),
+                        _format_pct(scenario.stage2_growth_rate),
+                        _format_pct(scenario.discount_rate),
+                        _format_pct(scenario.terminal_growth_rate),
+                        _format_note(scenario.note),
+                    )
+                    for scenario in (assumptions.scenarios[item] for item in assumptions.scenario_order)
+                ),
+            )
+        )
+        return lines
+
+    def render_effective_inputs(self, result: ValuationResult) -> list[str]:
+        return render_effective_inputs_section(result)
+
+    def render_input_provenance(self, result: ValuationResult) -> list[str]:
+        return render_input_provenance_section(result)
+
+    def render_scenario_results(self, result: ValuationResult) -> list[str]:
+        assumptions = result.run_input.assumptions.model_assumptions
+        if not isinstance(assumptions, TwoStageFcfDcfV1Assumptions):
+            raise ValidationError("two_stage_fcf_dcf_v1 requires TwoStageFcfDcfV1Assumptions")
+        effective = result.run_input.effective_inputs
+        lines = [
+            "",
+            "## Scenario Results",
+            "",
+            (
+                "Two-stage FCF DCF is illustrative two-stage positive-FCF DCF with perpetual-growth terminal "
+                "value and provider-FCF-proxy EV/equity math."
+            ),
+            (
+                "Scenario rows are not probabilities, forecasts, expected outcomes, target cases, "
+                "recommendations, or investment signals."
+            ),
+            (
+                "Model-implied value/share and spread are not target prices, forecasts, expected returns, "
+                "recommendations, or signals. Negative equity value and negative per-share values are rendered "
+                "when net debt exceeds enterprise value."
+            ),
+            "",
+        ]
+        lines.extend(
+            _lines_table(
+                (
+                    "scenario",
+                    "stage 1 growth",
+                    "stage 2 growth",
+                    "terminal growth",
+                    "stage1_final_fcf",
+                    "final_year_fcf",
+                    "undiscounted_terminal_value",
+                    "present_value_terminal_value",
+                    "terminal_value_share_of_enterprise_value",
+                    "scenario_enterprise_value",
+                    "net_debt",
+                    "scenario_equity_value",
+                    "model-implied value per share",
+                    "reference price",
+                    "spread vs reference price",
+                    "note",
+                ),
+                (
+                    (
+                        scenario_result.scenario_id,
+                        _format_pct(scenario_assumption.stage1_growth_rate),
+                        _format_pct(scenario_assumption.stage2_growth_rate),
+                        _format_pct(scenario_assumption.terminal_growth_rate),
+                        _format_money(scenario_result.model_metrics["stage1_final_fcf"], effective.currency),
+                        _format_money(scenario_result.model_metrics["final_year_fcf"], effective.currency),
+                        _format_money(scenario_result.terminal_value, effective.currency),
+                        _format_money(scenario_result.present_value_terminal_value, effective.currency),
+                        _format_pct(
+                            scenario_result.model_metrics["present_value_terminal_value_share_of_enterprise_value"]
+                        ),
+                        _format_money(scenario_result.enterprise_value, effective.currency),
+                        _format_money(effective.net_debt, effective.currency),
+                        _format_money(scenario_result.equity_value, effective.currency),
+                        _format_money(scenario_result.model_implied_value_per_share, effective.currency),
+                        _format_money(scenario_result.reference_price, effective.currency),
+                        _format_pct(scenario_result.model_implied_spread_to_reference_price),
+                        _format_note(scenario_assumption.note),
+                    )
+                    for scenario_result in result.scenario_results
+                    for scenario_assumption in (assumptions.scenarios[scenario_result.scenario_id],)
+                ),
+            )
+        )
+        return lines
 
 
 def _validate_two_stage_inputs(inputs: EffectiveValuationInputs) -> None:
