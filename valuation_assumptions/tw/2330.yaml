@@ -88,21 +88,21 @@ models:
     solver_max_iterations: 100
     scenarios:
       conservative:
-        growth_rate: 0.04
+        growth_rate: 0.16
         terminal_growth_rate: 0.02
-        implied_discount_rate_lower_bound: 0.055
+        implied_discount_rate_lower_bound: 0.05
         implied_discount_rate_upper_bound: 0.25
         note: Lower TWD ordinary-share implied-discount diagnostic case.
       base:
-        growth_rate: 0.06
+        growth_rate: 0.18
         terminal_growth_rate: 0.025
-        implied_discount_rate_lower_bound: 0.06
+        implied_discount_rate_lower_bound: 0.055
         implied_discount_rate_upper_bound: 0.25
         note: Middle TWD ordinary-share implied-discount diagnostic case.
       upside:
-        growth_rate: 0.08
+        growth_rate: 0.20
         terminal_growth_rate: 0.03
-        implied_discount_rate_lower_bound: 0.065
+        implied_discount_rate_lower_bound: 0.06
         implied_discount_rate_upper_bound: 0.25
         note: Higher TWD ordinary-share implied-discount diagnostic case.
   two_stage_fcf_dcf_v1:
