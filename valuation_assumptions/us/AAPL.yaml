@@ -24,6 +24,29 @@ prepared_by: universe-selector maintainers
 source_note: Demonstration assumptions for schema validation only; not investment advice.
 
 models:
+  exit_multiple_dcf_v1:
+    forecast_years: 5
+    terminal_method: exit_multiple
+    starting_fcf:
+      method: provider_ttm_fcf
+    discount_rate_basis: nominal_wacc
+    exit_multiple_basis: ev_to_fcf
+    scenarios:
+      conservative:
+        growth_rate: 0.02
+        discount_rate: 0.10
+        terminal_ev_to_fcf_multiple: 10.0
+        note: Lower growth and lower analyst-supplied EV to FCF exit multiple case.
+      base:
+        growth_rate: 0.04
+        discount_rate: 0.09
+        terminal_ev_to_fcf_multiple: 14.0
+        note: Middle analyst-supplied EV to FCF exit multiple case.
+      upside:
+        growth_rate: 0.06
+        discount_rate: 0.085
+        terminal_ev_to_fcf_multiple: 18.0
+        note: Higher growth and higher analyst-supplied EV to FCF exit multiple case.
   fcf_dcf_v1:
     forecast_years: 5
     terminal_method: perpetual_growth

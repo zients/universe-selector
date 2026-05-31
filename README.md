@@ -238,6 +238,7 @@ Run an ephemeral valuation analysis:
 uv run universe-selector value us --ticker AAPL
 uv run universe-selector value us --ticker AAPL --json
 uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1
+uv run universe-selector value us --ticker AAPL --model exit_multiple_dcf_v1
 uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1
 uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1
 uv run universe-selector value us --ticker AAPL \

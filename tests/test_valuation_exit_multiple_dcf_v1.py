@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import date, datetime, timezone
 
@@ -9,6 +10,7 @@ from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
 from universe_selector.valuation.exit_multiple_dcf_v1 import ExitMultipleDcfV1Model, ExitMultipleDcfV1OutputRenderer
+from universe_selector.valuation.output import render_valuation_json, render_valuation_markdown
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     ExitMultipleDcfScenarioAssumptions,
@@ -296,7 +298,7 @@ def test_exit_multiple_dcf_v1_rejects_missing_or_extra_scenario_ids(
     [
         ("conservative", "growth_rate", 0.05, "scenario growth rates"),
         ("conservative", "terminal_ev_to_fcf_multiple", 15.0, "scenario exit multiples"),
-        ("conservative", "discount_rate", 0.08, "scenario discount rates"),
+        ("conservative", "discount_rate", 0.08, "scenario discount_rate"),
     ],
 )
 def test_exit_multiple_dcf_v1_rejects_non_monotonic_scenarios(
@@ -443,7 +445,7 @@ def test_exit_multiple_dcf_v1_markdown_includes_disclosures_assumptions_and_resu
     assert "analyst-supplied EV / FCF exit multiple" in markdown
     assert "not peer-derived" in markdown
     assert "raw starting proxy" in markdown
-    assert "not match clean unlevered FCFF" in markdown
+    assert "not clean unlevered FCFF" in markdown
     assert "terminal_method: exit_multiple" in markdown
     assert "exit_multiple_basis: ev_to_fcf" in markdown
     assert "| base | 5.00% | 10.00% | 5.0x | unit test |" in markdown
@@ -482,3 +484,34 @@ def test_exit_multiple_dcf_v1_markdown_renders_negative_equity_outputs() -> None
     assert "scenario_equity_value" in markdown
     assert "$-357.85" in markdown
     assert "$-35.79" in markdown
+
+
+def test_exit_multiple_dcf_v1_full_markdown_uses_registered_renderer() -> None:
+    markdown = render_valuation_markdown(_valuation_result())
+
+    assert "model_id: exit_multiple_dcf_v1" in markdown
+    assert "analyst-supplied EV / FCF exit multiple" in markdown
+    assert "not target prices, forecasts, expected returns, recommendations, or signals" in markdown
+    assert "| base | 5.0x | $110.25 | $551.25 |" in markdown
+
+
+def test_exit_multiple_dcf_v1_json_contains_common_and_model_specific_fields() -> None:
+    payload = json.loads(render_valuation_json(_valuation_result()))
+    notes = "\n".join(payload["notes"])
+
+    assert payload["model_id"] == "exit_multiple_dcf_v1"
+    assert payload["model_assumptions"]["forecast_years"] == 2
+    assert payload["model_assumptions"]["terminal_method"] == "exit_multiple"
+    assert payload["model_assumptions"]["discount_rate_basis"] == "nominal_wacc"
+    assert payload["model_assumptions"]["exit_multiple_basis"] == "ev_to_fcf"
+    assert payload["model_assumptions"]["scenarios"]["base"]["growth_rate"] == 0.05
+    assert payload["model_assumptions"]["scenarios"]["base"]["terminal_ev_to_fcf_multiple"] == 5.0
+    assert payload["scenario_results"][0]["model_metrics"]["terminal_ev_to_fcf_multiple"] == 5.0
+    assert payload["scenario_results"][0]["model_metrics"]["final_year_fcf"] == 110.25
+    assert "analyst-supplied EV / FCF exit multiple" in notes
+    assert "peer-derived" in notes
+    assert "provider TTM FCF is a raw starting proxy" in notes
+    assert "not clean unlevered FCFF" in notes
+    assert "requires positive starting FCF" in notes
+    assert "not probabilities, forecasts, expected outcomes, target cases" in notes
+    assert "not target prices, forecasts, expected returns, recommendations, or signals" in notes

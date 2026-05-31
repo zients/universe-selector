@@ -56,12 +56,18 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
         "Report JSON includes the full persisted ticker snapshots and rankings plus a `top_horizons` report view."
         in normalized
     )
+    assert "uv run universe-selector value us --ticker AAPL --model exit_multiple_dcf_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model reverse_dcf_v1" in text
     assert "uv run universe-selector value us --ticker AAPL --model multiple_valuation_v1" in text
     assert "`value` uses the assumptions file `default_model` when `--model` is omitted" in normalized
     assert "`--model` explicitly overrides the assumptions file default model" in normalized
-    assert "Supported valuation models are `fcf_dcf_v1`, `reverse_dcf_v1`, and `multiple_valuation_v1`." in normalized
+    assert (
+        "Supported valuation models are `exit_multiple_dcf_v1`, `fcf_dcf_v1`, "
+        "`reverse_dcf_v1`, and `multiple_valuation_v1`."
+    ) in normalized
+    assert "`exit_multiple_dcf_v1` projects illustrative explicit-period FCF using scenario assumptions" in normalized
+    assert "uses an analyst-supplied EV / FCF exit multiple to calculate terminal value" in normalized
     assert "`reverse_dcf_v1` solves the explicit-period FCF growth" in normalized
     assert "`multiple_valuation_v1` applies analyst-supplied EV / FCF multiples" in normalized
     assert "Assumptions YAML may omit supported model blocks that are not selected" in normalized

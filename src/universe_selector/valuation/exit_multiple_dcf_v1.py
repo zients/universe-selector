@@ -89,9 +89,7 @@ class ExitMultipleDcfV1Model:
             scenarios[scenario_id] = self._parse_scenario(scenario_id, payload)
 
         if not (
-            scenarios["conservative"].growth_rate
-            <= scenarios["base"].growth_rate
-            <= scenarios["upside"].growth_rate
+            scenarios["conservative"].growth_rate <= scenarios["base"].growth_rate <= scenarios["upside"].growth_rate
         ):
             raise ValidationError("scenario growth rates must satisfy conservative <= base <= upside")
         if not (
@@ -105,7 +103,7 @@ class ExitMultipleDcfV1Model:
             >= scenarios["base"].discount_rate
             >= scenarios["upside"].discount_rate
         ):
-            raise ValidationError("scenario discount rates must satisfy conservative >= base >= upside")
+            raise ValidationError("scenario discount_rate values must satisfy conservative >= base >= upside")
 
         return ExitMultipleDcfV1Assumptions(
             forecast_years=forecast_years,
@@ -229,12 +227,24 @@ class ExitMultipleDcfV1OutputRenderer:
             ),
             (
                 "- FCF quality risk: provider TTM FCF is a raw starting proxy, may not be "
-                "analyst-normalized, may not match clean unlevered FCFF, and may be affected by "
+                "analyst-normalized, is not clean unlevered FCFF, and may be affected by "
                 "accounting classification, cyclicality, working capital, capex, and capital-structure effects."
             ),
             (
                 "- Sensitivity risk: outputs are highly sensitive to starting FCF, share count, net debt, "
                 "discount rate, forecast growth, and exit multiple assumptions."
+            ),
+            (
+                "- Starting FCF limitation: exit-multiple DCF requires positive starting FCF because "
+                "EV / FCF exit multiple terminal value is not meaningful when starting FCF is zero or negative."
+            ),
+            (
+                "- Scenario risk: scenario rows are illustrative assumption cases, not probabilities, "
+                "forecasts, expected outcomes, target cases, recommendations, or investment signals."
+            ),
+            (
+                "- Output interpretation risk: model-implied value per share and spread are illustrative "
+                "scenario math only, not target prices, forecasts, expected returns, recommendations, or signals."
             ),
         ]
 
@@ -254,6 +264,8 @@ class ExitMultipleDcfV1OutputRenderer:
             "",
         ]
         if assumptions.starting_fcf.method == "override":
+            if assumptions.starting_fcf.value is None or assumptions.starting_fcf.note is None:
+                raise ValidationError("exit_multiple_dcf_v1 override starting_fcf requires value and note")
             lines.extend(
                 [
                     f"- starting_fcf_value: {_format_number(assumptions.starting_fcf.value)}",

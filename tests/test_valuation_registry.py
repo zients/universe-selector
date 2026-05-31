@@ -22,6 +22,7 @@ class DummyRenderer:
 
 def test_registry_returns_fresh_model_and_renderer_instances() -> None:
     assert supported_valuation_model_ids() == (
+        "exit_multiple_dcf_v1",
         "fcf_dcf_v1",
         "multiple_valuation_v1",
         "reverse_dcf_v1",
@@ -39,6 +40,8 @@ def test_registry_returns_fresh_model_and_renderer_instances() -> None:
     assert second_renderer.model_id == "fcf_dcf_v1"
     assert first_renderer is not second_renderer
 
+    assert get_valuation_model("exit_multiple_dcf_v1").model_id == "exit_multiple_dcf_v1"
+    assert get_valuation_output_renderer("exit_multiple_dcf_v1").model_id == "exit_multiple_dcf_v1"
     assert get_valuation_model("reverse_dcf_v1").model_id == "reverse_dcf_v1"
     assert get_valuation_output_renderer("reverse_dcf_v1").model_id == "reverse_dcf_v1"
     assert get_valuation_model("multiple_valuation_v1").model_id == "multiple_valuation_v1"
