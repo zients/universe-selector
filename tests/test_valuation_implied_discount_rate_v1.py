@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import date
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ import pytest
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata
+from universe_selector.valuation.output import render_valuation_json, render_valuation_markdown
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     ImpliedDiscountRateScenarioAssumptions,
@@ -672,3 +674,40 @@ def test_implied_discount_rate_v1_renderer_redacts_and_escapes_scenario_notes() 
 
     assert "[redacted] \\| [redacted] second line" in markdown
     assert "buy \\|" not in markdown.lower()
+
+
+def test_implied_discount_rate_v1_registered_output_paths_render_markdown_and_json() -> None:
+    result = _valuation_result()
+
+    markdown = render_valuation_markdown(result)
+
+    assert "model_id: implied_discount_rate_v1" in markdown
+    assert "diagnostic reconciliation" in markdown
+    assert "not a company WACC estimate" in markdown
+    assert "not a required return" in markdown
+    assert "not an expected return" in markdown
+    assert "not a recommendation" in markdown
+    assert "not an investment signal" in markdown
+    assert "provider TTM FCF is a raw starting proxy" in markdown
+    assert "## Valuation Bridge" in markdown
+    assert "reference_implied_enterprise_value" in markdown
+    assert "## Scenario Results" in markdown
+    assert "terminal_value_share_of_enterprise_value" in markdown
+    assert "No result is produced when reference-implied enterprise value is outside solver bounds" in markdown
+    assert (
+        "model-implied value per share, spread, and implied discount rate are reconciliation math only, "
+        "not target prices, forecasts, expected returns, required returns, recommendations, or signals"
+    ) in markdown
+
+    payload = json.loads(render_valuation_json(result))
+    notes = " ".join(payload["notes"])
+
+    assert payload["model_id"] == "implied_discount_rate_v1"
+    assert payload["model_assumptions"]["implied_discount_rate_basis"] == "nominal_wacc"
+    assert payload["model_assumptions"]["scenarios"]["base"]["implied_discount_rate_lower_bound"] == 0.05
+    assert payload["scenario_results"][0]["model_metrics"]["implied_discount_rate"] == pytest.approx(0.10)
+    assert "not a company WACC estimate" in notes
+    assert "not a required return" in notes
+    assert "not an expected return" in notes
+    assert "not a recommendation" in notes
+    assert "not an investment signal" in notes

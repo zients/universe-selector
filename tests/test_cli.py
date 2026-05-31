@@ -822,6 +822,7 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
         "multiple_valuation_v1",
         "exit_multiple_dcf_v1",
         "two_stage_fcf_dcf_v1",
+        "implied_discount_rate_v1",
     ):
         result = runner.invoke(app, ["value", "us", "--ticker", "aapl", "--model", model_id])
         assert result.exit_code == 0, result.output
@@ -840,6 +841,7 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
             "multiple_valuation_v1",
             "exit_multiple_dcf_v1",
             "two_stage_fcf_dcf_v1",
+            "implied_discount_rate_v1",
         )
     ]
 

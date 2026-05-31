@@ -11,6 +11,10 @@ from universe_selector.valuation.exit_multiple_dcf_v1 import (
     ExitMultipleDcfV1OutputRenderer,
 )
 from universe_selector.valuation.fcf_dcf_v1 import FcfDcfV1Model, FcfDcfV1OutputRenderer
+from universe_selector.valuation.implied_discount_rate_v1 import (
+    ImpliedDiscountRateV1Model,
+    ImpliedDiscountRateV1OutputRenderer,
+)
 from universe_selector.valuation.multiple_valuation_v1 import (
     MultipleValuationV1Model,
     MultipleValuationV1OutputRenderer,
@@ -88,6 +92,11 @@ _REGISTRATIONS: Mapping[str, ValuationModelRegistration] = _build_registrations(
             model_id="fcf_dcf_v1",
             model_factory=FcfDcfV1Model,
             output_renderer_factory=FcfDcfV1OutputRenderer,
+        ),
+        ValuationModelRegistration(
+            model_id="implied_discount_rate_v1",
+            model_factory=ImpliedDiscountRateV1Model,
+            output_renderer_factory=ImpliedDiscountRateV1OutputRenderer,
         ),
         ValuationModelRegistration(
             model_id="multiple_valuation_v1",
