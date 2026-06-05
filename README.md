@@ -287,6 +287,27 @@ uv build --wheel --sdist
 CI runs formatting, linting, type checks, tests on Python 3.11 and 3.14, and
 builds both the wheel and source distribution.
 
+## Data Sources
+
+This project ships code only. It does not redistribute market data. In `live`
+mode, data is fetched at runtime from third-party sources, each governed by its
+own terms of use:
+
+- **yfinance / Yahoo Finance** (`yfinance` OHLCV and `yfinance_fundamentals`
+  providers) — intended for research and personal use. Yahoo's terms do not
+  license the data for commercial use. See the yfinance documentation and Yahoo
+  Finance's Terms of Service.
+- **NASDAQ Trader symbol files** (`nasdaq_trader` listing provider) — the public
+  `nasdaqlisted.txt` and `otherlisted.txt` symbol directories from
+  nasdaqtrader.com, subject to NASDAQ Trader's terms.
+- **TWSE ISIN data** (`twse_isin` listing provider) — listing and ISIN data
+  published by the Taiwan Stock Exchange (isin.twse.com.tw), subject to TWSE's
+  terms.
+
+The MIT license in this repository covers this software, not the data it
+retrieves. You are responsible for reviewing and complying with each source's
+terms, especially for any commercial use.
+
 ## Disclaimer
 
 Universe Selector is provided for research and software engineering purposes.
