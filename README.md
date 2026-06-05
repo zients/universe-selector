@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/zients/universe-selector/actions/workflows/ci.yml/badge.svg)](https://github.com/zients/universe-selector/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](pyproject.toml)
 
 Run-centric quantitative universe selector for repeatable market scans.
 
@@ -108,10 +108,10 @@ single-ticker valuation analysis and is not persisted in v1.
 
 ## Requirements
 
-- Python `>=3.11,<3.15`
+- Python `>=3.12,<3.15`
 - `uv`
 
-The project is tested in CI on Python 3.11 and 3.14.
+The project is tested in CI on Python 3.12 and 3.14.
 
 ## Setup
 
@@ -288,7 +288,7 @@ Build package artifacts:
 uv build --wheel --sdist
 ```
 
-CI runs formatting, linting, type checks, tests on Python 3.11 and 3.14, and
+CI runs formatting, linting, type checks, tests on Python 3.12 and 3.14, and
 builds both the wheel and source distribution.
 
 ## Data Sources

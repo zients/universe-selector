@@ -7,7 +7,7 @@ authors = [
   { name = "zients" }
 ]
 license = "MIT"
-requires-python = ">=3.11,<3.15"
+requires-python = ">=3.12,<3.15"
 keywords = [
   "quantitative-finance",
   "universe-selection",
@@ -22,7 +22,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
@@ -85,13 +84,13 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E9", "F"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 files = ["src/universe_selector"]
 ignore_missing_imports = true
 check_untyped_defs = true

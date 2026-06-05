@@ -7,7 +7,7 @@ alpha-stage research tool; contributions, bug reports, and ideas are welcome.
 
 Requirements:
 
-- Python `>=3.11,<3.15`
+- Python `>=3.12,<3.15`
 - [`uv`](https://docs.astral.sh/uv/)
 
 ```bash
@@ -31,7 +31,7 @@ uv run mypy
 uv run pytest
 ```
 
-CI runs these on Python 3.11 and 3.14 and also builds the wheel and source
+CI runs these on Python 3.12 and 3.14 and also builds the wheel and source
 distribution.
 
 ## Tests
