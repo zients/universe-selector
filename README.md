@@ -1,5 +1,9 @@
 # Universe Selector
 
+[![CI](https://github.com/zients/universe-selector/actions/workflows/ci.yml/badge.svg)](https://github.com/zients/universe-selector/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](pyproject.toml)
+
 Run-centric quantitative universe selector for repeatable market scans.
 
 Universe Selector loads market listings and OHLCV data, runs one or more ranking

@@ -42,7 +42,9 @@ dependencies = [
 universe-selector = "universe_selector.cli:app"
 
 [project.urls]
+Homepage = "https://github.com/zients/universe-selector"
 Repository = "https://github.com/zients/universe-selector"
+Documentation = "https://github.com/zients/universe-selector/tree/main/docs"
 Issues = "https://github.com/zients/universe-selector/issues"
 
 [dependency-groups]
