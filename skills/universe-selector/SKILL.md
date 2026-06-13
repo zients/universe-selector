@@ -1,6 +1,6 @@
 ---
 name: universe-selector
-description: Use when working in the Universe Selector repository, including running the CLI, finding ranking profiles, providers, valuation models, reports, persistence, config, fixtures, and quality gates.
+description: "Navigate the Universe Selector repo: CLI workflows, ranking profiles, providers, valuation models, persistence, fixtures, and quality gates."
 ---
 
 # Universe Selector

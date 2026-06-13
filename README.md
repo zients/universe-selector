@@ -35,6 +35,18 @@ This project is an alpha-stage research tool. It is not investment advice.
 - [Extending](docs/extending.md)
 - [Data and output](docs/data-and-output.md)
 
+## Agent Skill
+
+This repository includes an Agent Skill at
+`skills/universe-selector/SKILL.md` for AI coding agents that need to navigate
+the CLI workflows, ranking profiles, providers, valuation models, persistence,
+and quality gates.
+
+For repo auto-discovery, `.agents/skills/universe-selector` points to the same
+skill. OpenClaw also scans workspace `skills/` and `.agents/skills/` roots.
+Hermes can use the `skills/` layout as a tap path or install/copy the skill
+folder into `~/.hermes/skills/universe-selector/`.
+
 ## What It Does
 
 The CLI has four command families:
