@@ -1,0 +1,7 @@
+interface:
+  display_name: "Universe Selector"
+  short_description: "Navigate Universe Selector workflows."
+  default_prompt: "Use $universe-selector to find the right files, run the right commands, and preserve the project architecture while working."
+
+policy:
+  allow_implicit_invocation: true
