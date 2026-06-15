@@ -62,7 +62,7 @@ uv run universe-selector value tw --ticker 2330 --assumptions valuation_assumpti
 uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1 --json
 ```
 
-`config.yaml`, `.universe-selector/`, `.venv/`, `.worktrees/`, and `uv.lock` are local state or generated files and are ignored by git.
+`config.yaml`, `.universe-selector/`, `.venv/`, and `.worktrees/` are local state or generated files and are ignored by git.
 
 ## Finding Ranking Profiles
 

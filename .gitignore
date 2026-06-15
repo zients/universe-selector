@@ -2,7 +2,6 @@
 docs/superpowers/
 .universe-selector/
 config.yaml
-uv.lock
 .venv/
 .pytest_cache/
 .ruff_cache/
