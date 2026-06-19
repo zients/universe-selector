@@ -1,12 +1,8 @@
 # Repository Guidelines
 
-## Primary Agent Instructions
-
-Repo skills live under `.agents/skills/*/SKILL.md`. Read the relevant skill before working on that area — do not load all skills upfront.
-
 ## Minimal Fallback
 
-If your agent environment does not load skills, use these baseline rules:
+Use these baseline rules:
 
 - Install dependencies with `uv sync`.
 - Run quality gates with:
