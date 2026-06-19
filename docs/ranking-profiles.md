@@ -238,3 +238,9 @@ compounder proxy rather than a fundamental quality screen. Use
 `volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
 companions, either on their own or in a multi-profile batch with momentum or
 trend profiles.
+
+Use `universe-selector screen` with two or more `--ranking-profile` options to
+cross-reference the latest persisted runs across profiles for one market. The
+screen command reads persisted composite rankings, counts how many profiles each
+ticker appears in within a configurable top-N, and outputs a cross-reference
+table sorted by profile count then average rank.

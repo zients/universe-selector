@@ -23,6 +23,7 @@ Important boundary:
 - `batch` computes ranking runs and persists results.
 - `report` and `inspect` read persisted successful runs; they do not recompute rankings.
 - `value` is a live, ephemeral single-ticker valuation command; it does not read or write ranking runs.
+- `screen` cross-references persisted ranking runs across multiple profiles for one market; it reads existing runs and does not recompute.
 - Do not add profile-specific DuckDB columns. Ranking profiles persist profile-specific values through declared metric keys and `metrics_json`.
 
 ## Standard Commands
@@ -60,6 +61,19 @@ Run valuation examples:
 uv run universe-selector value us --ticker AAPL --assumptions valuation_assumptions/us/AAPL.yaml
 uv run universe-selector value tw --ticker 2330 --assumptions valuation_assumptions/tw/2330.yaml
 uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1 --json
+```
+
+Run a cross-profile screening:
+
+```bash
+uv run universe-selector screen us \
+  --ranking-profile momentum_quality_v1 \
+  --ranking-profile trend_quality_v1 \
+  --ranking-profile relative_strength_leader_v1
+uv run universe-selector screen us \
+  --ranking-profile momentum_quality_v1 \
+  --ranking-profile trend_quality_v1 \
+  --json
 ```
 
 `config.yaml`, `.universe-selector/`, `.venv/`, and `.worktrees/` are local state or generated files and are ignored by git.
@@ -151,7 +165,9 @@ Output:
 - `src/universe_selector/output/report.py`
 - `src/universe_selector/output/inspect.py`
 - `src/universe_selector/output/json.py`
+- `src/universe_selector/output/screen.py`
 - `src/universe_selector/output/value.py`
+- `src/universe_selector/screening.py`
 - `src/universe_selector/valuation/output.py`
 
 Report JSON reads persisted artifacts. If report JSON shape changes, check `tests/test_output.py`, `tests/test_valuation_output.py`, and CLI tests.
