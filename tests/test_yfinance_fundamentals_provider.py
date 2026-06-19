@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sys
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -29,11 +31,11 @@ def valid_payload() -> dict[str, object]:
     }
 
 
-def test_yfinance_fundamentals_uses_injected_fetcher_and_normalizes_contract(monkeypatch) -> None:
-    def fail_ticker(*args, **kwargs):
-        raise AssertionError("yfinance.Ticker must not be called when fetcher is injected")
+def _install_fake_yfinance(monkeypatch: pytest.MonkeyPatch, ticker_cls: type[object]) -> None:
+    monkeypatch.setitem(sys.modules, "yfinance", SimpleNamespace(Ticker=ticker_cls))
 
-    monkeypatch.setattr("yfinance.Ticker", fail_ticker)
+
+def test_yfinance_fundamentals_uses_injected_fetcher_and_normalizes_contract() -> None:
     requested = []
 
     def fetcher(symbol: str) -> dict[str, object]:
@@ -62,6 +64,7 @@ def test_yfinance_fundamentals_uses_injected_fetcher_and_normalizes_contract(mon
     assert data.facts.net_debt == 50_000_000_000.0
     assert data.facts.balance_sheet_as_of == date(2026, 3, 31)
     assert data.facts.fiscal_period_type == "ttm"
+    assert "yfinance" not in sys.modules
 
 
 def test_yfinance_fundamentals_maps_tw_ticker_to_yfinance_tw_symbol() -> None:
@@ -161,7 +164,7 @@ def test_default_yfinance_adapter_derives_ttm_from_quarterly_cash_flow(monkeypat
                 }
             )
 
-    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    _install_fake_yfinance(monkeypatch, FakeTicker)
     provider = YFinanceFundamentalsProvider(clock=lambda: datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc))
 
     data = provider.load_fundamentals(Market.US, "AAPL")
@@ -222,7 +225,7 @@ def test_default_yfinance_adapter_falls_back_to_yearly_and_fetch_date_price_time
                 }
             )
 
-    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    _install_fake_yfinance(monkeypatch, FakeTicker)
     provider = YFinanceFundamentalsProvider(clock=lambda: datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc))
 
     data = provider.load_fundamentals(Market.US, "AAPL")
@@ -256,7 +259,7 @@ def test_default_yfinance_adapter_rejects_quote_and_financial_currency_mismatch(
             del freq, pretty, kwargs
             return pd.DataFrame()
 
-    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    _install_fake_yfinance(monkeypatch, FakeTicker)
     provider = YFinanceFundamentalsProvider()
 
     with pytest.raises(ProviderDataError, match="financialCurrency"):
@@ -310,7 +313,7 @@ def test_yfinance_fundamentals_rejects_nat_dates_and_defaults_nat_quote_timestam
                 }
             )
 
-    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    _install_fake_yfinance(monkeypatch, FakeTicker)
     provider = YFinanceFundamentalsProvider(clock=lambda: datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc))
     data = provider.load_fundamentals(Market.US, "AAPL")
 
