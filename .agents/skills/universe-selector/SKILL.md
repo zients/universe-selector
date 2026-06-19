@@ -64,42 +64,6 @@ uv run universe-selector value us --ticker AAPL --model fcf_dcf_v1 --json
 
 `config.yaml`, `.universe-selector/`, `.venv/`, and `.worktrees/` are local state or generated files and are ignored by git.
 
-## Cross-Profile Research Synthesis
-
-Use Codex/LLM synthesis rather than a dedicated CLI command when comparing multiple ranking profiles. Keep deterministic work in the existing commands: `batch` persists runs, `report --json` and `inspect --json` provide evidence, and the agent synthesizes conclusions.
-
-Recommended workflow:
-
-1. If the user needs same-snapshot comparison, run a multi-profile batch in one command so every profile uses the same provider snapshot:
-
-   ```bash
-   uv run universe-selector batch us \
-     --ranking-profile momentum_quality_v1 \
-     --ranking-profile trend_quality_v1 \
-     --ranking-profile relative_strength_leader_v1
-   ```
-
-2. Collect persisted JSON reports for each profile:
-
-   ```bash
-   uv run universe-selector report us --ranking-profile momentum_quality_v1 --json
-   uv run universe-selector report us --ranking-profile trend_quality_v1 --json
-   uv run universe-selector report us --ranking-profile relative_strength_leader_v1 --json
-   ```
-
-3. Confirm runs are comparable before drawing cross-profile conclusions. At minimum compare `provider_summary.provider_config_hash`, `provider_summary.run_latest_bar_date`, provider IDs/source IDs, market, and data mode. If they differ, state that the comparison mixes snapshots or rerun a multi-profile batch.
-
-4. Use report JSON to identify overlapping and divergent tickers. Do not average scores across profiles; scores are only meaningful within the same run/profile/horizon. Rank overlap is a heuristic, not a model.
-
-5. Use `inspect --json` for tickers the user wants to understand:
-
-   ```bash
-   uv run universe-selector inspect us --ticker AAPL --ranking-profile momentum_quality_v1 --json
-   uv run universe-selector inspect us --ticker AAPL --ranking-profile trend_quality_v1 --json
-   ```
-
-6. Summarize with evidence: include run IDs, ranking profiles, ranking config hashes, horizons used, ranks, key metrics, notable profile tags, contradictions between profiles, and limitations. Frame the output as research synthesis, not investment advice.
-
 ## Finding Ranking Profiles
 
 Start here:

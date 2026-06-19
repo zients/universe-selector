@@ -1,0 +1,7 @@
+interface:
+  display_name: "Universe Selector Cross-Profile"
+  short_description: "Synthesize ranking profiles with evidence."
+  default_prompt: "Use $universe-selector-cross-profile to compare ranking profiles, inspect supporting evidence, and summarize consensus and divergence."
+
+policy:
+  allow_implicit_invocation: true
