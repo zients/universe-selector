@@ -7,7 +7,7 @@ from universe_selector.domain import Market
 from universe_selector.errors import NotFoundError, ValidationError
 from universe_selector.persistence.repository import DuckDbRepository
 from universe_selector.persistence.schema import apply_migrations
-from universe_selector.screening import ScreenCandidate, ScreenResult, run_screen
+from universe_selector.screening import ScreenResult, run_screen
 
 
 def _seed_screen_runs(connection: duckdb.DuckDBPyConnection) -> None:

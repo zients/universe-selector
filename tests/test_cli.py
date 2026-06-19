@@ -1005,7 +1005,7 @@ def test_cli_screen_renders_markdown_output(monkeypatch) -> None:
 
 
 def test_cli_screen_json_output(monkeypatch) -> None:
-    from universe_selector.screening import ScreenCandidate, ScreenResult
+    from universe_selector.screening import ScreenResult
     from universe_selector.persistence.repository import ResolvedRun
 
     monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
@@ -1032,9 +1032,12 @@ def test_cli_screen_json_output(monkeypatch) -> None:
     result = runner.invoke(
         app,
         [
-            "screen", "us",
-            "--ranking-profile", "momentum_v1",
-            "--ranking-profile", "trend_quality_v1",
+            "screen",
+            "us",
+            "--ranking-profile",
+            "momentum_v1",
+            "--ranking-profile",
+            "trend_quality_v1",
             "--json",
         ],
     )
@@ -1057,10 +1060,14 @@ def test_cli_screen_end_to_end_with_fixture(monkeypatch, tmp_path: Path, fixture
     screen_result = runner.invoke(
         app,
         [
-            "screen", "us",
-            "--ranking-profile", "sample_price_trend_v1",
-            "--ranking-profile", "momentum_v1",
-            "--top-n", "10",
+            "screen",
+            "us",
+            "--ranking-profile",
+            "sample_price_trend_v1",
+            "--ranking-profile",
+            "momentum_v1",
+            "--top-n",
+            "10",
         ],
     )
 
@@ -1072,10 +1079,14 @@ def test_cli_screen_end_to_end_with_fixture(monkeypatch, tmp_path: Path, fixture
     json_result = runner.invoke(
         app,
         [
-            "screen", "us",
-            "--ranking-profile", "sample_price_trend_v1",
-            "--ranking-profile", "momentum_v1",
-            "--top-n", "10",
+            "screen",
+            "us",
+            "--ranking-profile",
+            "sample_price_trend_v1",
+            "--ranking-profile",
+            "momentum_v1",
+            "--top-n",
+            "10",
             "--json",
         ],
     )

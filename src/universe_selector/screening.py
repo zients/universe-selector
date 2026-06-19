@@ -57,9 +57,7 @@ def run_screen(
         profile = get_ranking_profile(profile_id)
         primary_horizon = profile.horizon_order[0]
         rows = connection.execute(
-            "select ticker, rank from run_rankings "
-            "where run_id = ? and horizon = ? and rank <= ? "
-            "order by rank",
+            "select ticker, rank from run_rankings where run_id = ? and horizon = ? and rank <= ? order by rank",
             [run_id, primary_horizon, top_n],
         ).fetchall()
         for ticker, rank in rows:
