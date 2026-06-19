@@ -53,11 +53,18 @@ def run_screen(
     connection = repo.connect(read_only=True)
     for profile_id in profile_ids:
         run_id = resolved_runs[profile_id].run_id
+        available_horizons = sorted(
+            row[0] for row in connection.execute(
+                "select distinct horizon from run_rankings where run_id = ?",
+                [run_id],
+            ).fetchall()
+        )
+        primary_horizon = "composite" if "composite" in available_horizons else (available_horizons[0] if available_horizons else "composite")
         rows = connection.execute(
             "select ticker, rank from run_rankings "
-            "where run_id = ? and horizon = 'composite' and rank <= ? "
+            "where run_id = ? and horizon = ? and rank <= ? "
             "order by rank",
-            [run_id, top_n],
+            [run_id, primary_horizon, top_n],
         ).fetchall()
         for ticker, rank in rows:
             ticker_ranks[ticker][profile_id] = int(rank)

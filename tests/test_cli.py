@@ -39,6 +39,8 @@ def test_cli_help_describes_commands_and_supported_markets() -> None:
     assert "Inspect persisted rankings and metrics for one ticker." in normalized
     assert "value" in normalized
     assert "Run a live single-ticker valuation analysis." in normalized
+    assert "screen" in normalized
+    assert "Cross-reference" in normalized or "cross-reference" in normalized
 
 
 def test_cli_batch_help_documents_market_and_profile_options() -> None:
@@ -1040,3 +1042,45 @@ def test_cli_screen_json_output(monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["artifact_type"] == "universe_selector_screen"
+
+
+def test_cli_screen_end_to_end_with_fixture(monkeypatch, tmp_path: Path, fixture_dir: Path) -> None:
+    _write_cli_config(tmp_path, fixture_dir)
+    monkeypatch.chdir(tmp_path)
+
+    batch1 = runner.invoke(
+        app,
+        ["batch", "us", "--ranking-profile", "sample_price_trend_v1", "--ranking-profile", "momentum_v1"],
+    )
+    assert batch1.exit_code == 0, batch1.output
+
+    screen_result = runner.invoke(
+        app,
+        [
+            "screen", "us",
+            "--ranking-profile", "sample_price_trend_v1",
+            "--ranking-profile", "momentum_v1",
+            "--top-n", "10",
+        ],
+    )
+
+    assert screen_result.exit_code == 0, screen_result.output
+    assert "# Universe Selector Screen" in screen_result.output
+    assert "sample_price_trend_v1" in screen_result.output
+    assert "momentum_v1" in screen_result.output
+
+    json_result = runner.invoke(
+        app,
+        [
+            "screen", "us",
+            "--ranking-profile", "sample_price_trend_v1",
+            "--ranking-profile", "momentum_v1",
+            "--top-n", "10",
+            "--json",
+        ],
+    )
+
+    assert json_result.exit_code == 0, json_result.output
+    payload = json.loads(json_result.output)
+    assert payload["artifact_type"] == "universe_selector_screen"
+    assert len(payload["candidates"]) > 0
