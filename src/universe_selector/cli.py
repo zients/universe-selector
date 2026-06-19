@@ -12,6 +12,7 @@ from universe_selector.domain import Market, canonical_market, canonical_ticker
 from universe_selector.errors import NotFoundError, UniverseSelectorError, ValidationError
 from universe_selector.identifiers import parse_run_id
 from universe_selector.output.inspect import render_inspect, render_inspect_json
+from universe_selector.output.screen import render_screen_json, render_screen_markdown
 from universe_selector.output.value import (
     render_value_json as render_valuation_json,
     render_value_markdown as render_valuation_markdown,
@@ -20,6 +21,7 @@ from universe_selector.persistence.repository import DuckDbRepository, ResolvedR
 from universe_selector.persistence.schema import validate_schema
 from universe_selector.pipeline import BatchResult, MultiProfileBatchError, run_batch, run_batch_profiles
 from universe_selector.ranking_profiles import get_ranking_profile, supported_ranking_profile_ids
+from universe_selector.screening import run_screen
 from universe_selector.valuation.registry import get_valuation_model
 from universe_selector.valuation.service import run_valuation
 
@@ -305,6 +307,41 @@ def inspect(
             )
         )
         typer.echo(renderer_output, nl=False)
+
+    _guard(action)
+
+
+@app.command(
+    help=(
+        "Cross-reference persisted ranking runs across multiple profiles for one market. "
+        "Requires at least two --ranking-profile options. "
+        "Reads the latest successful run per profile and outputs a composite screening table."
+    )
+)
+def screen(
+    market: Annotated[str, typer.Argument(help=SUPPORTED_MARKETS_HELP)],
+    ranking_profile: Annotated[
+        list[str],
+        typer.Option("--ranking-profile", help=RANKING_PROFILE_HELP),
+    ],
+    top_n: Annotated[int, typer.Option("--top-n", help="Top N composite ranks per profile to include.")] = 50,
+    json_output: Annotated[bool, typer.Option("--json", help="Print machine-readable screen JSON.")] = False,
+) -> None:
+    def action() -> None:
+        resolved_market = canonical_market(market)
+        profile_ids = tuple(ranking_profile)
+        if len(profile_ids) < 2:
+            raise ValidationError("provide at least two ranking profiles for screening")
+        seen: set[str] = set()
+        for p in profile_ids:
+            if p in seen:
+                raise ValidationError(f"duplicate ranking profile {p}")
+            seen.add(p)
+        config = load_config()
+        repo = DuckDbRepository(config.duckdb_path)
+        result = run_screen(repo, resolved_market, profile_ids, top_n=top_n)
+        output = render_screen_json(result) if json_output else render_screen_markdown(result)
+        typer.echo(output, nl=False)
 
     _guard(action)
 

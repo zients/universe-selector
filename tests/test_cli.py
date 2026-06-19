@@ -926,3 +926,117 @@ def test_cli_value_rejects_unknown_model(monkeypatch) -> None:
 
     assert result.exit_code == ValidationError.exit_code
     assert "unknown valuation model unknown_model" in result.output
+
+
+def test_cli_screen_help_documents_options() -> None:
+    result = runner.invoke(app, ["screen", "--help"])
+    normalized = _normalized_help(result.output)
+
+    assert result.exit_code == 0, result.output
+    assert "Cross-reference" in normalized or "cross-reference" in normalized
+    assert "--ranking-profile" in normalized
+    assert "--top-n" in normalized
+    assert "--json" in normalized
+
+
+def test_cli_screen_requires_at_least_two_profiles(monkeypatch) -> None:
+    monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
+
+    result = runner.invoke(app, ["screen", "us", "--ranking-profile", "momentum_v1"])
+
+    assert result.exit_code != 0
+    assert "at least two" in result.output
+
+
+def test_cli_screen_rejects_duplicate_profiles(monkeypatch) -> None:
+    monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
+
+    result = runner.invoke(
+        app,
+        ["screen", "us", "--ranking-profile", "momentum_v1", "--ranking-profile", "momentum_v1"],
+    )
+
+    assert result.exit_code != 0
+    assert "duplicate" in result.output
+
+
+def test_cli_screen_renders_markdown_output(monkeypatch) -> None:
+    from universe_selector.screening import ScreenCandidate, ScreenResult
+    from universe_selector.persistence.repository import ResolvedRun
+
+    monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
+
+    def fake_run_screen(repo, market, profile_ids, *, top_n):
+        return ScreenResult(
+            market=market,
+            profile_ids=profile_ids,
+            top_n=top_n,
+            resolved_runs={
+                p: ResolvedRun(
+                    run_id=f"us-{i:08d}",
+                    market=market,
+                    ranking_profile=p,
+                    ranking_config_hash=f"hash-{i}",
+                )
+                for i, p in enumerate(profile_ids)
+            },
+            candidates=[
+                ScreenCandidate(
+                    ticker="AAA",
+                    profile_count=2,
+                    avg_rank=1.0,
+                    profile_ranks=dict(zip(profile_ids, [1, 1])),
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("universe_selector.cli.run_screen", fake_run_screen)
+
+    result = runner.invoke(
+        app,
+        ["screen", "us", "--ranking-profile", "momentum_v1", "--ranking-profile", "trend_quality_v1"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "# Universe Selector Screen" in result.output
+    assert "AAA" in result.output
+
+
+def test_cli_screen_json_output(monkeypatch) -> None:
+    from universe_selector.screening import ScreenCandidate, ScreenResult
+    from universe_selector.persistence.repository import ResolvedRun
+
+    monkeypatch.setattr("universe_selector.cli.load_config", lambda: AppConfig())
+
+    def fake_run_screen(repo, market, profile_ids, *, top_n):
+        return ScreenResult(
+            market=market,
+            profile_ids=profile_ids,
+            top_n=top_n,
+            resolved_runs={
+                p: ResolvedRun(
+                    run_id=f"us-{i:08d}",
+                    market=market,
+                    ranking_profile=p,
+                    ranking_config_hash=f"hash-{i}",
+                )
+                for i, p in enumerate(profile_ids)
+            },
+            candidates=[],
+        )
+
+    monkeypatch.setattr("universe_selector.cli.run_screen", fake_run_screen)
+
+    result = runner.invoke(
+        app,
+        [
+            "screen", "us",
+            "--ranking-profile", "momentum_v1",
+            "--ranking-profile", "trend_quality_v1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "universe_selector_screen"
