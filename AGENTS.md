@@ -2,11 +2,11 @@
 
 ## Primary Agent Instructions
 
-Before working in this repository, read the repo skill first:
+Before working in this repository, read all repo skills first:
 
-- `.agents/skills/universe-selector/SKILL.md`
+- `.agents/skills/*/SKILL.md`
 
-This is the single source of truth for project structure, CLI workflows, ranking profiles, providers, valuation models, persistence, fixtures, and quality gates.
+These are the single source of truth for project structure, CLI workflows, ranking profiles, providers, valuation models, persistence, fixtures, and quality gates.
 
 ## Minimal Fallback
 
