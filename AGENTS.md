@@ -2,11 +2,7 @@
 
 ## Primary Agent Instructions
 
-Before working in this repository, read all repo skills first:
-
-- `.agents/skills/*/SKILL.md`
-
-These are the single source of truth for project structure, CLI workflows, ranking profiles, providers, valuation models, persistence, fixtures, and quality gates.
+Repo skills live under `.agents/skills/*/SKILL.md`. Read the relevant skill before working on that area — do not load all skills upfront.
 
 ## Minimal Fallback
 
