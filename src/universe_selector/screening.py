@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.persistence.repository import DuckDbRepository, ResolvedRun
+from universe_selector.ranking_profiles import get_ranking_profile
 
 
 @dataclass(frozen=True)
@@ -53,13 +54,8 @@ def run_screen(
     connection = repo.connect(read_only=True)
     for profile_id in profile_ids:
         run_id = resolved_runs[profile_id].run_id
-        available_horizons = sorted(
-            row[0] for row in connection.execute(
-                "select distinct horizon from run_rankings where run_id = ?",
-                [run_id],
-            ).fetchall()
-        )
-        primary_horizon = "composite" if "composite" in available_horizons else (available_horizons[0] if available_horizons else "composite")
+        profile = get_ranking_profile(profile_id)
+        primary_horizon = profile.horizon_order[0]
         rows = connection.execute(
             "select ticker, rank from run_rankings "
             "where run_id = ? and horizon = ? and rank <= ? "
