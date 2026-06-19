@@ -1,6 +1,6 @@
 [project]
 name = "universe-selector"
-version = "0.1.10"
+version = "0.1.11"
 description = "Run-centric quantitative universe selector"
 readme = "README.md"
 authors = [
