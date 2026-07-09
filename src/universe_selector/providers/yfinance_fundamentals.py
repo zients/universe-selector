@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import numbers
+import re
 from collections.abc import Callable, Mapping
 from datetime import date, datetime, timezone
 from typing import Any
@@ -405,6 +406,8 @@ def _first_present(payload: Mapping[str, object], keys: tuple[str, ...]) -> obje
 
 def _request_symbol(market: Market, ticker: str) -> str:
     if market is Market.US:
+        if re.fullmatch(r"[A-Z0-9]+\.[A-Z0-9]+", ticker):
+            return ticker.replace(".", "-")
         return ticker
     if market is Market.TW:
         if ticker.endswith((".TW", ".TWO")):

@@ -184,6 +184,20 @@ def test_yfinance_fundamentals_uses_injected_fetcher_and_normalizes_contract() -
     assert "yfinance" not in sys.modules
 
 
+def test_yfinance_fundamentals_maps_us_class_share_to_yfinance_symbol() -> None:
+    requested = []
+
+    def fetcher(symbol: str) -> dict[str, object]:
+        requested.append(symbol)
+        return valid_payload()
+
+    provider = YFinanceFundamentalsProvider(fetcher=fetcher)
+    data = provider.load_fundamentals(Market.US, "BRK.B")
+
+    assert requested == ["BRK-B"]
+    assert data.facts.ticker == "BRK.B"
+
+
 def test_yfinance_fundamentals_maps_tw_ticker_to_yfinance_tw_symbol() -> None:
     requested = []
 
@@ -200,6 +214,46 @@ def test_yfinance_fundamentals_maps_tw_ticker_to_yfinance_tw_symbol() -> None:
     assert data.facts.market is Market.TW
     assert data.facts.ticker == "2330"
     assert data.facts.currency == "TWD"
+
+
+def test_yfinance_universe_fundamentals_maps_us_class_share_to_yfinance_symbol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requested = []
+
+    class FakeTicker:
+        info = {"financialCurrency": "USD"}
+
+        def __init__(self, symbol: str) -> None:
+            requested.append(symbol)
+
+        def get_income_stmt(self, *, freq: str = "yearly", pretty: bool = False, **kwargs) -> pd.DataFrame:
+            del kwargs
+            assert pretty is True
+            if freq == "quarterly":
+                return _quarterly_income_frame()
+            raise AssertionError(f"unexpected freq {freq}")
+
+        def get_cash_flow(self, *, freq: str = "yearly", pretty: bool = False, **kwargs) -> pd.DataFrame:
+            del kwargs
+            assert pretty is True
+            if freq == "quarterly":
+                return _quarterly_cash_flow_frame()
+            raise AssertionError(f"unexpected freq {freq}")
+
+        def get_balance_sheet(self, *, freq: str = "yearly", pretty: bool = False, **kwargs) -> pd.DataFrame:
+            del kwargs
+            assert pretty is True
+            assert freq == "quarterly"
+            return _balance_sheet_frame()
+
+    _install_fake_yfinance(monkeypatch, FakeTicker)
+    provider = YFinanceFundamentalsProvider(clock=lambda: datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc))
+
+    data = provider.load_fundamentals_for_listings(_context(), Market.US, [_listing("BRK.B")])
+
+    assert requested == ["BRK-B"]
+    assert data.facts["ticker"].to_list() == ["BRK.B"]
 
 
 def test_yfinance_universe_fundamentals_normalizes_quarterly_ttm(monkeypatch: pytest.MonkeyPatch) -> None:
