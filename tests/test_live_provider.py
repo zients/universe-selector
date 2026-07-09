@@ -7,10 +7,20 @@ import pytest
 
 from universe_selector.config import AppConfig
 from universe_selector.domain import Market
-from universe_selector.providers.models import ListingCandidate
 from universe_selector.errors import ProviderDataError
 from universe_selector.providers.live import LiveMarketDataProvider
-from universe_selector.providers.registration import ListingProviderRegistration, OhlcvProviderRegistration
+from universe_selector.providers.models import (
+    FundamentalsCoverage,
+    FundamentalsMetadata,
+    FundamentalsUniverseRunData,
+    ListingCandidate,
+    ProviderDataRequirements,
+)
+from universe_selector.providers.registration import (
+    FundamentalsProviderRegistration,
+    ListingProviderRegistration,
+    OhlcvProviderRegistration,
+)
 
 
 def _listing(ticker: str, *, market: Market = Market.US, exchange_segment: str = "NASDAQ") -> ListingCandidate:
@@ -62,11 +72,50 @@ class FakeOhlcvProvider:
         return self.bars
 
 
+class FakeFundamentalsProvider:
+    provider_id = "yfinance_fundamentals"
+    source_ids = ("yahoo-finance:yfinance-ticker",)
+
+    def __init__(self, data: FundamentalsUniverseRunData) -> None:
+        self.data = data
+        self.calls = []
+
+    def load_fundamentals_for_listings(self, context, market: Market, listings: list[ListingCandidate]):
+        self.calls.append((context, market, list(listings)))
+        return self.data
+
+
+def _fundamentals_data(
+    *,
+    provider_id: str = "yfinance_fundamentals",
+    source_ids: tuple[str, ...] = ("yahoo-finance:yfinance-ticker",),
+) -> FundamentalsUniverseRunData:
+    return FundamentalsUniverseRunData(
+        metadata=FundamentalsMetadata(
+            data_mode="live",
+            fundamentals_provider_id=provider_id,
+            fundamentals_source_ids=source_ids,
+            data_fetch_started_at=datetime(2026, 5, 3, 13, 30, tzinfo=timezone.utc),
+            latest_source_date=date(2026, 3, 31),
+            source_risk_note="unit risk",
+            field_mapping_note="unit mapping",
+        ),
+        facts=pl.DataFrame({"market": ["US"], "ticker": ["AAA"]}),
+        coverage=FundamentalsCoverage(
+            requested_count=2,
+            returned_count=1,
+            missing_count=1,
+            invalid_count=0,
+        ),
+    )
+
+
 def _provider(
     *,
     config: AppConfig,
     listing_provider: FakeListingProvider,
     ohlcv_provider: FakeOhlcvProvider,
+    fundamentals_provider: FakeFundamentalsProvider | None = None,
     now: datetime = datetime(2026, 5, 3, 13, 30, tzinfo=timezone.utc),
     clock=None,
 ) -> LiveMarketDataProvider:
@@ -82,10 +131,23 @@ def _provider(
         source_ids=ohlcv_provider.source_ids,
         factory=lambda _config: ohlcv_provider,
     )
+    fundamentals_registration = FundamentalsProviderRegistration(
+        provider_id=(
+            fundamentals_provider.provider_id if fundamentals_provider is not None else "yfinance_fundamentals"
+        ),
+        supported_markets=frozenset({Market.US}),
+        source_ids=(
+            fundamentals_provider.source_ids
+            if fundamentals_provider is not None
+            else ("yahoo-finance:yfinance-ticker",)
+        ),
+        factory=lambda: fundamentals_provider,
+    )
     return LiveMarketDataProvider(
         config,
         listing_registration_resolver=lambda provider_id, market: listing_registration,
         ohlcv_registration_resolver=lambda provider_id: ohlcv_registration,
+        fundamentals_registration_resolver=lambda provider_id, market: fundamentals_registration,
         clock=clock or (lambda: now),
     )
 
@@ -223,9 +285,85 @@ def test_live_provider_allows_partial_bars_and_builds_metadata_from_provider_con
     assert provider_data.metadata.listing_source_id == "nasdaqtrader:nasdaqlisted+nasdaqtrader:otherlisted"
     assert provider_data.metadata.ohlcv_provider_id == "yfinance"
     assert provider_data.metadata.ohlcv_source_id == "yahoo-finance:yfinance-download"
-    assert provider_data.metadata.provider_config_hash == config.provider_config_hash()
+    assert provider_data.metadata.provider_config_hash == config.provider_config_hash(ProviderDataRequirements())
     assert provider_data.metadata.market_timezone == "America/New_York"
     assert provider_data.metadata.run_latest_bar_date == date(2026, 5, 3)
+
+
+def test_live_provider_does_not_load_fundamentals_for_ohlcv_only_requirements() -> None:
+    config = AppConfig(data_mode="live")
+    listing_provider = FakeListingProvider([_listing("AAA")])
+    ohlcv_provider = FakeOhlcvProvider(
+        pl.DataFrame(
+            {
+                "market": ["US"],
+                "ticker": ["AAA"],
+                "bar_date": [date(2026, 5, 3)],
+                "open": [10.0],
+                "high": [10.0],
+                "low": [10.0],
+                "close": [10.0],
+                "adjusted_close": [10.0],
+                "volume": [1000],
+            }
+        )
+    )
+    fundamentals_provider = FakeFundamentalsProvider(_fundamentals_data())
+
+    provider_data = _provider(
+        config=config,
+        listing_provider=listing_provider,
+        ohlcv_provider=ohlcv_provider,
+        fundamentals_provider=fundamentals_provider,
+    ).load_run_data(Market.US, ProviderDataRequirements())
+
+    assert fundamentals_provider.calls == []
+    assert provider_data.fundamentals is None
+    assert provider_data.metadata.fundamentals_provider_id is None
+    assert provider_data.metadata.provider_config_hash == config.provider_config_hash(ProviderDataRequirements())
+
+
+def test_live_provider_loads_required_fundamentals_once_and_records_metadata() -> None:
+    config = AppConfig(data_mode="live")
+    listing_provider = FakeListingProvider([_listing("AAA"), _listing("BBB")])
+    ohlcv_provider = FakeOhlcvProvider(
+        pl.DataFrame(
+            {
+                "market": ["US", "US"],
+                "ticker": ["AAA", "BBB"],
+                "bar_date": [date(2026, 5, 3), date(2026, 5, 3)],
+                "open": [10.0, 11.0],
+                "high": [10.0, 11.0],
+                "low": [10.0, 11.0],
+                "close": [10.0, 11.0],
+                "adjusted_close": [10.0, 11.0],
+                "volume": [1000, 1000],
+            }
+        )
+    )
+    fundamentals = _fundamentals_data()
+    fundamentals_provider = FakeFundamentalsProvider(fundamentals)
+
+    provider_data = _provider(
+        config=config,
+        listing_provider=listing_provider,
+        ohlcv_provider=ohlcv_provider,
+        fundamentals_provider=fundamentals_provider,
+    ).load_run_data(Market.US, ProviderDataRequirements(fundamentals=True))
+
+    assert provider_data.fundamentals is fundamentals
+    assert len(fundamentals_provider.calls) == 1
+    assert [item.ticker for item in fundamentals_provider.calls[0][2]] == ["AAA", "BBB"]
+    assert provider_data.metadata.provider_config_hash == config.provider_config_hash(
+        ProviderDataRequirements(fundamentals=True)
+    )
+    assert provider_data.metadata.fundamentals_provider_id == "yfinance_fundamentals"
+    assert provider_data.metadata.fundamentals_source_id == "yahoo-finance:yfinance-ticker"
+    assert provider_data.metadata.fundamentals_latest_source_date == date(2026, 3, 31)
+    assert provider_data.metadata.fundamentals_requested_count == 2
+    assert provider_data.metadata.fundamentals_returned_count == 1
+    assert provider_data.metadata.fundamentals_missing_count == 1
+    assert provider_data.metadata.fundamentals_invalid_count == 0
 
 
 def test_live_provider_applies_ticker_limit_after_sorted_tw_listings() -> None:

@@ -13,8 +13,8 @@ from universe_selector.persistence.repository import DuckDbRepository
 from universe_selector.persistence.schema import apply_migrations
 from universe_selector.providers.base import MarketDataProvider
 from universe_selector.providers.fixture import FixtureProvider
-from universe_selector.providers.models import ProviderMetadata, ProviderRunData
-from universe_selector.ranking_profiles import get_ranking_profile
+from universe_selector.providers.models import ProviderDataRequirements, ProviderMetadata, ProviderRunData
+from universe_selector.ranking_profiles import get_ranking_profile, get_ranking_profile_registration
 
 
 @dataclass(frozen=True)
@@ -62,8 +62,15 @@ def _validate_provider_data(provider_data: ProviderRunData) -> None:
         raise ProviderDataError("OHLCV provider returned no usable bars")
 
 
+def _provider_requirements_for_profile_ids(profile_ids: tuple[str, ...]) -> ProviderDataRequirements:
+    registrations = tuple(get_ranking_profile_registration(profile_id) for profile_id in profile_ids)
+    return ProviderDataRequirements(
+        fundamentals=any(registration.data_requirements.fundamentals for registration in registrations),
+    )
+
+
 def _provider_summary(metadata: ProviderMetadata, config: AppConfig) -> dict[str, str]:
-    return {
+    summary = {
         "data_mode": metadata.data_mode,
         "listing_provider_id": metadata.listing_provider_id,
         "listing_source_id": metadata.listing_source_id,
@@ -76,6 +83,25 @@ def _provider_summary(metadata: ProviderMetadata, config: AppConfig) -> dict[str
         "ranking_profile": config.ranking_profile,
         "ranking_config_hash": config.ranking_config_hash(),
     }
+    if metadata.fundamentals_provider_id is not None:
+        summary.update(
+            {
+                "fundamentals_provider_id": metadata.fundamentals_provider_id,
+                "fundamentals_source_id": metadata.fundamentals_source_id or "",
+                "fundamentals_latest_source_date": (
+                    metadata.fundamentals_latest_source_date.isoformat()
+                    if metadata.fundamentals_latest_source_date is not None
+                    else ""
+                ),
+                "fundamentals_source_risk_note": metadata.fundamentals_source_risk_note or "",
+                "fundamentals_field_mapping_note": metadata.fundamentals_field_mapping_note or "",
+                "fundamentals_requested_count": str(metadata.fundamentals_requested_count),
+                "fundamentals_returned_count": str(metadata.fundamentals_returned_count),
+                "fundamentals_missing_count": str(metadata.fundamentals_missing_count),
+                "fundamentals_invalid_count": str(metadata.fundamentals_invalid_count),
+            }
+        )
+    return summary
 
 
 def _validate_profile_ids(profile_ids: Sequence[str]) -> tuple[str, ...]:
@@ -106,12 +132,16 @@ def _run_profile_from_provider_data(
             repo.create_running_run(run_id, market, config)
 
         profile = config.selected_ranking_profile
+        registration = get_ranking_profile_registration(config.ranking_profile)
+        if registration.data_requirements.fundamentals and provider_data.fundamentals is None:
+            raise ProviderDataError(f"ranking profile {config.ranking_profile} requires fundamentals")
         snapshot = profile.build_snapshot(
             run_id=run_id,
             market=market,
             listings=provider_data.listings,
             bars=provider_data.bars,
             run_latest_bar_date=provider_data.metadata.run_latest_bar_date,
+            fundamentals=provider_data.fundamentals,
         )
         rankings = profile.assign_rankings(snapshot)
         metadata = provider_data.metadata
@@ -160,7 +190,8 @@ def run_batch(market: Market, config: AppConfig) -> BatchResult:
         repo.create_running_run(run_id, market, config)
         try:
             provider = _provider_for(config)
-            provider_data = provider.load_run_data(market)
+            requirements = _provider_requirements_for_profile_ids((config.ranking_profile,))
+            provider_data = provider.load_run_data(market, requirements)
             _validate_provider_data(provider_data)
         except Exception as exc:
             repo.mark_failed_run(run_id, str(exc))
@@ -192,7 +223,8 @@ def run_batch_profiles(
         try:
             apply_migrations(repo.connect())
             provider = _provider_for(base_config)
-            provider_data = provider.load_run_data(market)
+            requirements = _provider_requirements_for_profile_ids(normalized_profile_ids)
+            provider_data = provider.load_run_data(market, requirements)
             _validate_provider_data(provider_data)
 
             completed: list[BatchResult] = []

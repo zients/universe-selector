@@ -10,7 +10,7 @@ import polars as pl
 
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
-from universe_selector.providers.models import ListingCandidate
+from universe_selector.providers.models import FundamentalsUniverseRunData, ListingCandidate
 from universe_selector.ranking_profiles.registration import RankingProfileRegistration
 
 
@@ -235,6 +235,7 @@ class MomentumV1Profile:
         listings: list[ListingCandidate],
         bars: pl.DataFrame,
         run_latest_bar_date: date,
+        fundamentals: FundamentalsUniverseRunData | None = None,
     ) -> pl.DataFrame:
         listed_tickers = {item.ticker for item in listings if item.market == market}
         if not listed_tickers or bars.is_empty():

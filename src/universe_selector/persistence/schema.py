@@ -11,6 +11,7 @@ from universe_selector.errors import DuckDbBusyError, SchemaError
 MIGRATIONS: tuple[tuple[int, str], ...] = (
     (1, "001_initial"),
     (2, "002_report_json_artifacts"),
+    (3, "003_fundamentals_metadata"),
 )
 
 REQUIRED_COLUMNS: dict[str, set[str]] = {
@@ -35,6 +36,15 @@ REQUIRED_COLUMNS: dict[str, set[str]] = {
         "data_fetch_started_at",
         "market_timezone",
         "run_latest_bar_date",
+        "fundamentals_provider_id",
+        "fundamentals_source_id",
+        "fundamentals_latest_source_date",
+        "fundamentals_source_risk_note",
+        "fundamentals_field_mapping_note",
+        "fundamentals_requested_count",
+        "fundamentals_returned_count",
+        "fundamentals_missing_count",
+        "fundamentals_invalid_count",
     },
     "run_ticker_snapshot": {
         "run_id",

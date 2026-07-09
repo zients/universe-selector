@@ -16,6 +16,7 @@ from universe_selector.providers.registry import (
     get_listing_registration,
     get_ohlcv_registration,
 )
+from universe_selector.providers.models import ProviderDataRequirements
 from universe_selector.ranking_profiles import RankingProfile, get_ranking_profile
 
 
@@ -132,7 +133,8 @@ class AppConfig:
     def ranking_config_hash(self) -> str:
         return hashlib.sha256(canonical_json(self.ranking_config_payload()).encode("utf-8")).hexdigest()
 
-    def provider_config_payload(self) -> dict[str, Any]:
+    def provider_config_payload(self, requirements: ProviderDataRequirements | None = None) -> dict[str, Any]:
+        requirements = requirements or ProviderDataRequirements()
         listing_provider_payload = {}
         for market in Market:
             registration = get_listing_registration(self.live_listing_provider[market], market)
@@ -141,7 +143,7 @@ class AppConfig:
                 "source_ids": list(registration.source_ids),
             }
         ohlcv_registration = get_ohlcv_registration(self.live_ohlcv_provider)
-        return {
+        payload: dict[str, Any] = {
             "listing_provider": listing_provider_payload,
             "ohlcv_provider": {
                 "provider_id": ohlcv_registration.provider_id,
@@ -154,9 +156,16 @@ class AppConfig:
             },
             "ticker_limit": self.live_ticker_limit,
         }
+        if requirements.fundamentals:
+            fundamentals_registration = get_fundamentals_provider_registration(self.live_fundamentals_provider)
+            payload["fundamentals_provider"] = {
+                "provider_id": fundamentals_registration.provider_id,
+                "source_ids": list(fundamentals_registration.source_ids),
+            }
+        return payload
 
-    def provider_config_hash(self) -> str:
-        return hashlib.sha256(canonical_json(self.provider_config_payload()).encode("utf-8")).hexdigest()
+    def provider_config_hash(self, requirements: ProviderDataRequirements | None = None) -> str:
+        return hashlib.sha256(canonical_json(self.provider_config_payload(requirements)).encode("utf-8")).hexdigest()
 
 
 def _parse_live_ticker_limit(value: object, *, label: str) -> int | None:

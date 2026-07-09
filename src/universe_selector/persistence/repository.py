@@ -66,6 +66,15 @@ PROVIDER_METADATA_COLUMNS = [
     "data_fetch_started_at",
     "market_timezone",
     "run_latest_bar_date",
+    "fundamentals_provider_id",
+    "fundamentals_source_id",
+    "fundamentals_latest_source_date",
+    "fundamentals_source_risk_note",
+    "fundamentals_field_mapping_note",
+    "fundamentals_requested_count",
+    "fundamentals_returned_count",
+    "fundamentals_missing_count",
+    "fundamentals_invalid_count",
 ]
 
 
@@ -164,6 +173,25 @@ def _metadata_from_row(row: tuple[Any, ...]) -> ProviderMetadata:
         data_fetch_started_at=data_fetch_started_at,
         market_timezone=str(payload["market_timezone"]),
         run_latest_bar_date=payload["run_latest_bar_date"],
+        fundamentals_provider_id=(
+            None if payload["fundamentals_provider_id"] is None else str(payload["fundamentals_provider_id"])
+        ),
+        fundamentals_source_id=None
+        if payload["fundamentals_source_id"] is None
+        else str(payload["fundamentals_source_id"]),
+        fundamentals_latest_source_date=payload["fundamentals_latest_source_date"],
+        fundamentals_source_risk_note=(
+            None if payload["fundamentals_source_risk_note"] is None else str(payload["fundamentals_source_risk_note"])
+        ),
+        fundamentals_field_mapping_note=(
+            None
+            if payload["fundamentals_field_mapping_note"] is None
+            else str(payload["fundamentals_field_mapping_note"])
+        ),
+        fundamentals_requested_count=payload["fundamentals_requested_count"],
+        fundamentals_returned_count=payload["fundamentals_returned_count"],
+        fundamentals_missing_count=payload["fundamentals_missing_count"],
+        fundamentals_invalid_count=payload["fundamentals_invalid_count"],
     )
 
 
@@ -350,9 +378,14 @@ class DuckDbRepository:
                 insert into run_provider_metadata(
                   run_id, data_mode, listing_provider_id, listing_source_id,
                   ohlcv_provider_id, ohlcv_source_id, provider_config_hash,
-                  data_fetch_started_at, market_timezone, run_latest_bar_date
+                  data_fetch_started_at, market_timezone, run_latest_bar_date,
+                  fundamentals_provider_id, fundamentals_source_id,
+                  fundamentals_latest_source_date, fundamentals_source_risk_note,
+                  fundamentals_field_mapping_note, fundamentals_requested_count,
+                  fundamentals_returned_count, fundamentals_missing_count,
+                  fundamentals_invalid_count
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     run_id,
@@ -365,6 +398,15 @@ class DuckDbRepository:
                     _metadata_timestamp_for_storage(metadata),
                     metadata.market_timezone,
                     metadata.run_latest_bar_date,
+                    metadata.fundamentals_provider_id,
+                    metadata.fundamentals_source_id,
+                    metadata.fundamentals_latest_source_date,
+                    metadata.fundamentals_source_risk_note,
+                    metadata.fundamentals_field_mapping_note,
+                    metadata.fundamentals_requested_count,
+                    metadata.fundamentals_returned_count,
+                    metadata.fundamentals_missing_count,
+                    metadata.fundamentals_invalid_count,
                 ],
             )
 

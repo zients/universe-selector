@@ -4,13 +4,14 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from universe_selector.ranking_profiles.base import RankingProfile
+from universe_selector.ranking_profiles.base import RankingProfile, RankingProfileDataRequirements
 
 
 @dataclass(frozen=True)
 class RankingProfileRegistration:
     profile_id: str
     factory: Callable[[], RankingProfile]
+    data_requirements: RankingProfileDataRequirements = RankingProfileDataRequirements()
 
     def create_profile(self) -> RankingProfile:
         return self.factory()

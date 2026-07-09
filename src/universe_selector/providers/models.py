@@ -30,6 +30,15 @@ class ProviderMetadata:
     data_fetch_started_at: datetime
     market_timezone: str
     run_latest_bar_date: date
+    fundamentals_provider_id: str | None = None
+    fundamentals_source_id: str | None = None
+    fundamentals_latest_source_date: date | None = None
+    fundamentals_source_risk_note: str | None = None
+    fundamentals_field_mapping_note: str | None = None
+    fundamentals_requested_count: int | None = None
+    fundamentals_returned_count: int | None = None
+    fundamentals_missing_count: int | None = None
+    fundamentals_invalid_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -37,6 +46,12 @@ class ProviderRunData:
     metadata: ProviderMetadata
     listings: list[ListingCandidate]
     bars: pl.DataFrame
+    fundamentals: FundamentalsUniverseRunData | None = None
+
+
+@dataclass(frozen=True)
+class ProviderDataRequirements:
+    fundamentals: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,3 +93,18 @@ class FundamentalFacts:
 class FundamentalsRunData:
     metadata: FundamentalsMetadata
     facts: FundamentalFacts
+
+
+@dataclass(frozen=True)
+class FundamentalsCoverage:
+    requested_count: int
+    returned_count: int
+    missing_count: int
+    invalid_count: int
+
+
+@dataclass(frozen=True)
+class FundamentalsUniverseRunData:
+    metadata: FundamentalsMetadata
+    facts: pl.DataFrame
+    coverage: FundamentalsCoverage

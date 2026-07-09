@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
 import polars as pl
 
 from universe_selector.domain import Market
-from universe_selector.providers.models import ListingCandidate
+from universe_selector.providers.models import FundamentalsUniverseRunData, ListingCandidate
+
+
+@dataclass(frozen=True)
+class RankingProfileDataRequirements:
+    fundamentals: bool = False
 
 
 class RankingProfile(Protocol):
@@ -40,6 +46,7 @@ class RankingProfile(Protocol):
         listings: list[ListingCandidate],
         bars: pl.DataFrame,
         run_latest_bar_date: date,
+        fundamentals: FundamentalsUniverseRunData | None = None,
     ) -> pl.DataFrame: ...
 
     def assign_rankings(self, snapshot: pl.DataFrame) -> pl.DataFrame: ...
