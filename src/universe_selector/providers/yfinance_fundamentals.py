@@ -138,11 +138,11 @@ class YFinanceFundamentalsProvider:
         rows: list[dict[str, object]] = []
         missing_count = 0
         invalid_count = 0
-        requested_tickers = [item.ticker for item in listings if item.market is market]
-        for ticker in requested_tickers:
-            normalized_ticker = canonical_ticker(ticker)
+        requested_listings = [item for item in listings if item.market is market]
+        for listing in requested_listings:
+            normalized_ticker = canonical_ticker(listing.ticker)
             try:
-                ticker_obj = yf.Ticker(_request_symbol(market, normalized_ticker))
+                ticker_obj = yf.Ticker(_request_symbol_for_listing(market, listing, normalized_ticker))
                 rows.append(self._normalize_universe_ticker(market, normalized_ticker, ticker_obj))
             except _MissingFundamentalsError:
                 missing_count += 1
@@ -169,7 +169,7 @@ class YFinanceFundamentalsProvider:
             ),
             facts=facts,
             coverage=FundamentalsCoverage(
-                requested_count=len(requested_tickers),
+                requested_count=len(requested_listings),
                 returned_count=len(rows),
                 missing_count=missing_count,
                 invalid_count=invalid_count,
@@ -402,6 +402,17 @@ def _first_present(payload: Mapping[str, object], keys: tuple[str, ...]) -> obje
         if value is not None:
             return value
     return None
+
+
+def _request_symbol_for_listing(market: Market, listing: ListingCandidate, ticker: str) -> str:
+    if market is not Market.TW:
+        return _request_symbol(market, ticker)
+    exchange_segment = listing.exchange_segment.upper()
+    if exchange_segment == "TWSE":
+        return f"{ticker}.TW"
+    if exchange_segment == "TPEX":
+        return f"{ticker}.TWO"
+    raise ProviderDataError(f"unsupported TW exchange segment for yfinance: {listing.exchange_segment}")
 
 
 def _request_symbol(market: Market, ticker: str) -> str:

@@ -216,6 +216,75 @@ def test_yfinance_fundamentals_maps_tw_ticker_to_yfinance_tw_symbol() -> None:
     assert data.facts.currency == "TWD"
 
 
+def test_yfinance_universe_fundamentals_maps_tpex_to_two_and_preserves_canonical_tickers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requested = []
+
+    class FakeTicker:
+        info = {"financialCurrency": "TWD"}
+
+        def __init__(self, symbol: str) -> None:
+            requested.append(symbol)
+
+        def get_income_stmt(self, *, freq: str = "yearly", pretty: bool = False, **kwargs) -> pd.DataFrame:
+            del kwargs
+            assert pretty is True
+            if freq == "quarterly":
+                return _quarterly_income_frame()
+            raise AssertionError(f"unexpected freq {freq}")
+
+        def get_cash_flow(self, *, freq: str = "yearly", pretty: bool = False, **kwargs) -> pd.DataFrame:
+            del kwargs
+            assert pretty is True
+            if freq == "quarterly":
+                return _quarterly_cash_flow_frame()
+            raise AssertionError(f"unexpected freq {freq}")
+
+        def get_balance_sheet(self, *, freq: str = "yearly", pretty: bool = False, **kwargs) -> pd.DataFrame:
+            del kwargs
+            assert pretty is True
+            assert freq == "quarterly"
+            return _balance_sheet_frame()
+
+    _install_fake_yfinance(monkeypatch, FakeTicker)
+    context = build_provider_run_context(
+        market=Market.TW,
+        data_fetch_started_at=datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc),
+        ticker_limit=None,
+    )
+    listings = [
+        ListingCandidate(
+            market=Market.TW,
+            ticker="2330",
+            listing_symbol="2330",
+            exchange_segment="TWSE",
+            listing_status="active",
+            instrument_type="common_stock",
+            source_id="unit:2330",
+        ),
+        ListingCandidate(
+            market=Market.TW,
+            ticker="1240",
+            listing_symbol="1240",
+            exchange_segment="TPEX",
+            listing_status="active",
+            instrument_type="common_stock",
+            source_id="unit:1240",
+        ),
+    ]
+    provider = YFinanceFundamentalsProvider(clock=lambda: datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc))
+
+    data = provider.load_fundamentals_for_listings(context, Market.TW, listings)
+
+    assert requested == ["2330.TW", "1240.TWO"]
+    assert data.facts["ticker"].to_list() == ["1240", "2330"]
+    assert data.coverage.requested_count == 2
+    assert data.coverage.returned_count == 2
+    assert data.coverage.missing_count == 0
+    assert data.coverage.invalid_count == 0
+
+
 def test_yfinance_universe_fundamentals_maps_us_class_share_to_yfinance_symbol(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
