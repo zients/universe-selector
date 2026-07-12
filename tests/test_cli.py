@@ -47,7 +47,8 @@ def test_cli_batch_help_documents_market_and_profile_options() -> None:
 
     assert result.exit_code == 0, result.output
     assert "Supported markets: us, tw." in normalized
-    assert "Run more" in normalized
+    assert "one provider snapshot" in normalized
+    assert "fundamental_quality_profitability_v1" in normalized
     assert "persist separate runs" in normalized
     assert "provider snapshot" in normalized
     for profile_id in supported_ranking_profile_ids():
@@ -188,6 +189,35 @@ def test_cli_batch_report_and_inspect_use_sample_profile(monkeypatch, tmp_path: 
     assert "- normalized ticker: AAA" in inspect.output
     assert "- return_60d:" in inspect.output
     assert "- return_120d:" in inspect.output
+
+
+def test_cli_batch_report_and_inspect_use_fundamental_quality_profile(
+    monkeypatch,
+    tmp_path: Path,
+    fixture_dir: Path,
+) -> None:
+    _write_cli_config(tmp_path, fixture_dir)
+    monkeypatch.chdir(tmp_path)
+
+    batch = runner.invoke(app, ["batch", "us", "--ranking-profile", "fundamental_quality_profitability_v1"])
+    assert batch.exit_code == 0, batch.output
+    run_id = _run_id_from(batch.output)
+
+    report = runner.invoke(app, ["report", "us", "--ranking-profile", "fundamental_quality_profitability_v1"])
+    assert report.exit_code == 0, report.output
+    assert f"run_id: {run_id}" in report.output
+    assert "ranking_profile: fundamental_quality_profitability_v1" in report.output
+    assert "| 1 | AAA |" in report.output
+
+    inspect = runner.invoke(
+        app,
+        ["inspect", "us", "--ticker", "AAA", "--ranking-profile", "fundamental_quality_profitability_v1"],
+    )
+    assert inspect.exit_code == 0, inspect.output
+    assert "# Universe Selector Inspect" in inspect.output
+    assert "- normalized ticker: AAA" in inspect.output
+    assert "- roe:" in inspect.output
+    assert "score_profitability 100.0" in inspect.output
 
 
 def test_cli_batch_ranking_profile_overrides_config(monkeypatch) -> None:

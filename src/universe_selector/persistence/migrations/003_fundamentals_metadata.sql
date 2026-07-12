@@ -1,0 +1,9 @@
+alter table run_provider_metadata add column fundamentals_provider_id varchar;
+alter table run_provider_metadata add column fundamentals_source_id varchar;
+alter table run_provider_metadata add column fundamentals_latest_source_date date;
+alter table run_provider_metadata add column fundamentals_source_risk_note varchar;
+alter table run_provider_metadata add column fundamentals_field_mapping_note varchar;
+alter table run_provider_metadata add column fundamentals_requested_count integer;
+alter table run_provider_metadata add column fundamentals_returned_count integer;
+alter table run_provider_metadata add column fundamentals_missing_count integer;
+alter table run_provider_metadata add column fundamentals_invalid_count integer;

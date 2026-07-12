@@ -18,6 +18,8 @@ from universe_selector.config import (
 )
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
+from universe_selector.providers.models import ProviderDataRequirements
+from universe_selector.providers.registration import FundamentalsProviderRegistration
 from universe_selector.ranking_profiles import (
     RankingProfileRegistration,
     get_ranking_profile,
@@ -31,6 +33,10 @@ from universe_selector.ranking_profiles.base_breakout_quality_v1 import (
 from universe_selector.ranking_profiles.defensive_compounder_quality_v1 import (
     DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID,
     DefensiveCompounderQualityV1Profile,
+)
+from universe_selector.ranking_profiles.fundamental_quality_profitability_v1 import (
+    FUNDAMENTAL_QUALITY_PROFITABILITY_PROFILE_ID,
+    FundamentalQualityProfitabilityV1Profile,
 )
 from universe_selector.ranking_profiles.liquidity_quality_v1 import (
     LIQUIDITY_QUALITY_PROFILE_ID,
@@ -457,6 +463,7 @@ def test_supported_profile_registry_includes_registered_profiles() -> None:
         RELATIVE_STRENGTH_LEADER_PROFILE_ID,
         MEAN_REVERSION_QUALITY_PROFILE_ID,
         DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID,
+        FUNDAMENTAL_QUALITY_PROFITABILITY_PROFILE_ID,
     )
 
     registration = get_ranking_profile_registration("sample_price_trend_v1")
@@ -513,6 +520,22 @@ def test_supported_profile_registry_includes_registered_profiles() -> None:
     assert isinstance(defensive_registration, RankingProfileRegistration)
     assert isinstance(defensive_registration.create_profile(), DefensiveCompounderQualityV1Profile)
     assert isinstance(get_ranking_profile(DEFENSIVE_COMPOUNDER_QUALITY_PROFILE_ID), DefensiveCompounderQualityV1Profile)
+
+    fundamental_registration = get_ranking_profile_registration(FUNDAMENTAL_QUALITY_PROFITABILITY_PROFILE_ID)
+    assert isinstance(fundamental_registration, RankingProfileRegistration)
+    assert isinstance(fundamental_registration.create_profile(), FundamentalQualityProfitabilityV1Profile)
+    assert isinstance(
+        get_ranking_profile(FUNDAMENTAL_QUALITY_PROFITABILITY_PROFILE_ID), FundamentalQualityProfitabilityV1Profile
+    )
+    assert fundamental_registration.data_requirements.fundamentals is True
+
+
+def test_existing_ranking_profile_registrations_default_to_no_fundamentals() -> None:
+    for profile_id in supported_ranking_profile_ids():
+        if profile_id == FUNDAMENTAL_QUALITY_PROFITABILITY_PROFILE_ID:
+            continue
+        registration = get_ranking_profile_registration(profile_id)
+        assert registration.data_requirements.fundamentals is False
 
 
 def test_supported_profile_registry_rejects_unknown_profile() -> None:
@@ -633,3 +656,44 @@ def test_valuation_fundamentals_provider_is_not_part_of_batch_provider_hash() ->
 
     assert default.provider_config_hash() == alternate_valuation_provider.provider_config_hash()
     assert "fundamentals_provider" not in default.provider_config_payload()
+
+
+def test_provider_config_payload_includes_fundamentals_only_when_required() -> None:
+    config = AppConfig()
+
+    ohlcv_only_payload = config.provider_config_payload(ProviderDataRequirements())
+    fundamentals_payload = config.provider_config_payload(ProviderDataRequirements(fundamentals=True))
+
+    assert "fundamentals_provider" not in ohlcv_only_payload
+    assert fundamentals_payload["fundamentals_provider"] == {
+        "provider_id": "yfinance_fundamentals",
+        "source_ids": ["yahoo-finance:yfinance-ticker"],
+    }
+
+
+def test_provider_config_hash_is_request_aware_for_fundamentals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    default = AppConfig()
+    alternate_fundamentals = AppConfig(live_fundamentals_provider="other_fundamentals")
+
+    def fake_fundamentals_registration(provider_id: str) -> FundamentalsProviderRegistration:
+        return FundamentalsProviderRegistration(
+            provider_id=provider_id,
+            supported_markets=frozenset({Market.US, Market.TW}),
+            source_ids=(f"unit:{provider_id}",),
+            factory=lambda: object(),  # type: ignore[return-value]
+        )
+
+    monkeypatch.setattr(
+        config_module,
+        "get_fundamentals_provider_registration",
+        fake_fundamentals_registration,
+    )
+
+    assert default.provider_config_hash(ProviderDataRequirements()) == alternate_fundamentals.provider_config_hash(
+        ProviderDataRequirements()
+    )
+    assert default.provider_config_hash(
+        ProviderDataRequirements(fundamentals=True)
+    ) != alternate_fundamentals.provider_config_hash(ProviderDataRequirements(fundamentals=True))

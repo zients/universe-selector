@@ -7,12 +7,18 @@ import polars as pl
 
 from universe_selector.domain import Market
 from universe_selector.providers.context import ProviderRunContext
-from universe_selector.providers.models import FundamentalsRunData, ListingCandidate, ProviderRunData
+from universe_selector.providers.models import (
+    FundamentalsRunData,
+    FundamentalsUniverseRunData,
+    ListingCandidate,
+    ProviderDataRequirements,
+    ProviderRunData,
+)
 
 
 class MarketDataProvider(ABC):
     @abstractmethod
-    def load_run_data(self, market: Market) -> ProviderRunData:
+    def load_run_data(self, market: Market, requirements: ProviderDataRequirements | None = None) -> ProviderRunData:
         raise NotImplementedError
 
 
@@ -42,4 +48,12 @@ class FundamentalsProvider(Protocol):
     source_ids: tuple[str, ...]
 
     def load_fundamentals(self, market: Market, ticker: str) -> FundamentalsRunData:
+        raise NotImplementedError
+
+    def load_fundamentals_for_listings(
+        self,
+        context: ProviderRunContext,
+        market: Market,
+        listings: list[ListingCandidate],
+    ) -> FundamentalsUniverseRunData:
         raise NotImplementedError

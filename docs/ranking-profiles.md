@@ -17,6 +17,7 @@ and interpretation notes.
 | `relative_strength_leader_v1` | Market-relative leadership profile favoring persistent 20/60/120-day relative strength, risk-adjusted momentum, trend durability, and overheat audit tags. | `composite`, `shortterm_leader`, `midterm_leader` | 274 bars |
 | `mean_reversion_quality_v1` | Market-relative mean reversion profile favoring short-term oversold candidates near support with rebound confirmation and falling-knife risk controls. | `composite`, `oversold_bounce`, `support_reversion` | 252 bars |
 | `defensive_compounder_quality_v1` | OHLCV-only defensive compounder proxy favoring steady positive price behavior, downside volatility control, drawdown control, and intact long-trend structure. | `composite`, `steady_compounder`, `downside_control` | 252 bars |
+| `fundamental_quality_profitability_v1` | Fundamentals-backed profile favoring profitability, cash generation, and lower debt-to-equity using normalized fundamentals provider data. | `composite` | latest bar plus eligible fundamentals |
 
 All profile scores are ranking values, not return forecasts. Higher score ranks
 better within the same run, market, profile, and horizon unless the profile
@@ -220,6 +221,24 @@ It persists positive and risk tags such as `tag_positive_steady_compounder`,
 `tag_risk_stale_or_illiquid`. Defensive compounder quality is not a buy signal;
 use it as a price-behavior ranking proxy that still requires independent review.
 
+### `fundamental_quality_profitability_v1`
+
+`fundamental_quality_profitability_v1` is a fundamentals-backed profile. It
+uses normalized provider facts for ROE, ROA, operating margin, net margin, FCF
+margin, positive FCF, and debt-to-equity. It requires a configured
+fundamentals provider and filters rows with stale or invalid fundamentals.
+
+It ranks one horizon:
+
+- `composite`: balanced profitability, cash generation, and balance-sheet
+  quality.
+
+It persists audit tags such as `tag_fundamentals_annual_fallback`,
+`tag_negative_net_income`, and `tag_negative_fcf`. Scores are cross-sectional
+percentile ranks within the eligible candidates in the same run. Fundamental
+quality profitability is not a buy signal; use it as a research-ranking lens
+that still requires independent verification of provider facts.
+
 ## Choosing Profiles
 
 Use `sample_price_trend_v1` for fixture smoke tests and as a reference
@@ -235,6 +254,8 @@ market's persistent leadership list with overheat and fade tags. Use
 that still preserve enough structure to avoid obvious falling-knife setups. Use
 `defensive_compounder_quality_v1` when you want an OHLCV-only defensive
 compounder proxy rather than a fundamental quality screen. Use
+`fundamental_quality_profitability_v1` when you want a fundamentals-backed
+profitability and balance-sheet quality screen. Use
 `volatility_quality_v1` and `liquidity_quality_v1` as risk and tradability
 companions, either on their own or in a multi-profile batch with momentum or
 trend profiles.

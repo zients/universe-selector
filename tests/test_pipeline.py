@@ -5,8 +5,10 @@ import json
 import math
 import shutil
 from dataclasses import replace
+from datetime import date, datetime, timezone
 from pathlib import Path
 
+import polars as pl
 import pytest
 
 import universe_selector.pipeline as pipeline
@@ -16,7 +18,13 @@ from universe_selector.errors import ProviderDataError, ValidationError
 from universe_selector.persistence.repository import DuckDbRepository
 from universe_selector.pipeline import MultiProfileBatchError, run_batch, run_batch_profiles
 from universe_selector.providers.fixture import FixtureProvider
-from universe_selector.ranking_profiles import get_ranking_profile
+from universe_selector.providers.models import FundamentalsCoverage, FundamentalsMetadata, FundamentalsUniverseRunData
+from universe_selector.ranking_profiles import (
+    RankingProfileRegistration,
+    get_ranking_profile,
+    get_ranking_profile_registration,
+)
+from universe_selector.ranking_profiles.base import RankingProfileDataRequirements
 
 
 def _fixture_config(tmp_path: Path, fixture_dir: Path) -> AppConfig:
@@ -138,6 +146,46 @@ def test_pipeline_runs_liquidity_quality_profile_and_persists_metrics(tmp_path: 
     assert {row["horizon"] for row in payload.rankings} == {"composite", "shortterm", "stable"}
     assert "depth_score" in payload.rankings[0]
     assert "tag_risk_thin_liquidity" in payload.rankings[0]
+
+
+def test_pipeline_runs_fundamental_quality_profile_and_persists_metrics(
+    tmp_path: Path,
+    fixture_dir: Path,
+) -> None:
+    config = AppConfig(
+        data_mode="fixture",
+        duckdb_path=str(tmp_path / "runs.duckdb"),
+        lock_path=str(tmp_path / "batch.lock"),
+        fixture_dir=str(fixture_dir),
+        ranking_profile="fundamental_quality_profitability_v1",
+        report_top_n=2,
+    )
+
+    result = run_batch(Market.US, config)
+
+    repo = DuckDbRepository(config.duckdb_path)
+    metadata = repo.read_provider_metadata(result.run_id)
+    payload = repo.read_inspect_payload(result.run_id, "AAA", profile=config.selected_ranking_profile)
+    report = repo.read_report_markdown(result.run_id)
+    json_report = json.loads(repo.read_report_artifact(result.run_id, "json"))
+
+    assert result.ranking_profile == "fundamental_quality_profitability_v1"
+    assert metadata.fundamentals_provider_id == "fixture-fundamentals-v1"
+    assert metadata.fundamentals_requested_count == 5
+    assert metadata.fundamentals_returned_count == 3
+    assert json_report["provider_summary"]["fundamentals_provider_id"] == "fixture-fundamentals-v1"
+    assert json_report["provider_summary"]["fundamentals_source_id"] == "sample_basic/fundamentals.csv"
+    assert json_report["provider_summary"]["fundamentals_returned_count"] == "3"
+    assert (
+        "Fixture fundamentals are deterministic sample data"
+        in json_report["provider_summary"]["fundamentals_source_risk_note"]
+    )
+    assert "ranking_profile: fundamental_quality_profitability_v1" in report
+    assert "fundamentals_provider_id: fixture-fundamentals-v1" in report
+    assert payload.snapshot["ticker"] == "AAA"
+    assert payload.snapshot["roe"] == pytest.approx(0.20)
+    assert payload.rankings[0]["horizon"] == "composite"
+    assert "score_profitability" in payload.rankings[0]
 
 
 def test_pipeline_runs_volatility_quality_profile_and_persists_metrics(tmp_path: Path, fixture_dir: Path) -> None:
@@ -638,7 +686,7 @@ def test_pipeline_runs_multiple_profiles_with_one_provider_load(
         def __init__(self, fixture_dir: str) -> None:
             self._provider = FixtureProvider(fixture_dir)
 
-        def load_run_data(self, market: Market):
+        def load_run_data(self, market: Market, requirements=None):
             nonlocal load_calls
             load_calls += 1
             return self._provider.load_run_data(market)
@@ -669,6 +717,127 @@ def test_pipeline_runs_multiple_profiles_with_one_provider_load(
         assert payload.snapshot["ticker"] == "AAA"
         assert payload.rankings
         assert {row["run_id"] for row in payload.rankings} == {result.run_id}
+
+
+def test_pipeline_aggregates_fundamentals_requirements_for_multi_profile_provider_load(
+    tmp_path: Path,
+    fixture_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _fixture_config(tmp_path, fixture_dir)
+    _install_fundamentals_required_profile(config, monkeypatch)
+    captured_requirements = []
+
+    class CountingFixtureProvider:
+        def __init__(self, fixture_dir: str) -> None:
+            self._provider = FixtureProvider(fixture_dir)
+
+        def load_run_data(self, market: Market, requirements=None):
+            captured_requirements.append(requirements)
+            provider_data = self._provider.load_run_data(market)
+            return replace(provider_data, fundamentals=_pipeline_fundamentals())
+
+    monkeypatch.setattr("universe_selector.pipeline.FixtureProvider", CountingFixtureProvider)
+
+    results = run_batch_profiles(
+        Market.US,
+        config,
+        ("sample_price_trend_v1", "fundamentals_required_profile"),
+    )
+
+    assert len(results) == 2
+    assert len(captured_requirements) == 1
+    assert captured_requirements[0].fundamentals is True
+
+
+def test_pipeline_fails_fundamentals_profile_when_provider_data_has_no_fundamentals(
+    tmp_path: Path,
+    fixture_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = replace(_fixture_config(tmp_path, fixture_dir), ranking_profile="fundamentals_required_profile")
+    _install_fundamentals_required_profile(config, monkeypatch)
+
+    class MissingFundamentalsProvider:
+        def __init__(self, fixture_dir: str) -> None:
+            self._provider = FixtureProvider(fixture_dir)
+
+        def load_run_data(self, market: Market, requirements=None):
+            return self._provider.load_run_data(market)
+
+    monkeypatch.setattr("universe_selector.pipeline.FixtureProvider", MissingFundamentalsProvider)
+
+    with pytest.raises(ProviderDataError, match="requires fundamentals"):
+        run_batch(Market.US, config)
+
+    rows = (
+        DuckDbRepository(config.duckdb_path)
+        .connect(read_only=True)
+        .execute("select status, error_message from run_log")
+        .fetchall()
+    )
+    assert len(rows) == 1
+    assert rows[0][0] == "failed"
+    assert "requires fundamentals" in rows[0][1]
+
+
+def test_pipeline_marks_fixture_fundamentals_required_run_failed_when_csv_is_missing(
+    tmp_path: Path,
+    fixture_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_fundamentals_dir = tmp_path / "missing_fundamentals"
+    shutil.copytree(fixture_dir, missing_fundamentals_dir)
+    (missing_fundamentals_dir / "fundamentals.csv").unlink()
+    config = replace(
+        _fixture_config(tmp_path, missing_fundamentals_dir),
+        ranking_profile="fundamentals_required_profile",
+    )
+    _install_fundamentals_required_profile(config, monkeypatch)
+
+    with pytest.raises(ProviderDataError, match="fixture fundamentals are required but unavailable"):
+        run_batch(Market.US, config)
+
+    rows = (
+        DuckDbRepository(config.duckdb_path)
+        .connect(read_only=True)
+        .execute("select status, error_message from run_log")
+        .fetchall()
+    )
+    assert len(rows) == 1
+    assert rows[0][0] == "failed"
+    assert "fixture fundamentals are required but unavailable" in rows[0][1]
+
+
+def test_pipeline_marks_fundamentals_run_failed_when_profile_filters_all_rows(
+    tmp_path: Path,
+    fixture_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = replace(_fixture_config(tmp_path, fixture_dir), ranking_profile="fundamental_quality_profitability_v1")
+
+    class StaleFundamentalsFixtureProvider:
+        def __init__(self, fixture_dir: str) -> None:
+            self._provider = FixtureProvider(fixture_dir)
+
+        def load_run_data(self, market: Market, requirements=None):
+            provider_data = self._provider.load_run_data(market)
+            return replace(provider_data, fundamentals=_stale_pipeline_fundamentals())
+
+    monkeypatch.setattr("universe_selector.pipeline.FixtureProvider", StaleFundamentalsFixtureProvider)
+
+    with pytest.raises(ProviderDataError, match="fundamentals provider returned no eligible fundamentals for US"):
+        run_batch(Market.US, config)
+
+    rows = (
+        DuckDbRepository(config.duckdb_path)
+        .connect(read_only=True)
+        .execute("select status, error_message from run_log")
+        .fetchall()
+    )
+    assert len(rows) == 1
+    assert rows[0][0] == "failed"
+    assert "fundamentals provider returned no eligible fundamentals for US" in rows[0][1]
 
 
 def test_pipeline_rejects_duplicate_multi_profile_ids_before_provider_load(
@@ -748,8 +917,18 @@ class _FailingProfile:
 
 def _install_failing_profile(config: AppConfig, monkeypatch: pytest.MonkeyPatch) -> None:
     real_pipeline_get_ranking_profile = pipeline.get_ranking_profile
+    real_pipeline_get_ranking_profile_registration = getattr(
+        pipeline,
+        "get_ranking_profile_registration",
+        get_ranking_profile_registration,
+    )
     real_config_get_ranking_profile = get_ranking_profile
-    delegate_profile = config.selected_ranking_profile
+    delegate_profile = get_ranking_profile("sample_price_trend_v1")
+    registration = RankingProfileRegistration(
+        profile_id="failing_profile",
+        factory=lambda: _FailingProfile(delegate_profile),
+        data_requirements=RankingProfileDataRequirements(),
+    )
 
     def fake_get_ranking_profile(profile_id: str):
         if profile_id == "failing_profile":
@@ -761,8 +940,138 @@ def _install_failing_profile(config: AppConfig, monkeypatch: pytest.MonkeyPatch)
             return _FailingProfile(delegate_profile)
         return real_config_get_ranking_profile(profile_id)
 
+    def fake_get_ranking_profile_registration(profile_id: str):
+        if profile_id == "failing_profile":
+            return registration
+        return real_pipeline_get_ranking_profile_registration(profile_id)
+
     monkeypatch.setattr(pipeline, "get_ranking_profile", fake_get_ranking_profile)
     monkeypatch.setattr("universe_selector.config.get_ranking_profile", fake_config_get_ranking_profile)
+    monkeypatch.setattr("universe_selector.persistence.repository.get_ranking_profile", fake_get_ranking_profile)
+    monkeypatch.setattr(
+        pipeline, "get_ranking_profile_registration", fake_get_ranking_profile_registration, raising=False
+    )
+
+
+class _FundamentalsRequiredProfile:
+    profile_id = "fundamentals_required_profile"
+    snapshot_metric_keys = ("return_60d", "return_120d")
+    ranking_metric_keys = ("score_return_60d", "score_return_120d")
+    inspect_metric_keys = ("return_60d", "return_120d")
+    horizon_order = ("midterm", "longterm")
+    rank_interpretation_note = "fundamentals required fixture"
+
+    def __init__(self, delegate_profile) -> None:
+        self._delegate_profile = delegate_profile
+
+    def validate(self) -> None:
+        return None
+
+    def ranking_config_payload(self) -> dict[str, object]:
+        return {"profile": self.profile_id, "version": 1}
+
+    def build_snapshot(self, **kwargs):
+        return self._delegate_profile.build_snapshot(**kwargs)
+
+    def assign_rankings(self, snapshot):
+        return self._delegate_profile.assign_rankings(snapshot)
+
+
+def _install_fundamentals_required_profile(config: AppConfig, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_pipeline_get_ranking_profile = pipeline.get_ranking_profile
+    real_pipeline_get_ranking_profile_registration = getattr(
+        pipeline,
+        "get_ranking_profile_registration",
+        get_ranking_profile_registration,
+    )
+    real_config_get_ranking_profile = get_ranking_profile
+    delegate_profile = get_ranking_profile("sample_price_trend_v1")
+
+    registration = RankingProfileRegistration(
+        profile_id="fundamentals_required_profile",
+        factory=lambda: _FundamentalsRequiredProfile(delegate_profile),
+        data_requirements=RankingProfileDataRequirements(fundamentals=True),
+    )
+
+    def fake_get_ranking_profile(profile_id: str):
+        if profile_id == "fundamentals_required_profile":
+            return _FundamentalsRequiredProfile(delegate_profile)
+        return real_pipeline_get_ranking_profile(profile_id)
+
+    def fake_config_get_ranking_profile(profile_id: str):
+        if profile_id == "fundamentals_required_profile":
+            return _FundamentalsRequiredProfile(delegate_profile)
+        return real_config_get_ranking_profile(profile_id)
+
+    def fake_get_ranking_profile_registration(profile_id: str):
+        if profile_id == "fundamentals_required_profile":
+            return registration
+        return real_pipeline_get_ranking_profile_registration(profile_id)
+
+    monkeypatch.setattr(pipeline, "get_ranking_profile", fake_get_ranking_profile)
+    monkeypatch.setattr("universe_selector.config.get_ranking_profile", fake_config_get_ranking_profile)
+    monkeypatch.setattr("universe_selector.persistence.repository.get_ranking_profile", fake_get_ranking_profile)
+    monkeypatch.setattr(
+        pipeline, "get_ranking_profile_registration", fake_get_ranking_profile_registration, raising=False
+    )
+
+
+def _pipeline_fundamentals() -> FundamentalsUniverseRunData:
+    return FundamentalsUniverseRunData(
+        metadata=FundamentalsMetadata(
+            data_mode="fixture",
+            fundamentals_provider_id="fixture-fundamentals-v1",
+            fundamentals_source_ids=("sample_basic/fundamentals.csv",),
+            data_fetch_started_at=datetime(2026, 4, 24, 12, 0, tzinfo=timezone.utc),
+            latest_source_date=date(2026, 3, 31),
+        ),
+        facts=pl.DataFrame({"market": ["US"], "ticker": ["AAA"]}),
+        coverage=FundamentalsCoverage(requested_count=1, returned_count=1, missing_count=0, invalid_count=0),
+    )
+
+
+def _stale_pipeline_fundamentals() -> FundamentalsUniverseRunData:
+    return FundamentalsUniverseRunData(
+        metadata=FundamentalsMetadata(
+            data_mode="fixture",
+            fundamentals_provider_id="fixture-fundamentals-v1",
+            fundamentals_source_ids=("sample_basic/fundamentals.csv",),
+            data_fetch_started_at=datetime(2026, 4, 24, 12, 0, tzinfo=timezone.utc),
+            latest_source_date=date(2024, 1, 1),
+        ),
+        facts=pl.DataFrame(
+            {
+                "market": ["US"],
+                "ticker": ["AAA"],
+                "currency": ["USD"],
+                "fiscal_period_end": [date(2024, 1, 1)],
+                "balance_sheet_as_of": [date(2024, 1, 1)],
+                "fiscal_period_type": ["ttm"],
+                "revenue_ttm": [100.0],
+                "gross_profit_ttm": [60.0],
+                "operating_income_ttm": [30.0],
+                "net_income_ttm": [20.0],
+                "total_assets": [200.0],
+                "shareholders_equity": [100.0],
+                "total_debt": [50.0],
+                "cash_and_cash_equivalents": [10.0],
+                "operating_cash_flow_ttm": [25.0],
+                "capital_expenditures_ttm": [5.0],
+                "free_cash_flow_ttm": [20.0],
+                "roe": [0.20],
+                "roa": [0.10],
+                "gross_margin": [0.60],
+                "operating_margin": [0.30],
+                "net_margin": [0.20],
+                "debt_to_equity": [0.50],
+                "fcf_margin": [0.20],
+                "tag_fundamentals_annual_fallback": [0.0],
+                "tag_negative_net_income": [0.0],
+                "tag_negative_fcf": [0.0],
+            }
+        ),
+        coverage=FundamentalsCoverage(requested_count=1, returned_count=1, missing_count=0, invalid_count=0),
+    )
 
 
 def test_pipeline_multi_profile_partial_failure_carries_completed_and_failed_runs(

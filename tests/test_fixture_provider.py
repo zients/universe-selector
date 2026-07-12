@@ -9,6 +9,7 @@ import pytest
 from universe_selector.domain import Market
 from universe_selector.errors import ProviderDataError
 from universe_selector.providers.fixture import FixtureProvider
+from universe_selector.providers.models import ProviderDataRequirements
 
 
 @pytest.fixture
@@ -37,6 +38,31 @@ def test_fixture_provider_loads_metadata_listings_and_bars(fixture_dir: Path) ->
     assert "price_basis" not in us_data.bars.columns
     assert us_data.bars.filter(us_data.bars["ticker"] == "AAA").height == 274
     assert tw_data.bars.filter(tw_data.bars["ticker"] == "2330").height == 274
+
+
+def test_fixture_provider_loads_fundamentals_only_when_requested(fixture_dir: Path) -> None:
+    provider = FixtureProvider(fixture_dir)
+
+    ohlcv_only = provider.load_run_data(Market.US, ProviderDataRequirements())
+    assert ohlcv_only.fundamentals is None
+
+    with_fundamentals = provider.load_run_data(Market.US, ProviderDataRequirements(fundamentals=True))
+    assert with_fundamentals.fundamentals is not None
+    assert with_fundamentals.fundamentals.facts["ticker"].to_list() == ["AAA", "BBB", "CCC"]
+    assert with_fundamentals.metadata.fundamentals_provider_id == "fixture-fundamentals-v1"
+    assert with_fundamentals.metadata.fundamentals_requested_count == 5
+    assert with_fundamentals.metadata.fundamentals_returned_count == 3
+
+
+def test_fixture_provider_requires_fundamentals_file_when_requested(tmp_path: Path, fixture_dir: Path) -> None:
+    temp_fixture_dir = tmp_path / "sample_basic"
+    shutil.copytree(fixture_dir, temp_fixture_dir)
+    (temp_fixture_dir / "fundamentals.csv").unlink()
+    provider = FixtureProvider(temp_fixture_dir)
+
+    assert provider.load_run_data(Market.US, ProviderDataRequirements()).fundamentals is None
+    with pytest.raises(ProviderDataError, match="fixture fundamentals are required but unavailable"):
+        provider.load_run_data(Market.US, ProviderDataRequirements(fundamentals=True))
 
 
 def test_fixture_provider_rejects_duplicate_bars(tmp_path: Path, fixture_dir: Path) -> None:
