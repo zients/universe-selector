@@ -15,7 +15,6 @@ from universe_selector.config import (
     canonical_json,
     ensure_runtime_dirs,
     load_config,
-    load_live_fundamentals_provider_id,
     load_live_value_provider_selection,
 )
 from universe_selector.domain import Market
@@ -164,18 +163,6 @@ def test_app_config_defaults_to_sample_price_trend_profile() -> None:
     assert profile.profile_id == SAMPLE_PRICE_TREND_PROFILE_ID
     assert config.live_fundamentals_provider == "yfinance_fundamentals"
     assert config.ranking_config_payload() == profile.ranking_config_payload()
-
-
-def test_load_live_fundamentals_provider_id_reads_minimal_value_config(monkeypatch, tmp_path: Path) -> None:
-    (tmp_path / "config.yaml").write_text(
-        """
-live:
-  fundamentals_provider: yfinance_fundamentals
-""".lstrip()
-    )
-    monkeypatch.chdir(tmp_path)
-
-    assert load_live_fundamentals_provider_id() == "yfinance_fundamentals"
 
 
 def test_load_live_value_provider_selection_reads_minimal_tw_config(monkeypatch, tmp_path: Path) -> None:

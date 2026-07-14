@@ -105,7 +105,7 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "uv run universe-selector value tw --ticker 2330" in text
     assert "--assumptions valuation_assumptions/tw/2330.yaml" in text
     assert "`value` v1 prints markdown by default and JSON with `--json`." in normalized
-    assert "requires `config.yaml` only for selecting `live.fundamentals_provider`" in normalized
+    assert "requires `config.yaml` only for selecting the live valuation providers" in normalized
     assert "does not read DuckDB" in normalized
     assert "does not persist the result" in normalized
     assert "The default assumptions path is `valuation_assumptions/{market}/{ticker}.yaml`" in normalized
@@ -120,7 +120,9 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "The committed valuation assumption files are repository templates" in normalized
     assert "installed wheels do not copy them into your working directory" in normalized
     assert "yfinance fundamentals are third-party convenience data" in normalized
-    assert "TW tickers default to the yfinance `.TW` request suffix" in normalized
+    assert "same canonical bare ticker as `inspect`" in text
+    assert "live.listing_provider.TW" in text
+    assert "Do not append a provider suffix" in text
     assert "uses provider raw FCF as a starting proxy so the command can run directly" in normalized
     assert "model-implied scenario results" in normalized
     assert "not forecasts, expected outcomes, target cases, or recommendations" in normalized

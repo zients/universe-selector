@@ -242,21 +242,6 @@ def load_config() -> AppConfig:
     return config
 
 
-def load_live_fundamentals_provider_id() -> str:
-    loaded = _load_config_mapping()
-    live = loaded.get("live")
-    if not isinstance(live, dict):
-        raise ValidationError("config key live must be a mapping")
-    if "fundamentals_provider" not in live:
-        raise ValidationError("config missing required key: live.fundamentals_provider")
-    provider_id = _parse_provider_id(
-        live["fundamentals_provider"],
-        label="live.fundamentals_provider",
-    )
-    get_fundamentals_provider_registration(provider_id)
-    return provider_id
-
-
 def load_live_value_provider_selection(market: Market) -> LiveValueProviderSelection:
     loaded = _load_config_mapping()
     live = loaded.get("live")

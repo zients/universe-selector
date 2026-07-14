@@ -7,7 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from universe_selector.cli import app
-from universe_selector.config import AppConfig
+from universe_selector.config import AppConfig, LiveValueProviderSelection
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.persistence.repository import DuckDbRepository
@@ -703,12 +703,14 @@ def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> Non
         model_id: str | None,
         assumptions_path: Path | None,
         fundamentals_provider_id: str,
+        listing_provider_id: str | None = None,
     ):
         captured["market"] = market
         captured["ticker"] = ticker
         captured["model_id"] = model_id
         captured["assumptions_path"] = assumptions_path
         captured["fundamentals_provider_id"] = fundamentals_provider_id
+        captured["listing_provider_id"] = listing_provider_id
         return sentinel_result
 
     monkeypatch.setattr(
@@ -717,9 +719,11 @@ def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> Non
         raising=False,
     )
     monkeypatch.setattr(
-        "universe_selector.cli.load_live_fundamentals_provider_id",
-        lambda: "fake_fundamentals",
-        raising=False,
+        "universe_selector.cli.load_live_value_provider_selection",
+        lambda market: LiveValueProviderSelection(
+            fundamentals_provider_id="fake_fundamentals",
+            listing_provider_id=None,
+        ),
     )
     monkeypatch.setattr(
         "universe_selector.cli.get_valuation_model",
@@ -742,6 +746,7 @@ def test_cli_value_reads_config_provider_and_prints_markdown(monkeypatch) -> Non
     assert captured["model_id"] is None
     assert captured["assumptions_path"] is None
     assert captured["fundamentals_provider_id"] == "fake_fundamentals"
+    assert captured["listing_provider_id"] is None
 
 
 def test_cli_value_json_uses_json_renderer(monkeypatch) -> None:
@@ -756,12 +761,14 @@ def test_cli_value_json_uses_json_renderer(monkeypatch) -> None:
         model_id: str | None,
         assumptions_path: Path | None,
         fundamentals_provider_id: str,
+        listing_provider_id: str | None = None,
     ):
         captured["market"] = market
         captured["ticker"] = ticker
         captured["model_id"] = model_id
         captured["assumptions_path"] = assumptions_path
         captured["fundamentals_provider_id"] = fundamentals_provider_id
+        captured["listing_provider_id"] = listing_provider_id
         return sentinel_result
 
     monkeypatch.setattr(
@@ -770,9 +777,11 @@ def test_cli_value_json_uses_json_renderer(monkeypatch) -> None:
         raising=False,
     )
     monkeypatch.setattr(
-        "universe_selector.cli.load_live_fundamentals_provider_id",
-        lambda: "fake_fundamentals",
-        raising=False,
+        "universe_selector.cli.load_live_value_provider_selection",
+        lambda market: LiveValueProviderSelection(
+            fundamentals_provider_id="fake_fundamentals",
+            listing_provider_id=None,
+        ),
     )
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
     monkeypatch.setattr(
@@ -799,6 +808,7 @@ def test_cli_value_json_uses_json_renderer(monkeypatch) -> None:
     assert captured["model_id"] is None
     assert captured["assumptions_path"] is None
     assert captured["fundamentals_provider_id"] == "fake_fundamentals"
+    assert captured["listing_provider_id"] is None
 
 
 def test_cli_value_help_documents_model_default_source() -> None:
@@ -820,6 +830,7 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
         model_id: str | None,
         assumptions_path: Path | None,
         fundamentals_provider_id: str,
+        listing_provider_id: str | None = None,
     ):
         captured.append(
             {
@@ -828,6 +839,7 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
                 "model_id": model_id,
                 "assumptions_path": assumptions_path,
                 "fundamentals_provider_id": fundamentals_provider_id,
+                "listing_provider_id": listing_provider_id,
             }
         )
         return object()
@@ -838,9 +850,11 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
         raising=False,
     )
     monkeypatch.setattr(
-        "universe_selector.cli.load_live_fundamentals_provider_id",
-        lambda: "fake_fundamentals",
-        raising=False,
+        "universe_selector.cli.load_live_value_provider_selection",
+        lambda market: LiveValueProviderSelection(
+            fundamentals_provider_id="fake_fundamentals",
+            listing_provider_id=None,
+        ),
     )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
@@ -864,6 +878,7 @@ def test_cli_value_passes_model_and_default_assumptions_path_ownership(monkeypat
             "model_id": model_id,
             "assumptions_path": None,
             "fundamentals_provider_id": "fake_fundamentals",
+            "listing_provider_id": None,
         }
         for model_id in (
             "fcf_dcf_v1",
@@ -888,12 +903,14 @@ def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path)
         model_id: str | None,
         assumptions_path: Path | None,
         fundamentals_provider_id: str,
+        listing_provider_id: str | None = None,
     ):
         captured["market"] = market
         captured["ticker"] = ticker
         captured["model_id"] = model_id
         captured["assumptions_path"] = assumptions_path
         captured["fundamentals_provider_id"] = fundamentals_provider_id
+        captured["listing_provider_id"] = listing_provider_id
         return object()
 
     monkeypatch.setattr(
@@ -902,9 +919,11 @@ def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path)
         raising=False,
     )
     monkeypatch.setattr(
-        "universe_selector.cli.load_live_fundamentals_provider_id",
-        lambda: "fake_fundamentals",
-        raising=False,
+        "universe_selector.cli.load_live_value_provider_selection",
+        lambda market: LiveValueProviderSelection(
+            fundamentals_provider_id="fake_fundamentals",
+            listing_provider_id=None,
+        ),
     )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", lambda model_id: object(), raising=False)
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation, raising=False)
@@ -921,6 +940,34 @@ def test_cli_value_passes_explicit_assumptions_path(monkeypatch, tmp_path: Path)
     assert captured["model_id"] is None
     assert captured["assumptions_path"] == assumptions_path
     assert captured["fundamentals_provider_id"] == "fake_fundamentals"
+    assert captured["listing_provider_id"] is None
+
+
+def test_cli_value_tw_passes_canonical_ticker_and_both_provider_ids(monkeypatch) -> None:
+    _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
+    captured: dict[str, object] = {}
+
+    def fake_run_valuation(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        "universe_selector.cli.load_live_value_provider_selection",
+        lambda market: LiveValueProviderSelection(
+            fundamentals_provider_id="fake_fundamentals",
+            listing_provider_id="fake_listing",
+        ),
+    )
+    monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation)
+    monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n")
+
+    result = runner.invoke(app, ["value", "tw", "--ticker", "6488"])
+
+    assert result.exit_code == 0, result.output
+    assert captured["market"] is Market.TW
+    assert captured["ticker"] == "6488"
+    assert captured["fundamentals_provider_id"] == "fake_fundamentals"
+    assert captured["listing_provider_id"] == "fake_listing"
 
 
 def test_cli_value_rejects_unknown_model(monkeypatch) -> None:
@@ -938,11 +985,10 @@ def test_cli_value_rejects_unknown_model(monkeypatch) -> None:
         raising=False,
     )
     monkeypatch.setattr(
-        "universe_selector.cli.load_live_fundamentals_provider_id",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("load_live_fundamentals_provider_id must not run before model validation")
+        "universe_selector.cli.load_live_value_provider_selection",
+        lambda market: (_ for _ in ()).throw(
+            AssertionError("load_live_value_provider_selection must not run before model validation")
         ),
-        raising=False,
     )
     monkeypatch.setattr("universe_selector.cli.get_valuation_model", fail_model_lookup, raising=False)
     monkeypatch.setattr("universe_selector.cli.run_valuation", fail_run_valuation, raising=False)
