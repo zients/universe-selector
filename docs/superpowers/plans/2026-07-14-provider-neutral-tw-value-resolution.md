@@ -10,29 +10,35 @@
 
 ---
 
-## Checkpoint Status (2026-07-14)
+## Completion Status (2026-07-15)
 
 Remote branch: `origin/feature/value-tw-listing-resolution`
 
-Implementation checkpoint: `7bce5cbd177dc557e7f176f7b0b065bc5cc1be53`
+Implementation checkpoint: `096666dcd0e7cd909ab7c554145a172d54f34009`
 
 - Task 1 is complete. Minimal value-provider selection is implemented and has
   passed independent spec-compliance and code-quality reviews.
 - Task 2 is complete. Single-ticker fundamentals requires TW listing identity;
   Yahoo maps TWSE to `.TW` and TPEX to `.TWO`. Its review finding was fixed and
   re-reviewed successfully.
-- Task 3 implementation is committed. Valuation orchestration validates a bare
-  TW ticker, resolves one exact listing after assumptions validation, and passes
-  the listing to fundamentals. Its targeted tests passed, and the checkpoint
-  passed Ruff formatting/checks, mypy, and the full `711 passed` pytest suite.
-- Task 3 independent spec review was interrupted for this checkpoint;
-  code-quality review has not started.
-- Task 4 has not started. CLI still uses the legacy fundamentals-only config
-  loader and does not pass `listing_provider_id` to `run_valuation`.
+- Task 3 is complete. Valuation orchestration validates a bare TW ticker,
+  resolves one exact listing after assumptions validation, and passes the
+  listing to fundamentals. Its resumed independent spec-compliance and fresh
+  code-quality reviews both passed.
+- Task 4 is complete. The CLI uses `load_live_value_provider_selection`, passes
+  both provider IDs to `run_valuation`, preserves explicit model validation
+  before configuration access, removes the legacy minimal loader, and documents
+  the provider-neutral Taiwan ticker contract. Its TDD implementation passed
+  spec review; two code-quality test findings were fixed and re-reviewed.
+- The final independent whole-branch review found one minor provider-error
+  classification issue. Commit `096666d` fixed it with a focused RED/GREEN
+  regression, and final re-review reported no remaining findings.
+- Final controller verification passed Ruff formatting, Ruff checks, mypy, and
+  the full `712 passed` pytest suite.
 
-This checkpoint is not merge-ready and `value tw` is not yet end-to-end usable.
-Resume by completing Task 3 spec and quality reviews, then execute Task 4,
-perform final independent review, and rerun all repository quality gates.
+The implementation is complete and `value tw --ticker <canonical bare ticker>`
+is wired end to end while remaining live and ephemeral. No ranking persistence,
+report/inspect, or DuckDB schema boundary changed.
 
 ## File Structure
 
