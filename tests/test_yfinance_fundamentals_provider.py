@@ -252,7 +252,20 @@ def test_yfinance_single_tw_fundamentals_requires_matching_listing() -> None:
     with pytest.raises(ProviderDataError, match="requires resolved listing identity"):
         provider.load_fundamentals(Market.TW, "2330")
 
-    with pytest.raises(ProviderDataError, match="does not match requested ticker"):
+    with pytest.raises(
+        ProviderDataError,
+        match="resolved listing US:6488 does not match requested TW:6488",
+    ):
+        provider.load_fundamentals(
+            Market.TW,
+            "6488",
+            listing=_listing("6488"),
+        )
+
+    with pytest.raises(
+        ProviderDataError,
+        match="resolved listing TW:6488 does not match requested TW:2330",
+    ):
         provider.load_fundamentals(
             Market.TW,
             "2330",

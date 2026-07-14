@@ -430,14 +430,14 @@ def _request_symbol_for_single_listing(
         return _request_symbol(market, ticker)
     if listing is None:
         raise ProviderDataError("TW single-ticker fundamentals requires resolved listing identity")
-    if listing.market is not market:
-        raise ProviderDataError("resolved listing identity does not match requested ticker")
     try:
         listing_ticker = canonical_ticker(listing.ticker)
     except ValidationError as exc:
         raise ProviderDataError("resolved listing identity does not match requested ticker") from exc
-    if listing_ticker != ticker:
-        raise ProviderDataError("resolved listing identity does not match requested ticker")
+    if listing.market is not market or listing_ticker != ticker:
+        raise ProviderDataError(
+            f"resolved listing {listing.market.value}:{listing_ticker} does not match requested {market.value}:{ticker}"
+        )
     return _request_symbol_for_listing(market, listing, ticker)
 
 
