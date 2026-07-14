@@ -12,6 +12,7 @@ import yaml
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
 from universe_selector.providers.registry import (
+    get_fundamentals_registration,
     get_fundamentals_provider_registration,
     get_listing_registration,
     get_ohlcv_registration,
@@ -57,6 +58,12 @@ _REQUIRED_MAPPING_KEYS = frozenset(
 
 def canonical_json(value: dict[str, Any]) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+@dataclass(frozen=True)
+class LiveValueProviderSelection:
+    fundamentals_provider_id: str
+    listing_provider_id: str | None
 
 
 @dataclass(frozen=True)
@@ -248,6 +255,40 @@ def load_live_fundamentals_provider_id() -> str:
     )
     get_fundamentals_provider_registration(provider_id)
     return provider_id
+
+
+def load_live_value_provider_selection(market: Market) -> LiveValueProviderSelection:
+    loaded = _load_config_mapping()
+    live = loaded.get("live")
+    if not isinstance(live, dict):
+        raise ValidationError("config key live must be a mapping")
+    if "fundamentals_provider" not in live:
+        raise ValidationError("config missing required key: live.fundamentals_provider")
+    fundamentals_provider_id = _parse_provider_id(
+        live["fundamentals_provider"],
+        label="live.fundamentals_provider",
+    )
+    get_fundamentals_registration(fundamentals_provider_id, market)
+
+    listing_provider_id = None
+    if market is Market.TW:
+        if "listing_provider" not in live:
+            raise ValidationError("config missing required key: live.listing_provider.TW")
+        listing_provider = live["listing_provider"]
+        if not isinstance(listing_provider, dict):
+            raise ValidationError("config key live.listing_provider must be a mapping")
+        if Market.TW.value not in listing_provider:
+            raise ValidationError("config missing required key: live.listing_provider.TW")
+        listing_provider_id = _parse_provider_id(
+            listing_provider[Market.TW.value],
+            label="live.listing_provider.TW",
+        )
+        get_listing_registration(listing_provider_id, market)
+
+    return LiveValueProviderSelection(
+        fundamentals_provider_id=fundamentals_provider_id,
+        listing_provider_id=listing_provider_id,
+    )
 
 
 def _load_config_mapping() -> dict[str, Any]:

@@ -11,10 +11,12 @@ import universe_selector.config as config_module
 import universe_selector.ranking_profiles as ranking_profiles
 from universe_selector.config import (
     AppConfig,
+    LiveValueProviderSelection,
     canonical_json,
     ensure_runtime_dirs,
     load_config,
     load_live_fundamentals_provider_id,
+    load_live_value_provider_selection,
 )
 from universe_selector.domain import Market
 from universe_selector.errors import ValidationError
@@ -174,6 +176,90 @@ live:
     monkeypatch.chdir(tmp_path)
 
     assert load_live_fundamentals_provider_id() == "yfinance_fundamentals"
+
+
+def test_load_live_value_provider_selection_reads_minimal_tw_config(monkeypatch, tmp_path: Path) -> None:
+    _use_config(
+        monkeypatch,
+        tmp_path,
+        raw_yaml="""
+live:
+  listing_provider:
+    TW: twse_isin
+  fundamentals_provider: yfinance_fundamentals
+""",
+    )
+
+    assert load_live_value_provider_selection(Market.TW) == LiveValueProviderSelection(
+        fundamentals_provider_id="yfinance_fundamentals",
+        listing_provider_id="twse_isin",
+    )
+
+
+def test_load_live_value_provider_selection_reads_minimal_us_config(monkeypatch, tmp_path: Path) -> None:
+    _use_config(
+        monkeypatch,
+        tmp_path,
+        raw_yaml="""
+live:
+  fundamentals_provider: yfinance_fundamentals
+""",
+    )
+
+    assert load_live_value_provider_selection(Market.US) == LiveValueProviderSelection(
+        fundamentals_provider_id="yfinance_fundamentals",
+        listing_provider_id=None,
+    )
+
+
+def test_load_live_value_provider_selection_requires_tw_listing_provider(monkeypatch, tmp_path: Path) -> None:
+    _use_config(
+        monkeypatch,
+        tmp_path,
+        raw_yaml="""
+live:
+  fundamentals_provider: yfinance_fundamentals
+""",
+    )
+
+    with pytest.raises(ValidationError, match=r"config missing required key: live\.listing_provider\.TW"):
+        load_live_value_provider_selection(Market.TW)
+
+
+@pytest.mark.parametrize(
+    ("raw_yaml", "expected_message"),
+    [
+        (
+            """
+live:
+  listing_provider:
+    TW: unknown
+  fundamentals_provider: yfinance_fundamentals
+""",
+            "unsupported listing provider for TW: unknown",
+        ),
+        (
+            """
+live:
+  listing_provider:
+    TW: twse_isin
+  fundamentals_provider: unknown
+""",
+            "unsupported fundamentals provider for TW: unknown",
+        ),
+    ],
+    ids=("listing-provider", "fundamentals-provider"),
+)
+def test_load_live_value_provider_selection_rejects_unregistered_provider(
+    monkeypatch,
+    tmp_path: Path,
+    raw_yaml: str,
+    expected_message: str,
+) -> None:
+    _use_config(monkeypatch, tmp_path, raw_yaml=raw_yaml)
+
+    with pytest.raises(ValidationError, match=expected_message):
+        load_live_value_provider_selection(Market.TW)
 
 
 def test_sample_price_trend_profile_public_api_and_payload() -> None:
