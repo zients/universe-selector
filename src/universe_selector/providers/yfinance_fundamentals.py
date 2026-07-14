@@ -11,7 +11,7 @@ import pandas as pd
 import polars as pl
 
 from universe_selector.domain import Market, canonical_ticker
-from universe_selector.errors import ProviderDataError
+from universe_selector.errors import ProviderDataError, ValidationError
 from universe_selector.providers.context import ProviderRunContext
 from universe_selector.providers.models import (
     FundamentalFacts,
@@ -106,9 +106,15 @@ class YFinanceFundamentalsProvider:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._fetcher = fetcher or self._default_fetcher
 
-    def load_fundamentals(self, market: Market, ticker: str) -> FundamentalsRunData:
+    def load_fundamentals(
+        self,
+        market: Market,
+        ticker: str,
+        *,
+        listing: ListingCandidate | None = None,
+    ) -> FundamentalsRunData:
         normalized_ticker = canonical_ticker(ticker)
-        request_symbol = _request_symbol(market, normalized_ticker)
+        request_symbol = _request_symbol_for_single_listing(market, normalized_ticker, listing)
         fetch_started_at = self._clock()
         payload = self._fetcher(request_symbol)
         facts = self._normalize_payload(market, normalized_ticker, payload)
@@ -415,15 +421,31 @@ def _request_symbol_for_listing(market: Market, listing: ListingCandidate, ticke
     raise ProviderDataError(f"unsupported TW exchange segment for yfinance: {listing.exchange_segment}")
 
 
+def _request_symbol_for_single_listing(
+    market: Market,
+    ticker: str,
+    listing: ListingCandidate | None,
+) -> str:
+    if market is not Market.TW:
+        return _request_symbol(market, ticker)
+    if listing is None:
+        raise ProviderDataError("TW single-ticker fundamentals requires resolved listing identity")
+    if listing.market is not market:
+        raise ProviderDataError("resolved listing identity does not match requested ticker")
+    try:
+        listing_ticker = canonical_ticker(listing.ticker)
+    except ValidationError as exc:
+        raise ProviderDataError("resolved listing identity does not match requested ticker") from exc
+    if listing_ticker != ticker:
+        raise ProviderDataError("resolved listing identity does not match requested ticker")
+    return _request_symbol_for_listing(market, listing, ticker)
+
+
 def _request_symbol(market: Market, ticker: str) -> str:
     if market is Market.US:
         if re.fullmatch(r"[A-Z0-9]+\.[A-Z0-9]+", ticker):
             return ticker.replace(".", "-")
         return ticker
-    if market is Market.TW:
-        if ticker.endswith((".TW", ".TWO")):
-            return ticker
-        return f"{ticker}.TW"
     raise ProviderDataError(
         f"unsupported fundamentals provider for {market.value}: {YFinanceFundamentalsProvider.provider_id}"
     )
