@@ -32,6 +32,8 @@ def test_readme_is_concise_entrypoint_with_links_to_detail_docs() -> None:
 def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     text = _documentation_corpus()
     normalized = " ".join(text.split())
+    readme_normalized = " ".join(README.read_text().split())
+    valuation_docs_normalized = " ".join((REPO_ROOT / "docs/valuation.md").read_text().split())
 
     assert "The CLI has four command families:" in text
     assert "`value MARKET --ticker TICKER`" in text
@@ -120,9 +122,10 @@ def test_readme_documents_value_as_ephemeral_not_persisted() -> None:
     assert "The committed valuation assumption files are repository templates" in normalized
     assert "installed wheels do not copy them into your working directory" in normalized
     assert "yfinance fundamentals are third-party convenience data" in normalized
-    assert "same canonical bare ticker as `inspect`" in text
-    assert "live.listing_provider.TW" in text
-    assert "Do not append a provider suffix" in text
+    for provider_neutral_contract in (readme_normalized, valuation_docs_normalized):
+        assert "same canonical bare ticker as `inspect`" in provider_neutral_contract
+        assert "live.listing_provider.TW" in provider_neutral_contract
+        assert "Do not append a provider suffix" in provider_neutral_contract
     assert "uses provider raw FCF as a starting proxy so the command can run directly" in normalized
     assert "model-implied scenario results" in normalized
     assert "not forecasts, expected outcomes, target cases, or recommendations" in normalized

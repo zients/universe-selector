@@ -947,16 +947,33 @@ def test_cli_value_tw_passes_canonical_ticker_and_both_provider_ids(monkeypatch)
     _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
     captured: dict[str, object] = {}
 
-    def fake_run_valuation(**kwargs):
-        captured.update(kwargs)
+    def fake_load_live_value_provider_selection(market: Market) -> LiveValueProviderSelection:
+        captured["provider_selection_market"] = market
+        return LiveValueProviderSelection(
+            fundamentals_provider_id="fake_fundamentals",
+            listing_provider_id="fake_listing",
+        )
+
+    def fake_run_valuation(
+        *,
+        market: Market,
+        ticker: str,
+        model_id: str | None,
+        assumptions_path: Path | None,
+        fundamentals_provider_id: str,
+        listing_provider_id: str | None = None,
+    ):
+        captured["market"] = market
+        captured["ticker"] = ticker
+        captured["model_id"] = model_id
+        captured["assumptions_path"] = assumptions_path
+        captured["fundamentals_provider_id"] = fundamentals_provider_id
+        captured["listing_provider_id"] = listing_provider_id
         return object()
 
     monkeypatch.setattr(
         "universe_selector.cli.load_live_value_provider_selection",
-        lambda market: LiveValueProviderSelection(
-            fundamentals_provider_id="fake_fundamentals",
-            listing_provider_id="fake_listing",
-        ),
+        fake_load_live_value_provider_selection,
     )
     monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation)
     monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n")
@@ -964,6 +981,7 @@ def test_cli_value_tw_passes_canonical_ticker_and_both_provider_ids(monkeypatch)
     result = runner.invoke(app, ["value", "tw", "--ticker", "6488"])
 
     assert result.exit_code == 0, result.output
+    assert captured["provider_selection_market"] is Market.TW
     assert captured["market"] is Market.TW
     assert captured["ticker"] == "6488"
     assert captured["fundamentals_provider_id"] == "fake_fundamentals"
