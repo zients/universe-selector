@@ -646,6 +646,29 @@ def test_run_valuation_rejects_non_unique_tw_listing_before_fundamentals(
     assert fake_provider.listing_requests == []
 
 
+def test_run_valuation_rejects_invalid_same_market_listing_ticker_before_fundamentals(
+    monkeypatch,
+) -> None:
+    fake_listing_provider, fake_provider = _install_tw_value_providers(
+        monkeypatch,
+        [_tw_listing("")],
+    )
+
+    with pytest.raises(ProviderDataError, match="listing provider returned invalid ticker for TW"):
+        run_valuation(
+            Market.TW,
+            "2330",
+            "fcf_dcf_v1",
+            TW_FIXTURE,
+            "fake_fundamentals",
+            listing_provider_id="fake_listing",
+        )
+
+    assert len(fake_listing_provider.requests) == 1
+    assert fake_provider.requests == []
+    assert fake_provider.listing_requests == []
+
+
 @pytest.mark.parametrize("ticker", ("2330.TW", "6488.TWO"))
 def test_run_valuation_rejects_suffixed_tw_ticker_before_provider_registration(
     monkeypatch,

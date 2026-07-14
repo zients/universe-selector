@@ -27,9 +27,16 @@ def _select_listing(
     ticker: str,
     listings: list[ListingCandidate],
 ) -> ListingCandidate:
-    matches = [
-        listing for listing in listings if listing.market is market and canonical_ticker(listing.ticker) == ticker
-    ]
+    matches: list[ListingCandidate] = []
+    for listing in listings:
+        if listing.market is not market:
+            continue
+        try:
+            listing_ticker = canonical_ticker(listing.ticker)
+        except ValidationError as exc:
+            raise ProviderDataError(f"listing provider returned invalid ticker for {market.value}") from exc
+        if listing_ticker == ticker:
+            matches.append(listing)
     if len(matches) != 1:
         raise ProviderDataError(
             f"expected exactly one listing for {market.value} ticker {ticker}; found {len(matches)}"
