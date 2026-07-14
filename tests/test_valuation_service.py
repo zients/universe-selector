@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -8,9 +9,19 @@ import pytest
 import yaml
 
 from universe_selector.domain import Market
-from universe_selector.errors import ValidationError
-from universe_selector.providers.models import FundamentalFacts, FundamentalsMetadata, FundamentalsRunData
-from universe_selector.providers.registration import FundamentalsProviderRegistration
+from universe_selector.errors import ProviderDataError, ValidationError
+from universe_selector.providers.context import ProviderRunContext
+from universe_selector.providers.models import (
+    FundamentalFacts,
+    FundamentalsMetadata,
+    FundamentalsRunData,
+    FundamentalsUniverseRunData,
+    ListingCandidate,
+)
+from universe_selector.providers.registration import (
+    FundamentalsProviderRegistration,
+    ListingProviderRegistration,
+)
 from universe_selector.valuation.models import (
     EffectiveValuationInputs,
     ValuationInputProvenance,
@@ -26,14 +37,24 @@ TW_FIXTURE = Path(__file__).parent / "fixtures" / "valuation_assumptions" / "tw"
 
 class FakeFundamentalsProvider:
     provider_id = "fake_fundamentals"
-    source_ids = ("fake-source",)
+    source_ids: tuple[str, ...] = ("fake-source",)
 
     def __init__(self, facts: FundamentalFacts) -> None:
         self._facts = facts
         self.requests: list[tuple[Market, str]] = []
+        self.listing_requests: list[ListingCandidate | None] = []
+        self.registration_requests: list[tuple[str, Market]] = []
+        self.factory_requests: list[None] = []
 
-    def load_fundamentals(self, market: Market, ticker: str) -> FundamentalsRunData:
+    def load_fundamentals(
+        self,
+        market: Market,
+        ticker: str,
+        *,
+        listing: ListingCandidate | None = None,
+    ) -> FundamentalsRunData:
         self.requests.append((market, ticker))
+        self.listing_requests.append(listing)
         return FundamentalsRunData(
             metadata=FundamentalsMetadata(
                 data_mode="live",
@@ -44,6 +65,29 @@ class FakeFundamentalsProvider:
             ),
             facts=self._facts,
         )
+
+    def load_fundamentals_for_listings(
+        self,
+        context: ProviderRunContext,
+        market: Market,
+        listings: list[ListingCandidate],
+    ) -> FundamentalsUniverseRunData:
+        raise AssertionError("valuation service must not load universe fundamentals")
+
+
+class FakeListingProvider:
+    provider_id = "fake_listing"
+    source_ids: tuple[str, ...] = ("fake-listings",)
+
+    def __init__(self, listings: list[ListingCandidate]) -> None:
+        self._listings = listings
+        self.requests: list[tuple[ProviderRunContext, Market]] = []
+        self.registration_requests: list[tuple[str, Market]] = []
+        self.factory_requests: list[object] = []
+
+    def load_listings(self, context: ProviderRunContext, market: Market) -> list[ListingCandidate]:
+        self.requests.append((context, market))
+        return self._listings
 
 
 class SpyValuationModel:
@@ -125,6 +169,75 @@ def _facts() -> FundamentalFacts:
         fiscal_period_end=date(2025, 9, 30),
         fiscal_period_type="ttm",
     )
+
+
+def _tw_listing(ticker: str, exchange_segment: str = "TPEX") -> ListingCandidate:
+    return ListingCandidate(
+        market=Market.TW,
+        ticker=ticker,
+        listing_symbol=ticker,
+        exchange_segment=exchange_segment,
+        listing_status="active",
+        instrument_type="common_stock",
+        source_id=f"unit:{ticker}",
+    )
+
+
+def _install_tw_value_providers(
+    monkeypatch: pytest.MonkeyPatch,
+    listings: list[ListingCandidate],
+) -> tuple[FakeListingProvider, FakeFundamentalsProvider]:
+    fake_listing_provider = FakeListingProvider(listings)
+    fake_fundamentals_provider = FakeFundamentalsProvider(
+        replace(_facts(), market=Market.TW, ticker="2330", currency="TWD")
+    )
+
+    def build_listing_provider(config: object) -> FakeListingProvider:
+        fake_listing_provider.factory_requests.append(config)
+        assert config is None
+        return fake_listing_provider
+
+    def build_fundamentals_provider() -> FakeFundamentalsProvider:
+        fake_fundamentals_provider.factory_requests.append(None)
+        return fake_fundamentals_provider
+
+    listing_registration = ListingProviderRegistration(
+        provider_id=fake_listing_provider.provider_id,
+        supported_markets=frozenset({Market.TW}),
+        source_ids=fake_listing_provider.source_ids,
+        factory=build_listing_provider,
+    )
+    fundamentals_registration = FundamentalsProviderRegistration(
+        provider_id=fake_fundamentals_provider.provider_id,
+        supported_markets=frozenset({Market.TW}),
+        source_ids=fake_fundamentals_provider.source_ids,
+        factory=build_fundamentals_provider,
+    )
+
+    def resolve_listing_registration(provider_id: str, market: Market) -> ListingProviderRegistration:
+        fake_listing_provider.registration_requests.append((provider_id, market))
+        assert provider_id == "fake_listing"
+        assert market is Market.TW
+        return listing_registration
+
+    def resolve_fundamentals_registration(
+        provider_id: str,
+        market: Market,
+    ) -> FundamentalsProviderRegistration:
+        fake_fundamentals_provider.registration_requests.append((provider_id, market))
+        assert provider_id == "fake_fundamentals"
+        assert market is Market.TW
+        return fundamentals_registration
+
+    monkeypatch.setattr(
+        "universe_selector.valuation.service.get_listing_registration",
+        resolve_listing_registration,
+    )
+    monkeypatch.setattr(
+        "universe_selector.valuation.service.get_fundamentals_registration",
+        resolve_fundamentals_registration,
+    )
+    return fake_listing_provider, fake_fundamentals_provider
 
 
 def _copy_fixture_with_reference_price_override(tmp_path: Path) -> Path:
@@ -473,44 +586,135 @@ def test_run_valuation_rejects_unknown_model_and_missing_assumptions(tmp_path: P
         run_valuation(Market.US, "AAPL", "fcf_dcf_v1", tmp_path / "missing.yaml", "yfinance_fundamentals")
 
 
-def test_run_valuation_loads_tw_assumptions_after_resolving_supported_provider(monkeypatch, tmp_path: Path) -> None:
-    fake_provider = FakeFundamentalsProvider(
-        FundamentalFacts(
-            market=Market.TW,
-            ticker="2330",
-            currency="TWD",
-            reference_price=800.0,
-            reference_price_as_of=date(2026, 5, 15),
-            reference_price_as_of_source="provider_reported",
-            reference_price_as_of_note=None,
-            shares_outstanding=25_900_000_000.0,
-            cash_and_cash_equivalents=2_000_000_000_000.0,
-            total_debt=1_000_000_000_000.0,
-            balance_sheet_as_of=date(2026, 3, 31),
-            net_debt=-1_000_000_000_000.0,
-            operating_cash_flow=1_000_000_000_000.0,
-            capital_expenditures=300_000_000_000.0,
-            free_cash_flow=700_000_000_000.0,
-            fiscal_period_end=date(2025, 12, 31),
-            fiscal_period_type="ttm",
-        )
-    )
-    fake_registration = FundamentalsProviderRegistration(
-        provider_id=fake_provider.provider_id,
-        supported_markets=frozenset({Market.TW}),
-        source_ids=fake_provider.source_ids,
-        factory=lambda: fake_provider,
+def test_run_valuation_resolves_tw_listing_before_loading_fundamentals(monkeypatch) -> None:
+    listing = _tw_listing("2330", "TWSE")
+    fake_listing_provider, fake_provider = _install_tw_value_providers(monkeypatch, [listing])
+
+    result = run_valuation(
+        Market.TW,
+        "2330",
+        "fcf_dcf_v1",
+        TW_FIXTURE,
+        "fake_fundamentals",
+        listing_provider_id="fake_listing",
     )
 
-    monkeypatch.setattr(
-        "universe_selector.valuation.service.get_fundamentals_registration",
-        lambda provider_id, market: fake_registration,
-    )
-
-    result = run_valuation(Market.TW, "2330", "fcf_dcf_v1", TW_FIXTURE, "fake_fundamentals")
-
+    assert len(fake_listing_provider.requests) == 1
+    assert fake_listing_provider.requests[0][0].ticker_limit is None
+    assert fake_listing_provider.requests[0][0].data_fetch_started_at.tzinfo is timezone.utc
+    assert fake_listing_provider.requests[0][1] is Market.TW
     assert fake_provider.requests == [(Market.TW, "2330")]
+    assert fake_provider.listing_requests == [listing]
+    assert fake_provider.listing_requests[0] is listing
     assert result.run_input.market is Market.TW
     assert result.run_input.ticker == "2330"
     assert result.run_input.assumptions.assumption_path.endswith("valuation_assumptions/tw/2330.yaml")
     assert result.run_input.effective_inputs.currency == "TWD"
+
+
+@pytest.mark.parametrize(
+    ("listings", "expected_found"),
+    (
+        ([], 0),
+        ([_tw_listing("2330"), _tw_listing("2330")], 2),
+        ([replace(_tw_listing("2330"), market=Market.US)], 0),
+    ),
+    ids=("missing", "duplicate", "wrong-market"),
+)
+def test_run_valuation_rejects_non_unique_tw_listing_before_fundamentals(
+    monkeypatch,
+    listings: list[ListingCandidate],
+    expected_found: int,
+) -> None:
+    fake_listing_provider, fake_provider = _install_tw_value_providers(monkeypatch, listings)
+
+    with pytest.raises(
+        ProviderDataError,
+        match=rf"expected exactly one listing for TW ticker 2330; found {expected_found}",
+    ):
+        run_valuation(
+            Market.TW,
+            "2330",
+            "fcf_dcf_v1",
+            TW_FIXTURE,
+            "fake_fundamentals",
+            listing_provider_id="fake_listing",
+        )
+
+    assert len(fake_listing_provider.requests) == 1
+    assert fake_provider.requests == []
+    assert fake_provider.listing_requests == []
+
+
+@pytest.mark.parametrize("ticker", ("2330.TW", "6488.TWO"))
+def test_run_valuation_rejects_suffixed_tw_ticker_before_provider_registration(
+    monkeypatch,
+    ticker: str,
+) -> None:
+    def fail_registration(*_args: object) -> None:
+        raise AssertionError("provider registration must not be accessed")
+
+    monkeypatch.setattr(
+        "universe_selector.valuation.service.get_fundamentals_registration",
+        fail_registration,
+    )
+    monkeypatch.setattr(
+        "universe_selector.valuation.service.get_listing_registration",
+        fail_registration,
+    )
+
+    with pytest.raises(ValidationError, match="canonical bare ticker"):
+        run_valuation(
+            Market.TW,
+            ticker,
+            "fcf_dcf_v1",
+            TW_FIXTURE,
+            "fake_fundamentals",
+            listing_provider_id="fake_listing",
+        )
+
+
+def test_run_valuation_validates_assumptions_before_tw_provider_access(monkeypatch, tmp_path: Path) -> None:
+    fake_listing_provider, fake_provider = _install_tw_value_providers(
+        monkeypatch,
+        [_tw_listing("2330")],
+    )
+
+    with pytest.raises(ValidationError, match="missing valuation assumptions file"):
+        run_valuation(
+            Market.TW,
+            "2330",
+            "fcf_dcf_v1",
+            tmp_path / "missing.yaml",
+            "fake_fundamentals",
+            listing_provider_id="fake_listing",
+        )
+
+    assert fake_listing_provider.requests == []
+    assert fake_listing_provider.registration_requests == [("fake_listing", Market.TW)]
+    assert fake_listing_provider.factory_requests == []
+    assert fake_provider.requests == []
+    assert fake_provider.listing_requests == []
+    assert fake_provider.registration_requests == [("fake_fundamentals", Market.TW)]
+    assert fake_provider.factory_requests == []
+
+
+def test_run_valuation_requires_tw_listing_provider(monkeypatch) -> None:
+    fake_listing_provider, fake_provider = _install_tw_value_providers(
+        monkeypatch,
+        [_tw_listing("2330")],
+    )
+
+    with pytest.raises(ValidationError, match="TW value requires a configured listing provider"):
+        run_valuation(
+            Market.TW,
+            "2330",
+            "fcf_dcf_v1",
+            TW_FIXTURE,
+            "fake_fundamentals",
+            listing_provider_id=None,
+        )
+
+    assert fake_listing_provider.requests == []
+    assert fake_provider.requests == []
+    assert fake_provider.listing_requests == []
