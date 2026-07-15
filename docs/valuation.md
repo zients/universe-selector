@@ -6,8 +6,9 @@ fundamental facts through the configured fundamentals provider, and prints
 markdown or JSON to stdout.
 
 `value` v1 prints markdown by default and JSON with `--json`. It requires
-`config.yaml` only for selecting `live.fundamentals_provider`, does not read
-DuckDB, and does not persist the result.
+`config.yaml` only for selecting the live valuation providers, does not read
+DuckDB, and does not persist the result. US selects only
+`live.fundamentals_provider`; TW also selects `live.listing_provider.TW`.
 
 The default assumptions path is
 `valuation_assumptions/{market}/{ticker}.yaml`; the committed
@@ -47,6 +48,12 @@ uv run universe-selector value us --ticker AAPL \
 uv run universe-selector value tw --ticker 2330 \
   --assumptions valuation_assumptions/tw/2330.yaml
 ```
+
+For Taiwan, `value` accepts the same canonical bare ticker as `inspect`, for
+example `2330` or `6488`. It resolves the ticker through
+`live.listing_provider.TW`; provider-specific request symbols such as `.TW` and
+`.TWO` remain internal to the configured fundamentals provider.
+Do not append a provider suffix to `--ticker`.
 
 ## `exit_multiple_dcf_v1`
 
@@ -145,10 +152,10 @@ starting FCF is zero or negative.
 
 ## Provider Facts
 
-`value` uses yfinance fundamentals for v1 `US` and `TW` live facts. TW tickers
-default to the yfinance `.TW` request suffix. yfinance fundamentals are
-third-party convenience data and may be stale, incomplete, restated, mapped
-inconsistently, or unavailable. Independently verify provider facts and validate
-or override assumptions before relying on model-implied outputs.
+`value` uses yfinance fundamentals for v1 `US` and `TW` live facts. yfinance
+fundamentals are third-party convenience data and may be stale, incomplete,
+restated, mapped inconsistently, or unavailable. Independently verify provider
+facts and validate or override assumptions before relying on model-implied
+outputs.
 TW valuation templates use TWD ordinary-share basis with no ADR-ratio,
 board-lot, or currency adjustment.

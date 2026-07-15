@@ -47,7 +47,13 @@ class FundamentalsProvider(Protocol):
     provider_id: str
     source_ids: tuple[str, ...]
 
-    def load_fundamentals(self, market: Market, ticker: str) -> FundamentalsRunData:
+    def load_fundamentals(
+        self,
+        market: Market,
+        ticker: str,
+        *,
+        listing: ListingCandidate | None = None,
+    ) -> FundamentalsRunData:
         raise NotImplementedError
 
     def load_fundamentals_for_listings(

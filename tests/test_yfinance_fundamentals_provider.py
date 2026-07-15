@@ -49,6 +49,18 @@ def _listing(ticker: str) -> ListingCandidate:
     )
 
 
+def _tw_listing(ticker: str, exchange_segment: str) -> ListingCandidate:
+    return ListingCandidate(
+        market=Market.TW,
+        ticker=ticker,
+        listing_symbol=ticker,
+        exchange_segment=exchange_segment,
+        listing_status="active",
+        instrument_type="common_stock",
+        source_id=f"unit:{ticker}",
+    )
+
+
 def _context():
     return build_provider_run_context(
         market=Market.US,
@@ -198,7 +210,18 @@ def test_yfinance_fundamentals_maps_us_class_share_to_yfinance_symbol() -> None:
     assert data.facts.ticker == "BRK.B"
 
 
-def test_yfinance_fundamentals_maps_tw_ticker_to_yfinance_tw_symbol() -> None:
+@pytest.mark.parametrize(
+    ("ticker", "exchange_segment", "expected_symbol"),
+    [
+        ("2330", "TWSE", "2330.TW"),
+        ("6488", "TPEX", "6488.TWO"),
+    ],
+)
+def test_yfinance_single_fundamentals_maps_resolved_tw_listing(
+    ticker: str,
+    exchange_segment: str,
+    expected_symbol: str,
+) -> None:
     requested = []
 
     def fetcher(symbol: str) -> dict[str, object]:
@@ -208,12 +231,53 @@ def test_yfinance_fundamentals_maps_tw_ticker_to_yfinance_tw_symbol() -> None:
         return payload
 
     provider = YFinanceFundamentalsProvider(fetcher=fetcher)
-    data = provider.load_fundamentals(Market.TW, "2330")
+    data = provider.load_fundamentals(
+        Market.TW,
+        ticker,
+        listing=_tw_listing(ticker, exchange_segment),
+    )
 
-    assert requested == ["2330.TW"]
+    assert requested == [expected_symbol]
     assert data.facts.market is Market.TW
-    assert data.facts.ticker == "2330"
+    assert data.facts.ticker == ticker
     assert data.facts.currency == "TWD"
+
+
+def test_yfinance_single_tw_fundamentals_requires_matching_listing() -> None:
+    def fetcher(symbol: str) -> dict[str, object]:
+        raise AssertionError(f"fetcher must not be invoked: {symbol}")
+
+    provider = YFinanceFundamentalsProvider(fetcher=fetcher)
+
+    with pytest.raises(ProviderDataError, match="requires resolved listing identity"):
+        provider.load_fundamentals(Market.TW, "2330")
+
+    with pytest.raises(
+        ProviderDataError,
+        match="resolved listing US:6488 does not match requested TW:6488",
+    ):
+        provider.load_fundamentals(
+            Market.TW,
+            "6488",
+            listing=_listing("6488"),
+        )
+
+    with pytest.raises(
+        ProviderDataError,
+        match="resolved listing TW:6488 does not match requested TW:2330",
+    ):
+        provider.load_fundamentals(
+            Market.TW,
+            "2330",
+            listing=_tw_listing("6488", "TPEX"),
+        )
+
+    with pytest.raises(ProviderDataError, match="unsupported TW exchange segment"):
+        provider.load_fundamentals(
+            Market.TW,
+            "2330",
+            listing=_tw_listing("2330", "EMERGING"),
+        )
 
 
 def test_yfinance_universe_fundamentals_maps_tpex_to_two_and_preserves_canonical_tickers(

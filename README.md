@@ -275,6 +275,11 @@ uv run universe-selector value tw --ticker 2330 \
   --assumptions valuation_assumptions/tw/2330.yaml
 ```
 
+For Taiwan, `value` accepts the same canonical bare ticker as `inspect` and
+resolves it through `live.listing_provider.TW`. Provider suffixes such as `.TW`
+and `.TWO` stay internal to the fundamentals provider.
+Do not append a provider suffix to `--ticker`.
+
 Supported valuation models are `exit_multiple_dcf_v1`, `fcf_dcf_v1`,
 `implied_discount_rate_v1`, `multiple_valuation_v1`, `reverse_dcf_v1`, and
 `two_stage_fcf_dcf_v1`.
