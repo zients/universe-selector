@@ -988,6 +988,52 @@ def test_cli_value_tw_passes_canonical_ticker_and_both_provider_ids(monkeypatch)
     assert captured["listing_provider_id"] == "fake_listing"
 
 
+def test_cli_value_rejects_suffixed_tw_ticker_before_config_selection(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "universe_selector.cli.load_live_value_provider_selection",
+        lambda market: (_ for _ in ()).throw(
+            AssertionError("load_live_value_provider_selection ran before TW ticker validation")
+        ),
+    )
+    monkeypatch.setattr(
+        "universe_selector.cli.run_valuation",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("run_valuation must not run for a suffixed TW ticker")
+        ),
+    )
+
+    for ticker in ("2330.TW", "6488.TWO"):
+        result = runner.invoke(app, ["value", "tw", "--ticker", ticker])
+
+        assert result.exit_code == ValidationError.exit_code
+        assert "canonical bare ticker" in result.output
+
+
+def test_cli_value_preserves_dotted_us_class_share_ticker(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "universe_selector.cli.load_live_value_provider_selection",
+        lambda market: LiveValueProviderSelection(
+            fundamentals_provider_id="fake_fundamentals",
+            listing_provider_id=None,
+        ),
+    )
+
+    def fake_run_valuation(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("universe_selector.cli.run_valuation", fake_run_valuation)
+    monkeypatch.setattr("universe_selector.cli.render_valuation_markdown", lambda result: "ok\n")
+
+    result = runner.invoke(app, ["value", "us", "--ticker", "BRK.B"])
+
+    assert result.exit_code == 0, result.output
+    assert captured["market"] is Market.US
+    assert captured["ticker"] == "BRK.B"
+
+
 def test_cli_value_rejects_unknown_model(monkeypatch) -> None:
     _install_value_cli_no_persistence_or_ranking_guards(monkeypatch)
 

@@ -21,7 +21,7 @@ from universe_selector.persistence.schema import validate_schema
 from universe_selector.pipeline import BatchResult, MultiProfileBatchError, run_batch, run_batch_profiles
 from universe_selector.ranking_profiles import get_ranking_profile, supported_ranking_profile_ids
 from universe_selector.valuation.registry import get_valuation_model
-from universe_selector.valuation.service import run_valuation
+from universe_selector.valuation.service import run_valuation, validate_value_ticker
 
 
 SUPPORTED_MARKETS_HELP = "Supported markets: us, tw."
@@ -330,6 +330,7 @@ def value(
         normalized_ticker = canonical_ticker(ticker)
         if model is not None:
             get_valuation_model(model)
+        validate_value_ticker(resolved_market, normalized_ticker)
         provider_selection = load_live_value_provider_selection(resolved_market)
         result = run_valuation(
             market=resolved_market,

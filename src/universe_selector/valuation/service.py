@@ -17,7 +17,7 @@ from universe_selector.valuation.models import (
 from universe_selector.valuation.registry import get_valuation_model
 
 
-def _validate_value_ticker(market: Market, ticker: str) -> None:
+def validate_value_ticker(market: Market, ticker: str) -> None:
     if market is Market.TW and ticker.endswith((".TW", ".TWO")):
         raise ValidationError(f"TW value ticker must be a canonical bare ticker without provider suffix: {ticker}")
 
@@ -54,7 +54,7 @@ def run_valuation(
     listing_provider_id: str | None = None,
 ) -> ValuationResult:
     normalized_ticker = canonical_ticker(ticker)
-    _validate_value_ticker(market, normalized_ticker)
+    validate_value_ticker(market, normalized_ticker)
     model = get_valuation_model(model_id) if model_id is not None else None
     fundamentals_registration = get_fundamentals_registration(fundamentals_provider_id, market)
 
